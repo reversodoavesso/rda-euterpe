@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Euterpe — protótipo</title>
+<style>
+  :root {
+    --euterpe-bg: #121212;
+    --euterpe-surface: #181818;
+    --euterpe-surface-raised: #242424;
+    --euterpe-text: #ffffff;
+    --euterpe-subtext: #b3b3b3;
+    --euterpe-accent: #1db954;
+    --euterpe-accent-active: #1ed760;
+    --euterpe-on-accent: #000000;
+    --euterpe-divider: rgba(255,255,255,.12);
+    --euterpe-border: rgba(255,255,255,.25);
+    --euterpe-overlay: rgba(0,0,0,.35);
+    --euterpe-text-muted: rgba(255,255,255,.5);
+    --euterpe-text-dim: rgba(255,255,255,.78);
+    --euterpe-status: rgba(255,255,255,.55);
+    --euterpe-surface-soft: rgba(255,255,255,.08);
+    --euterpe-btn-bg: rgba(255,255,255,.12);
+    --euterpe-code-bg: rgba(255,255,255,.14);
+    --euterpe-message-bot-bg: rgba(255,255,255,.08);
+    --euterpe-message-user-bg: rgba(29,185,84,.25);
+    --euterpe-chip-bg: rgba(29,185,84,.16);
+    --euterpe-chip-border: rgba(29,185,84,.35);
+    --euterpe-accent-soft: rgba(29,185,84,.2);
+    --euterpe-accent-soft-2: rgba(29,185,84,.15);
+    --euterpe-accent-border-strong: rgba(29,185,84,.4);
+    --euterpe-danger: #f15e6c;
+    --euterpe-danger-soft: rgba(241,94,108,.2);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    font-size: 15px;
+    color: var(--euterpe-text);
+    background: var(--euterpe-bg);
+  }
+  .shell {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    height: 100%;
+  }
+  /* Moldura que simula a sidebar do Spotify */
+  .frame {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--euterpe-bg);
+    border-left: 1px solid var(--euterpe-divider);
+    border-right: 1px solid var(--euterpe-divider);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 20px 24px 4px;
+  }
+  .header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .chip {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 500px;
+    font-weight: 600;
+  }
+  .chip.online {
+    background: var(--euterpe-accent-soft);
+    color: var(--euterpe-accent);
+  }
+  .chip.offline {
+    background: var(--euterpe-danger-soft);
+    color: var(--euterpe-danger);
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--euterpe-border);
+    border-radius: 500px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--euterpe-text);
+    cursor: pointer;
+  }
+  .btn-ghost:hover { background: var(--euterpe-surface-soft); }
+
+  .tabsbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    overflow-x: auto;
+    padding: 12px 24px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--euterpe-border) transparent;
+  }
+  .tabsbar::-webkit-scrollbar { height: 6px; }
+  .tabsbar::-webkit-scrollbar-thumb { background: var(--euterpe-border); border-radius: 3px; }
+  .tabsbar::-webkit-scrollbar-track { background: transparent; }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--euterpe-surface);
+    border: 1px solid var(--euterpe-divider);
+    border-radius: 500px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--euterpe-subtext);
+    cursor: pointer;
+    max-width: 220px;
+    white-space: nowrap;
+  }
+  .tab .label { overflow: hidden; text-overflow: ellipsis; }
+  .tab:hover { background: var(--euterpe-surface-raised); }
+  .tab.active {
+    background: var(--euterpe-accent-soft);
+    border-color: var(--euterpe-accent-border-strong);
+    color: var(--euterpe-text);
+  }
+  .tab .close {
+    background: none;
+    border: none;
+    color: var(--euterpe-text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    display: inline-flex;
+  }
+  .tab .close:hover { color: var(--euterpe-text); }
+  .tab-new {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px dashed var(--euterpe-border);
+    border-radius: 500px;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: var(--euterpe-subtext);
+    cursor: pointer;
+    line-height: 1;
+  }
+  .tab-new:hover { color: var(--euterpe-text); border-color: var(--euterpe-text-muted); }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 24px;
+  }
+  .msg {
+    max-width: 80%;
+    word-break: break-word;
+    border-radius: 12px;
+    padding: 8px 12px;
+    line-height: 1.5;
+  }
+  .msg.user { align-self: flex-end; background: var(--euterpe-message-user-bg); }
+  .msg.bot { align-self: flex-start; background: var(--euterpe-message-bot-bg); }
+  .msg p { margin: 4px 0; }
+  .msg h1,.msg h2,.msg h3,.msg h4,.msg h5,.msg h6 { margin: 10px 0 4px; }
+  .msg h1 { font-size: 1.35em; } .msg h2 { font-size: 1.2em; } .msg h3 { font-size: 1.1em; }
+  .msg h4 { font-size: 1em; } .msg h5 { font-size: .95em; } .msg h6 { font-size: .9em; }
+  .msg ul,.msg ol { margin: 6px 0; padding-left: 22px; }
+  .msg li { margin: 2px 0; }
+  .msg blockquote {
+    margin: 6px 0;
+    padding: 2px 12px;
+    border-left: 3px solid var(--euterpe-accent);
+    color: var(--euterpe-text-dim);
+  }
+  .msg hr { border: none; border-top: 1px solid var(--euterpe-divider); margin: 8px 0; }
+  .msg a { color: var(--euterpe-accent); text-decoration: underline; }
+  .msg code {
+    background: var(--euterpe-code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: .9em;
+  }
+  .msg pre {
+    margin: 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    white-space: pre-wrap;
+  }
+  .msg .codeblock {
+    background: var(--euterpe-overlay);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 6px 0;
+    position: relative;
+  }
+  .msg .codeblock .copy {
+    position: absolute;
+    top: 6px; right: 6px;
+    background: var(--euterpe-btn-bg);
+    border: none;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--euterpe-text);
+    cursor: pointer;
+  }
+  .msg .tasklist { margin: 6px 0; display: flex; flex-direction: column; gap: 3px; }
+  .msg .task { display: flex; align-items: flex-start; gap: 8px; }
+  .msg .task .box { color: var(--euterpe-accent); font-size: 13px; line-height: 1.5; }
+  .msg .task.done .box { color: var(--euterpe-text-muted); }
+  .msg .task.done .label { opacity: .6; text-decoration: line-through; }
+  .msg .caret {
+    display: inline-block;
+    width: 7px; height: 14px;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    background: var(--euterpe-accent);
+    animation: blink 1s steps(2,start) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .chip-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--euterpe-chip-bg);
+    border: 1px solid var(--euterpe-chip-border);
+    border-radius: 500px;
+    padding: 3px 8px;
+    margin: 2px 4px 2px 0;
+    vertical-align: middle;
+  }
+  .chip-track .ic { display: inline-flex; opacity: .9; color: var(--euterpe-accent); font-size: 12px; }
+  .chip-track button {
+    background: none;
+    border: none;
+    color: var(--euterpe-text);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 0;
+  }
+  .chip-track .open {
+    color: var(--euterpe-accent);
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .chip-artist {
+    background: none;
+    border: none;
+    color: var(--euterpe-accent);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 0;
+    margin: 2px 4px 2px 0;
+    vertical-align: middle;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--euterpe-accent);
+  }
+
+  .statusline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--euterpe-status);
+    font-size: 12px;
+  }
+  .statusline .dot {
+    width: 8px; height: 8px; border-radius: 4px;
+    background: var(--euterpe-accent);
+  }
+  .statusline .text { color: var(--euterpe-status); }
+
+  .proposal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--euterpe-accent-soft-2);
+    border: 1px solid var(--euterpe-accent-border-strong);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin: 0 24px 8px;
+  }
+  .proposal .title { font-size: 13px; font-weight: 600; }
+  .proposal .btns { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn-primary {
+    background: var(--euterpe-accent);
+    color: var(--euterpe-on-accent);
+    border: none;
+    border-radius: 500px;
+    padding: 8px 16px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-primary:hover { background: var(--euterpe-accent-active); }
+  .btn-ghost-sm {
+    background: transparent;
+    border: 1px solid var(--euterpe-border);
+    border-radius: 500px;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--euterpe-text);
+  }
+  .btn-ghost-sm:hover { background: var(--euterpe-surface-soft); }
+
+  .inputbar {
+    display: flex;
+    gap: 8px;
+    padding: 0 24px 16px;
+  }
+  .suggestions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 0 24px 8px;
+  }
+  .suggestion {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--euterpe-surface);
+    border: 1px solid var(--euterpe-divider);
+    border-radius: 500px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--euterpe-text);
+    cursor: pointer;
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .suggestion .bolt {
+    color: var(--euterpe-accent);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .suggestion:hover {
+    background: var(--euterpe-surface-raised);
+    border-color: var(--euterpe-accent-border-strong);
+  }
+  .suggestion.primary {
+    background: var(--euterpe-accent-soft);
+    border-color: var(--euterpe-accent-border-strong);
+  }
+  .inputbar input {
+    flex: 1;
+    background: var(--euterpe-surface-soft);
+    border: none;
+    border-radius: 500px;
+    padding: 10px 14px;
+    color: var(--euterpe-text);
+    outline: none;
+    font-size: 14px;
+  }
+  .inputbar input::placeholder { color: var(--euterpe-text-muted); }
+  .inputbar input:focus { box-shadow: 0 0 0 2px var(--euterpe-accent-soft); }
+  .btn-send {
+    background: var(--euterpe-accent);
+    color: var(--euterpe-on-accent);
+    border: none;
+    border-radius: 500px;
+    padding: 10px 18px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-send:hover { background: var(--euterpe-accent-active); }
+  .btn-send:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="frame">
+    <div class="header">
+      <h1>Euterpe</h1>
+      <div class="header-actions">
+        <span class="chip online" id="connChip">online</span>
+        <button class="btn-ghost" id="clearBtn">Limpar conversa</button>
+      </div>
+    </div>
+
+    <div class="tabsbar" id="tabsbar"></div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="proposal" id="proposal" hidden>
+      <div class="title" id="proposalTitle"></div>
+      <div class="btns">
+        <button class="btn-primary" id="proposalApprove">Confirmar</button>
+        <button class="btn-ghost-sm" id="proposalReject">Cancelar</button>
+      </div>
+    </div>
+
+    <div class="suggestions" id="suggestions"></div>
+
+    <div class="inputbar">
+      <input id="input" placeholder="Ex.: pega os artistas da minha playlist X e busca músicas de término…" />
+      <button class="btn-send" id="sendBtn">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const messagesEl = document.getElementById("messages");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("sendBtn");
+const clearBtn = document.getElementById("clearBtn");
+const proposalEl = document.getElementById("proposal");
+const proposalTitle = document.getElementById("proposalTitle");
+const proposalApprove = document.getElementById("proposalApprove");
+const proposalReject = document.getElementById("proposalReject");
+const suggestionsEl = document.getElementById("suggestions");
+
+const ICONS = {
+  play: '<path d="M3 1.71a1 1 0 0 1 1.49-.87l10 5.79a1 1 0 0 1 0 1.74l-10 5.79A1 1 0 0 1 3 13.29V1.71Z"/>',
+  playlist: '<path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 0 6.5v-5Zm10 0h-9v5h9v-5Zm-2.5 10v3h-1v-3H4.5l3.5-3.5 3.5 3.5H7.5ZM6.5 16v1.5a1.5 1.5 0 0 1-3 0v-9a1.5 1.5 0 0 1 3 0v7.5Z"/>',
+  album: '<path d="M1.5 14.5h13V16h-13v-1.5Zm0-3h13V13h-13v-1.5ZM4 0h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2Zm3.5 10.5a3 3 0 1 0-3-3 3 3 0 0 0 3 3Z"/>',
+  artist: '<path d="M8 8a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 1.5c-2.67 0-8 1.34-8 4V15h16v-1.5c0-2.66-5.33-4-8-4Z"/>',
+};
+
+function svgIcon(name, size) {
+  const path = ICONS[name];
+  return '<svg width="' + (size||14) + '" height="' + (size||14) + '" viewBox="0 0 16 16" fill="currentColor" style="display:inline-block">' + (path || '') + '</svg>';
+}
+
+function spotifyIcon(size) {
+  return '<svg width="' + (size||14) + '" height="' + (size||14) + '" viewBox="0 0 16 16" fill="currentColor" style="display:inline-block"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm3.67 11.54c-.15.24-.47.31-.71.16-1.94-1.18-4.38-1.45-7.26-.8-.28.06-.55-.12-.61-.4-.06-.28.12-.55.4-.61 3.15-.7 5.85-.4 8.01.9.25.15.32.48.17.72Zm.99-2.18c-.19.3-.58.39-.88.2-2.22-1.36-5.6-1.76-8.22-.96-.32.1-.67-.08-.77-.4-.1-.32.08-.67.4-.77 2.98-.91 6.69-.46 9.26 1.12.3.18.38.58.21.88v.01Zm.09-2.26C10.07 5.4 6.06 5.21 3.57 5.99c-.38.12-.78-.1-.9-.47-.12-.38.1-.78.47-.9 2.84-.89 7.27-.68 10.14 1.34.34.25.42.73.18 1.07-.25.34-.73.42-1.07.18l-.02-.01Z"/></svg>';
+}
+
+/* ---- parser markdown inline (espelha o index.js) ---- */
+function spotifyChip(raw) {
+  const m = raw.match(/^\{\{\s*spotify:(track|playlist|album|artist|show|episode):([A-Za-z0-9_-]{6,})(?:\s*\|\s*([\s\S]*?))?\s*\}\}$/);
+  if (!m) return null;
+  const type = m[1];
+  const uri = "spotify:" + type + ":" + m[2];
+  const label = (m[3] || "").trim() || uri;
+  const iconName = { track: "play", playlist: "playlist", album: "album", artist: "artist" }[type] || "play";
+  if (type === "artist") {
+    return '<button class="chip-artist" title="Abrir página do artista no Spotify">' + escapeHtml(label) + '</button>';
+  }
+  return '<span class="chip-track" title="' + escapeHtml(uri) + '">' +
+    '<span class="ic">' + svgIcon(iconName, 12) + '</span>' +
+    '<button>' + escapeHtml(label) + '</button>' +
+    '<button class="open" title="Abrir no Spotify">' + spotifyIcon(11) + '</button>' +
+  '</span>';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function mdInline(text) {
+  const tokenRe = /(\{\{spotify:[\s\S]+?\}\}|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`|~~[^~\n]+~~|\[[^\]]+\]\([^)\s]+\))/g;
+  let out = "";
+  let last = 0;
+  let m;
+  while ((m = tokenRe.exec(text)) !== null) {
+    if (m.index > last) out += escapeHtml(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith("{{spotify:")) {
+      const chip = spotifyChip(tok);
+      out += chip || escapeHtml(tok);
+    } else if (tok.startsWith("**") || tok.startsWith("__")) {
+      out += "<strong>" + mdInline(tok.slice(2, -2)) + "</strong>";
+    } else if (tok.startsWith("`")) {
+      out += "<code>" + escapeHtml(tok.slice(1, -1)) + "</code>";
+    } else if (tok.startsWith("~~")) {
+      out += "<s>" + mdInline(tok.slice(2, -2)) + "</s>";
+    } else if (tok.startsWith("[")) {
+      const mm = tok.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (mm) out += '<a href="' + escapeHtml(mm[2]) + '" target="_blank" rel="noopener noreferrer">' + mdInline(mm[1]) + "</a>";
+    } else if (tok.startsWith("*") || tok.startsWith("_")) {
+      out += "<em>" + mdInline(tok.slice(1, -1)) + "</em>";
+    }
+    last = m.index + tok.length;
+  }
+  if (last < text.length) out += escapeHtml(text.slice(last));
+  return out;
+}
+
+function renderMarkdown(md) {
+  const blocks = [];
+  const lines = md.split("\n");
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const fence = line.match(/^```(\w*)/);
+    if (fence) {
+      const code = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) { code.push(lines[i]); i++; }
+      i++;
+      const codeText = code.join("\n");
+      blocks.push('<div class="codeblock"><pre><code>' + escapeHtml(codeText) + '</code></pre><button class="copy">copiar</button></div>');
+      continue;
+    }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const level = h[1].length;
+      blocks.push("<h" + level + ">" + mdInline(h[2]) + "</h" + level + ">");
+      i++;
+      continue;
+    }
+    if (line.trim().startsWith(">")) {
+      const quote = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) { quote.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+      blocks.push("<blockquote>" + mdInline(quote.join("\n")) + "</blockquote>");
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { blocks.push("<hr>"); i++; continue; }
+    const bullet = /^\s*[-*+]\s+/.test(line);
+    const ordered = /^\s*\d+\.\s+/.test(line);
+    if (bullet || ordered) {
+      const isTask = /^\s*[-*+]\s+\[[ xX]\]\s+/.test(line);
+      const items = [];
+      while (i < lines.length) {
+        const bl = lines[i].match(/^\s*[-*+]\s+(.*)$/);
+        const ol = lines[i].match(/^\s*\d+\.\s+(.*)$/);
+        if (bullet && bl) { items.push(bl[1]); i++; }
+        else if (ordered && ol) { items.push(ol[1]); i++; }
+        else break;
+      }
+      if (isTask) {
+        blocks.push('<div class="tasklist">' + items.map(it => {
+          const tm = it.match(/^\[([ xX])\]\s+(.*)$/);
+          const checked = tm ? /[xX]/.test(tm[1]) : false;
+          const body = tm ? tm[2] : it;
+          return '<div class="task' + (checked ? " done" : "") + '"><span class="box">' + (checked ? "☑" : "☐") + '</span><span class="label">' + mdInline(body) + "</span></div>";
+        }).join("") + "</div>");
+        continue;
+      }
+      const tag = bullet ? "ul" : "ol";
+      blocks.push("<" + tag + ">" + items.map(it => "<li>" + mdInline(it) + "</li>").join("") + "</" + tag + ">");
+      continue;
+    }
+    const soloChip = line.trim().match(/^\{\{spotify:[\s\S]+?\}\}$/);
+    if (soloChip) {
+      const chip = spotifyChip(line.trim());
+      if (chip) { blocks.push('<div style="margin:4px 0">' + chip + "</div>"); i++; continue; }
+    }
+    const para = [];
+    while (i < lines.length && lines[i].trim() !== "" && !lines[i].trim().startsWith("```")) { para.push(lines[i]); i++; }
+    if (para.length) blocks.push("<p>" + mdInline(para.join(" ")) + "</p>");
+    else i++;
+  }
+  return blocks.join("");
+}
+
+/* ---- DOM helpers ---- */
+const tabsbarEl = document.getElementById("tabsbar");
+
+function scrollBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function renderMessages() {
+  messagesEl.innerHTML = "";
+  const s = currentSession();
+  if (!s) return;
+  for (const m of s.messages) {
+    const el = document.createElement("div");
+    el.className = "msg " + m.role;
+    el.innerHTML = m.html;
+    messagesEl.appendChild(el);
+  }
+  scrollBottom();
+}
+
+function addMessage(role, html) {
+  const s = currentSession();
+  if (!s) return null;
+  s.messages.push({ role, html });
+  updateSessionTitle(s);
+  saveSessions();
+  renderTabs();
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  el.innerHTML = html;
+  messagesEl.appendChild(el);
+  scrollBottom();
+  return el;
+}
+
+/* ---- sessões ---- */
+const STORE_KEY = "euterpe:proto:sessions";
+let sessions = [];
+let currentId = null;
+
+function loadSessions() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) sessions = arr;
+  } catch (e) {}
+}
+function saveSessions() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); } catch (e) {}
+}
+function currentSession() {
+  return sessions.find(s => s.id === currentId) || null;
+}
+function updateSessionTitle(s) {
+  const userMsg = s.messages.find(m => m.role === "user");
+  if (userMsg) {
+    const text = userMsg.html.replace(/<[^>]+>/g, "").trim();
+    s.title = text.length > 28 ? text.slice(0, 28) + "…" : text;
+  }
+}
+function newSession() {
+  const id = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  sessions.push({
+    id,
+    title: "Conversa",
+    messages: [{
+      role: "bot",
+      html: '<p>Olá! Sou o <strong>Euterpe</strong>. Posso ler suas playlists, buscar artistas similares, analisar letras e montar curadoria com capa — tudo aqui no Spotify.</p><p>Ex.: <em>"pega os artistas da minha playlist X e busca músicas de término"</em></p>',
+    }],
+  });
+  currentId = id;
+  saveSessions();
+  renderTabs();
+  renderMessages();
+  hideProposal();
+  showSuggestions(WELCOME_SUGGESTIONS);
+}
+function selectSession(id) {
+  currentId = id;
+  renderTabs();
+  renderMessages();
+  hideProposal();
+  showSuggestions(WELCOME_SUGGESTIONS);
+}
+function removeSession(id) {
+  const idx = sessions.findIndex(s => s.id === id);
+  if (idx === -1) return;
+  sessions.splice(idx, 1);
+  if (currentId === id) currentId = sessions.length ? sessions[sessions.length - 1].id : null;
+  if (!sessions.length) { newSession(); return; }
+  saveSessions();
+  renderTabs();
+  renderMessages();
+  hideProposal();
+}
+function renderTabs() {
+  tabsbarEl.innerHTML = "";
+  for (const s of sessions) {
+    const tab = document.createElement("div");
+    tab.className = "tab" + (s.id === currentId ? " active" : "");
+    tab.title = s.title;
+    tab.innerHTML = '<span class="label">' + escapeHtml(s.title) + '</span>';
+    tab.addEventListener("click", () => selectSession(s.id));
+    const close = document.createElement("button");
+    close.className = "close";
+    close.innerHTML = "×";
+    close.title = "Fechar sessão";
+    close.addEventListener("click", (e) => { e.stopPropagation(); removeSession(s.id); });
+    tab.appendChild(close);
+    tabsbarEl.appendChild(tab);
+  }
+  const plus = document.createElement("button");
+  plus.className = "tab-new";
+  plus.innerHTML = "+";
+  plus.title = "Nova conversa";
+  plus.addEventListener("click", newSession);
+  tabsbarEl.appendChild(plus);
+  tabsbarEl.scrollLeft = tabsbarEl.scrollWidth;
+}
+
+/* ---- estado ---- */
+let statusEl = null;
+let busy = false;
+
+function setTool(text) {
+  if (statusEl) statusEl.remove();
+  statusEl = null;
+  if (text) {
+    statusEl = document.createElement("div");
+    statusEl.className = "statusline";
+    statusEl.innerHTML = '<span class="dot"></span><span class="text">' + escapeHtml(text.replace("usando ", "")) + "</span>";
+    messagesEl.appendChild(statusEl);
+    scrollBottom();
+  }
+}
+
+function showProposal(title) {
+  proposalTitle.textContent = title;
+  proposalEl.hidden = false;
+}
+function hideProposal() { proposalEl.hidden = true; }
+
+/* ---- sugestões rápidas ---- */
+const WELCOME_SUGGESTIONS = [
+  { text: "Curadoria pra vibe de término", primary: true },
+  { text: "O que tem na minha playlist favorita?", primary: false },
+  { text: "Top artistas e gêneros da semana", primary: false },
+  { text: "Radar de lançamentos", primary: false },
+];
+
+function showSuggestions(list) {
+  suggestionsEl.innerHTML = "";
+  for (const s of list) {
+    const btn = document.createElement("button");
+    btn.className = "suggestion" + (s.primary ? " primary" : "");
+    btn.innerHTML = escapeHtml(s.text);
+    btn.title = s.text;
+    btn.addEventListener("click", () => {
+      inputEl.value = s.text;
+      send();
+    });
+    suggestionsEl.appendChild(btn);
+  }
+}
+function hideSuggestions() {
+  suggestionsEl.innerHTML = "";
+}
+
+/* ---- demo: respostas falsas do agente ---- */
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function streamText(text) {
+  const el = document.createElement("div");
+  el.className = "msg bot";
+  el.innerHTML = '<span class="caret"></span>';
+  messagesEl.appendChild(el);
+  scrollBottom();
+  const rendered = renderMarkdown(text);
+  await sleep(600 + Math.min(1200, text.length * 8));
+  el.innerHTML = rendered + '<span class="caret"></span>';
+  scrollBottom();
+  await sleep(600);
+  el.innerHTML = rendered;
+  scrollBottom();
+  const s = currentSession();
+  if (s) s.messages.push({ role: "bot", html: rendered });
+  saveSessions();
+  renderTabs();
+}
+
+async function demoReply(userText) {
+  setTool("buscando artistas similares…");
+  await sleep(900);
+
+  setTool("lendo letras (LRCLIB)…");
+  await sleep(900);
+
+  setTool("consultando SearXNG…");
+  await sleep(900);
+  setTool(null);
+
+  const markdown =
+`Beleza! Cruzei sua playlist com **similares do Last.fm** e letras. Aqui vai a curadoria pra vibe *"término"*:
+
+1. **Cazuza — Exagerado** {{spotify:track:2FQUOfGHkQ6Sg2Csf2I0G0 | Exagerado}}
+   > "E viver de amor... até o fim" — encaixa no tema de entrega total.
+2. **Legião Urbana — Tempo Perdido** {{spotify:track:7uAkCp5TkT1ShBjKKSNPVO | Tempo Perdido}}
+   - Metadados: energia alta, valência baixa (tristeza pulsante).
+3. **Marisa Monte — Ainda Bem** {{spotify:artist:0rSTXrxHuYE1LygLZC37Aa | Marisa Monte}}
+   - Similar a artistas da sua playlist (score 0.87).
+
+\`\`\`
+Fontes: Last.fm (0.87) · LRCLIB (2/3) · inferido por metadados (1/3)
+\`\`\`
+
+Quer que eu **crie a playlist** com essas faixas?`;
+
+  await streamText(markdown);
+
+  showProposal("Criar playlist “Términos 2026” (5 faixas) com justificativa por faixa?");
+
+  showSuggestions([
+    { text: "Sim, criar a playlist", primary: true },
+    { text: "Mais faixas, sem letra", primary: false },
+    { text: "Só me manda o link", primary: false },
+  ]);
+}
+
+/* ---- eventos ---- */
+function send() {
+  const text = inputEl.value.trim();
+  if (!text || busy) return;
+  busy = true;
+  hideSuggestions();
+  addMessage("user", escapeHtml(text));
+  inputEl.value = "";
+  sendBtn.disabled = true;
+  demoReply(text).finally(() => { busy = false; sendBtn.disabled = false; });
+}
+
+sendBtn.addEventListener("click", send);
+inputEl.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+clearBtn.addEventListener("click", () => {
+  const s = currentSession();
+  if (!s) return;
+  s.messages = [];
+  saveSessions();
+  renderMessages();
+  hideProposal();
+  showSuggestions(WELCOME_SUGGESTIONS);
+});
+
+proposalApprove.addEventListener("click", () => {
+  hideProposal();
+  addMessage("bot", "<p>Playlist <strong>“Términos 2026”</strong> criada! <a href=\"#\">abrir no Spotify</a> {{spotify:playlist:37i9dQZF1DXcBWIGoYBM5M | Términos 2026}}</p>");
+});
+proposalReject.addEventListener("click", hideProposal);
+
+/* ---- init ---- */
+loadSessions();
+if (sessions.length) {
+  currentId = sessions[sessions.length - 1].id;
+  renderTabs();
+  renderMessages();
+} else {
+  newSession();
+}
+</script>
+</body>
+</html>

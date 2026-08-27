@@ -1,0 +1,24 @@
+# Env / secrets
+.env
+*.local
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent runtime
+agent/data/ws-secret
+agent/data/*.db
+agent/data/*.db-journal
+agent/data/*.db-wal
+agent/data/*.db-shm
+tmp/
