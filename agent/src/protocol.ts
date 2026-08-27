@@ -74,5 +74,7 @@ export interface ServerMessage {
     | "proposal.create"
     | "undo.ok"
     | "pong";
+  /** Sugestões de continuação da conversa (geradas pelo agente), opcional. */
+  suggestions?: string[];
   [key: string]: unknown;
 }

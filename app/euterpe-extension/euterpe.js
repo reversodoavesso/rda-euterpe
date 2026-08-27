@@ -18,6 +18,7 @@
 
     let ws = null;
     let retry = 0;
+    let agentVersion = null;
 
     function notify(msg) {
       listeners.forEach((cb) => {
@@ -476,6 +477,7 @@
       fetch(AGENT_URL + "/config")
         .then((r) => r.json())
         .then((cfg) => {
+          agentVersion = cfg.version || null;
           ws = new WebSocket(WS_URL);
 
           ws.onopen = () => {
@@ -580,6 +582,9 @@
       },
       get connected() {
         return ws && ws.readyState === WebSocket.OPEN;
+      },
+      get agentVersion() {
+        return agentVersion;
       },
     };
 

@@ -49,7 +49,7 @@ await new Promise((res) => mockLlm.listen(18999, "127.0.0.1", res));
 const server = spawn("npx", ["tsx", "src/index.ts"], {
   cwd: agentDir,
   shell: true,
-  env: { ...process.env, DEEPSEEK_API_KEY: "test", LLM_BASE_URL: "http://127.0.0.1:18999", PORT: "8338", DB_PATH: "data/test.db" },
+  env: { ...process.env, DEEPSEEK_API_KEY: "test", LLM_BASE_URL: "http://127.0.0.1:18999", PORT: "8338", DB_PATH: "data/test.db", EUTERPE_SUGGESTIONS: "false" },
 });
 
 function killPort(port) {

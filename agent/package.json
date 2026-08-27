@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^8.3.1",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^12",
     "dotenv": "^16.4.7",
     "fastify": "^4.29.0",
     "openai": "^4.77.0",

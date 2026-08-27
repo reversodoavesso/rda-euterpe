@@ -10,6 +10,7 @@ import { handleChat, handleSongChange } from "./agent.js";
 import { clearHistory, saveSnapshot } from "./db.js";
 import { MUTATING_TOOLS } from "./tools/defs.js";
 import { logSession, listSessions, readSession } from "./logging.js";
+import { AGENT_STRINGS, makeT, normalizeLocale, type Translator } from "./i18n.js";
 
 const app = Fastify({ logger: { level: "info" } });
 await app.register(websocket);

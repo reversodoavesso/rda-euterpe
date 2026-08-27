@@ -62,6 +62,8 @@ const server = spawn("npx", ["tsx", "src/index.ts"], {
     LLM_BASE_URL: "http://127.0.0.1:18999",
     PORT: "8338",
     DB_PATH: "data/test.db",
+    CHAT_HISTORY: "4",
+    EUTERPE_SUGGESTIONS: "false",
   },
 });
 

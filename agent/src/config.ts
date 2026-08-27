@@ -23,6 +23,10 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  EUTERPE_SUGGESTIONS: z
+    .string()
+    .optional()
+    .transform((v) => v === undefined || (v !== "false" && v !== "0")),
   CHAT_HISTORY: z.coerce.number().default(0),
   EUTERPE_DEBUG: z
     .string()
@@ -61,6 +65,7 @@ export interface AppConfig {
   maxToolSteps: number;
   autoRouting: boolean;
   chatHistoryTurns: number;
+  suggestionsEnabled: boolean;
   debug: boolean;
   wsSecret: string;
 }
@@ -79,6 +84,7 @@ export const config: AppConfig = {
   maxToolSteps: parsed.MAX_TOOL_STEPS,
   autoRouting: parsed.AUTO_ROUTING,
   chatHistoryTurns: parsed.CHAT_HISTORY,
+  suggestionsEnabled: parsed.EUTERPE_SUGGESTIONS,
   debug: parsed.EUTERPE_DEBUG,
   wsSecret: loadSecret(),
 };

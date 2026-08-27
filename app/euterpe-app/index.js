@@ -13,13 +13,6 @@ const MSG_PREFIX = "euterpe:messages:";
 const MAX_SESSIONS = 12;
 const SESSION_TITLE_MAX = 28;
 
-const WELCOME_SUGGESTIONS = [
-  "Curadoria pra vibe de término",
-  "O que tem na minha playlist favorita?",
-  "Top artistas e gêneros da semana",
-  "Radar de lançamentos",
-];
-
 function newSessionId() {
   return "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 }
@@ -225,6 +218,25 @@ function spotifyLinkIcon(size) {
     React.createElement("path", {
       d: "M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm3.67 11.54c-.15.24-.47.31-.71.16-1.94-1.18-4.38-1.45-7.26-.8-.28.06-.55-.12-.61-.4-.06-.28.12-.55.4-.61 3.15-.7 5.85-.4 8.01.9.25.15.32.48.17.72Zm.99-2.18c-.19.3-.58.39-.88.2-2.22-1.36-5.6-1.76-8.22-.96-.32.1-.67-.08-.77-.4-.1-.32.08-.67.4-.77 2.98-.91 6.69-.46 9.26 1.12.3.18.38.58.21.88v.01Zm.09-2.26C10.07 5.4 6.06 5.21 3.57 5.99c-.38.12-.78-.1-.9-.47-.12-.38.1-.78.47-.9 2.84-.89 7.27-.68 10.14 1.34.34.25.42.73.18 1.07-.25.34-.73.42-1.07.18l-.02-.01Z",
     })
+  );
+}
+
+/* Logo Euterpe — mesma arte do ícone em manifest.json (duas colcheias com
+   barra dupla). Mantenha o path/elipses sincronizados com o manifest. */
+function euterpeLogo(size) {
+  return React.createElement(
+    "svg",
+    {
+      width: size || 18,
+      height: size || 18,
+      viewBox: "0 0 16 16",
+      fill: "currentColor",
+      "aria-hidden": true,
+      style: { display: "block" },
+    },
+    React.createElement("path", { d: "M5.9 12.6L5.9 3 12.9 3.3 12.9 12.6 12.2 12.6 12.2 4.5 6.6 4.2 6.6 12.6Z" }),
+    React.createElement("ellipse", { cx: "5.1", cy: "12.7", rx: "1.65", ry: "1.2", transform: "rotate(-20 5.1 12.7)" }),
+    React.createElement("ellipse", { cx: "11.6", cy: "12.7", rx: "1.65", ry: "1.2", transform: "rotate(-20 11.6 12.7)" })
   );
 }
 
@@ -609,7 +621,11 @@ function renderMarkdown(md, keyBase = "md") {
 
 (function injectStyles() {
   try {
-    if (document.getElementById("euterpe-styles")) return;
+    // Substitui em vez de retornar cedo: o <style> persiste entre navegações do
+    // custom app na mesma sessão do Spotify, e o arquivo pode ser relido após um
+    // update sem reiniciar o cliente — o CSS novo precisa chegar de novo.
+    const existing = document.getElementById("euterpe-styles");
+    if (existing) existing.remove();
     const s = document.createElement("style");
     s.id = "euterpe-styles";
     s.textContent = `:root {
@@ -644,7 +660,66 @@ function renderMarkdown(md, keyBase = "md") {
   --euterpe-danger: #f15e6c;
   --euterpe-danger-soft: rgba(241,94,108,.2);
 }
-@keyframes euterpeBlink { 50% { opacity: 0; } }`;
+@keyframes euterpeBlink { 50% { opacity: 0; } }
+@keyframes euterpePulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--spice-rgb-button, 29,185,84), .5); }
+  70% { box-shadow: 0 0 0 6px rgba(var(--spice-rgb-button, 29,185,84), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--spice-rgb-button, 29,185,84), 0); }
+}
+/* Botões do app — classes utilitárias escopadas no root do app para vencer os
+   resets do Encore (specificity 0,2,0) com reset completo de estilo. */
+.euterpe-app .euterpe-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 500px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--euterpe-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
+}
+.euterpe-app .euterpe-btn:disabled { opacity: .5; cursor: not-allowed; }
+.euterpe-app .euterpe-btn-ghost { border-color: var(--euterpe-divider); }
+.euterpe-app .euterpe-btn-ghost:hover:not(:disabled) { background: var(--euterpe-surface-soft); border-color: var(--euterpe-border); }
+/* Quick replies — balões de sugestão dentro do thread de conversa. */
+.euterpe-app .euterpe-quickreply {
+  appearance: none;
+  display: block;
+  margin: 0;
+  padding: 8px 12px;
+  max-width: 100%;
+  border-radius: 14px;
+  border-top-left-radius: 4px;
+  border: 1px solid var(--euterpe-accent-border-strong);
+  background: var(--euterpe-surface);
+  color: var(--euterpe-text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.euterpe-app .euterpe-quickreply:hover { background: var(--euterpe-accent-soft); }
+.euterpe-app .euterpe-quickreply:active { background: var(--euterpe-accent-soft-2); }
+.euterpe-app .euterpe-quickreply:focus-visible {
+  outline: 2px solid var(--euterpe-accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .euterpe-app * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}`;
     document.head.appendChild(s);
   } catch (err) {}
 })();
@@ -669,6 +744,10 @@ function Euterpe() {
   const [proposal, setProposal] = useState(null);
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+  const [agentVersion, setAgentVersion] = useState(
+    window.euterpe && window.euterpe.agentVersion ? window.euterpe.agentVersion : null
+  );
+  const [focused, setFocused] = useState(false);
   const listRef = useRef(null);
   const bus = window.euterpe;
 
@@ -683,13 +762,16 @@ function Euterpe() {
           markLastDone();
           setTool(null);
           setStatus("conectado");
-          setSuggestions(WELCOME_SUGGESTIONS);
+          // Só mexe nas sugestões quando o agente mandou o campo — o routing
+          // (songchange) também emite chat.done sem suggestions e não deve
+          // resetar os pills contextuais da conversa.
+          if (Array.isArray(msg.suggestions)) setSuggestions(msg.suggestions.slice(0, 3));
           break;
         case "chat.cleared":
           clearMessages();
           setTool(null);
           setStatus("conversa limpa");
-          setSuggestions(WELCOME_SUGGESTIONS);
+          setSuggestions([]);
           break;
         case "proposal.create":
           setProposal({ id: msg.proposalId, title: msg.title, detail: msg.detail || msg.name || "" });
@@ -710,6 +792,7 @@ function Euterpe() {
         case "hello.ok":
           setConnected(true);
           setStatus("conectado");
+          setAgentVersion(msg.version || (window.euterpe && window.euterpe.agentVersion) || null);
           break;
         default:
           break;
@@ -726,7 +809,7 @@ function Euterpe() {
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, status, tool]);
+  }, [messages, status, tool, suggestions]);
 
   const send = (textOverride) => {
     const text = (textOverride !== undefined ? textOverride : input).trim();
@@ -742,7 +825,7 @@ function Euterpe() {
     if (!bus || !currentId) return;
     clearMessages();
     bus.send({ type: "chat.clear", sessionId: currentId });
-    setSuggestions(WELCOME_SUGGESTIONS);
+    setSuggestions([]);
   };
 
   if (!bus) {
@@ -758,26 +841,100 @@ function Euterpe() {
     );
   }
 
-  const headerStyle = {
+  const headerOuterStyle = {
+    padding: "18px 0 14px",
+    marginBottom: "2px",
+    background: "var(--euterpe-bg)",
+    borderBottom: "1px solid var(--euterpe-divider)",
+  };
+  const headerRowStyle = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: "8px",
+    gap: "12px",
   };
-  const chipStyle = {
-    fontSize: "12px",
-    padding: "4px 10px",
-    borderRadius: "500px",
-    fontWeight: 600,
-    background: connected ? "var(--euterpe-accent-soft)" : "var(--euterpe-danger-soft)",
-    color: connected ? "var(--euterpe-accent)" : "var(--euterpe-danger)",
+  const brandStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    minWidth: 0,
+  };
+  const logoStyle = {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    flexShrink: 0,
+    background: "var(--euterpe-accent)",
+    color: "var(--euterpe-on-accent)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 2px 10px rgba(0,0,0,.3)",
+  };
+  const titleStackStyle = {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  };
+  const titleStyle = {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 700,
+    letterSpacing: "-.3px",
+    lineHeight: 1.15,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+  const connecting = !connected && status === "conectando…";
+  const dotStyle = {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    flexShrink: 0,
+    background: connected ? "var(--euterpe-accent)" : "var(--euterpe-danger)",
+    animation: connecting ? "euterpePulse 1.6s ease-out infinite" : "none",
+  };
+  const subtitleText = connected
+    ? agentVersion
+      ? `conectado ao agente · v${agentVersion}`
+      : "conectado ao agente"
+    : status || "desconectado";
+  const headerActionsStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexShrink: 0,
+  };
+  const emptyStateStyle = {
+    margin: "auto",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "10px",
+    textAlign: "center",
+    maxWidth: 340,
+    padding: "32px 12px",
+  };
+  const emptyLogoStyle = {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    flexShrink: 0,
+    background: "var(--euterpe-accent-soft)",
+    color: "var(--euterpe-accent)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   };
   const tabsBarStyle = {
     display: "flex",
     gap: "8px",
     alignItems: "center",
     overflowX: "auto",
-    padding: "12px 0 0",
+    padding: "12px 0 10px",
+    borderBottom: "1px solid var(--euterpe-divider)",
     scrollbarWidth: "thin",
   };
   const tabStyle = (active) => ({
@@ -816,55 +973,58 @@ function Euterpe() {
     cursor: "pointer",
     lineHeight: "1",
   };
-  const suggestionsBarStyle = {
-    display: "flex",
-    gap: "8px",
-    alignItems: "center",
-    flexWrap: "wrap",
-    padding: "0 0 8px",
-  };
-  const suggestionStyle = {
-    display: "inline-flex",
-    alignItems: "center",
-    background: "var(--euterpe-surface)",
-    border: "1px solid var(--euterpe-divider)",
-    borderRadius: "500px",
-    padding: "6px 12px",
-    fontSize: "12px",
-    color: "var(--euterpe-text)",
-    cursor: "pointer",
-    maxWidth: "280px",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  };
 
   return React.createElement(
     "section",
-    { className: "contentSpacing", style: { display: "flex", flexDirection: "column", height: "100%" } },
+    { className: "contentSpacing euterpe-app", style: { display: "flex", flexDirection: "column", height: "100%" } },
     React.createElement(
       "div",
-      { style: headerStyle },
-      React.createElement("h1", { style: { margin: 0 } }, "Euterpe"),
+      { style: headerOuterStyle },
       React.createElement(
         "div",
-        { style: { display: "flex", gap: "8px", alignItems: "center" } },
-        React.createElement("span", { style: chipStyle }, connected ? "online" : "offline"),
+        { style: headerRowStyle },
         React.createElement(
-          "button",
-          {
-            onClick: clear,
-            style: {
-              background: "transparent",
-              border: "1px solid var(--euterpe-border)",
-              borderRadius: "500px",
-              padding: "4px 12px",
-              fontSize: "12px",
-              color: "var(--euterpe-text)",
-              cursor: "pointer",
+          "div",
+          { style: brandStyle },
+          React.createElement("div", { style: logoStyle, "aria-hidden": true }, euterpeLogo(18)),
+          React.createElement(
+            "div",
+            { style: titleStackStyle },
+            React.createElement("h1", { style: titleStyle }, "Euterpe"),
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 2, minWidth: 0 } },
+              React.createElement("span", { style: dotStyle, title: connected ? "conectado" : "desconectado" }),
+              React.createElement(
+                "span",
+                {
+                  style: {
+                    fontSize: 12,
+                    color: "var(--euterpe-subtext)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  },
+                },
+                subtitleText
+              )
+            )
+          )
+        ),
+        React.createElement(
+          "div",
+          { style: headerActionsStyle },
+          React.createElement(
+            "button",
+            {
+              className: "euterpe-btn euterpe-btn-ghost",
+              onClick: clear,
+              title: "Apagar as mensagens desta conversa",
+              "aria-label": "Limpar conversa",
             },
-          },
-          "Limpar conversa"
+            nativeIcon("ban", 13),
+            "Limpar conversa"
+          )
         )
       )
     ),
@@ -874,13 +1034,24 @@ function Euterpe() {
       sessions.map((s) =>
         React.createElement(
           "div",
-          { key: s.id, onClick: () => openSession(s.id), style: tabStyle(s.id === currentId), title: s.title },
+          {
+            key: s.id,
+            onClick: () => {
+              setSuggestions([]);
+              openSession(s.id);
+            },
+            style: tabStyle(s.id === currentId),
+            title: s.title,
+          },
           React.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis" } }, s.title),
           React.createElement(
             "button",
             {
               onClick: (e) => {
                 e.stopPropagation();
+                // Se fechou a sessão ativa, a thread muda — os quick replies da
+                // sessão anterior não podem vazar para a próxima.
+                if (s.id === currentId) setSuggestions([]);
                 closeSession(s.id);
               },
               style: tabCloseStyle,
@@ -893,7 +1064,15 @@ function Euterpe() {
       ),
       React.createElement(
         "button",
-        { onClick: newSession, style: tabNewStyle, title: "Nova conversa", "aria-label": "Nova conversa" },
+        {
+          onClick: () => {
+            setSuggestions([]);
+            newSession();
+          },
+          style: tabNewStyle,
+          title: "Nova conversa",
+          "aria-label": "Nova conversa",
+        },
         "+"
       )
     ),
@@ -901,8 +1080,21 @@ function Euterpe() {
       "div",
       {
         ref: listRef,
-        style: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", padding: "12px 0" },
+        style: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", padding: "12px 0", scrollbarWidth: "thin" },
       },
+      !messages.length && !tool && (!status || status === "conectado")
+        ? React.createElement(
+            "div",
+            { style: emptyStateStyle },
+            React.createElement("div", { style: emptyLogoStyle, "aria-hidden": true }, euterpeLogo(26)),
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: "var(--euterpe-text)" } }, "Seu assistente musical"),
+            React.createElement(
+              "div",
+              { style: { fontSize: 13, lineHeight: 1.5, color: "var(--euterpe-subtext)" } },
+              "Pergunte sobre playlists, artistas, mood e lançamentos — depois de cada resposta, o Euterpe sugere os próximos passos."
+            )
+          )
+        : null,
       messages.map((m, i) =>
         React.createElement(
           "div",
@@ -943,6 +1135,28 @@ function Euterpe() {
               ])
         )
       ),
+      suggestions.length && connected && !tool
+        ? React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: "6px",
+                marginTop: "2px",
+                maxWidth: "80%",
+              },
+            },
+            suggestions.map((text, i) =>
+              React.createElement(
+                "button",
+                { key: i, className: "euterpe-quickreply", onClick: () => send(text) },
+                text
+              )
+            )
+          )
+        : null,
       tool
         ? React.createElement(
             "div",
@@ -951,7 +1165,7 @@ function Euterpe() {
             tool.replace("usando ", "")
           )
         : null,
-      status && !tool
+      status && !tool && status !== "conectado"
         ? React.createElement("div", { style: { color: "var(--euterpe-status)", fontSize: "12px" } }, status)
         : null
     ),
@@ -1013,19 +1227,6 @@ function Euterpe() {
           )
         )
       : null,
-    suggestions.length
-      ? React.createElement(
-          "div",
-          { style: suggestionsBarStyle },
-          suggestions.map((text, i) =>
-            React.createElement(
-              "button",
-              { key: i, onClick: () => send(text), style: suggestionStyle, title: text },
-              text
-            )
-          )
-        )
-      : null,
     React.createElement(
       "div",
       { style: { display: "flex", gap: "8px", paddingBottom: "16px" } },
@@ -1033,11 +1234,16 @@ function Euterpe() {
         style: {
           flex: 1,
           background: "var(--euterpe-surface-soft)",
-          border: "none",
+          border: focused ? "1px solid var(--euterpe-accent-border-strong)" : "1px solid transparent",
           borderRadius: "500px",
           padding: "10px 14px",
           color: "var(--euterpe-text)",
+          outline: "none",
+          transition: "border-color .15s ease",
+          opacity: connected ? 1 : 0.5,
         },
+        onFocus: () => setFocused(true),
+        onBlur: () => setFocused(false),
         placeholder: "Ex.: pega os artistas da minha playlist X e busca músicas de término…",
         value: input,
         onChange: (e) => setInput(e.target.value),
