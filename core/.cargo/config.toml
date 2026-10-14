@@ -1,0 +1,14 @@
+# Toolchain do crate `euterpe` (PLAN-REFACTOR.md, Fase 0/2).
+#
+# Esta máquina não tem MSVC (instalar Build Tools exige admin, indisponível), então
+# o host é `x86_64-pc-windows-gnu` com o GCC do MinGW-w64 (UCRT/POSIX/SEH).
+#
+# Pré-requisito: `winget install --id BrechtSanders.WinLibs.POSIX.UCRT --scope user`
+# com `<pkg>\mingw64\bin` no PATH. Ver `core/README.md`.
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "gcc-ar"
+
+[build]
+# Mantém o alvo explícito para que `cargo test`/`cargo build` não dependam do host.
+target = "x86_64-pc-windows-gnu"

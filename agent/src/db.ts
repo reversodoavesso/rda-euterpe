@@ -6,12 +6,10 @@ import { config } from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export function openDb(): Database.Database {
-  const dbPath = resolve(__dirname, "..", config.dbPath);
-  mkdirSync(dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.exec(`
+/** Schema canônico (contrato C10). Extraído para constante para ser exportado
+    como golden (`agent/tools/export-goldens.mjs` → `core/tests/fixtures/schema.sql`)
+    e manter o paridade_store.rs ancorado no mesmo texto. Não mudar sem bump. */
+export const SCHEMA_SQL = `
     CREATE TABLE IF NOT EXISTS conversations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT,
@@ -38,7 +36,14 @@ export function openDb(): Database.Database {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-  `);
+  `;
+
+export function openDb(): Database.Database {
+  const dbPath = resolve(__dirname, "..", config.dbPath);
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const db = new Database(dbPath);
+  db.pragma("journal_mode = WAL");
+  db.exec(SCHEMA_SQL);
 
   const cols = db.prepare("PRAGMA table_info(conversations)").all() as { name: string }[];
   if (!cols.some((c) => c.name === "session_id")) {

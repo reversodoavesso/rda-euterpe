@@ -1,0 +1,98 @@
+[
+  {
+    "in": "hello world",
+    "label": "short_as_max",
+    "max": 11,
+    "out": "hello world"
+  },
+  {
+    "in": "",
+    "label": "empty",
+    "max": 10,
+    "out": ""
+  },
+  {
+    "in": "abcdef",
+    "label": "exact_max",
+    "max": 6,
+    "out": "abcdef"
+  },
+  {
+    "in": "abcdefg",
+    "label": "one_over",
+    "max": 6,
+    "out": "abcdef…"
+  },
+  {
+    "in": "first paragraph here.\n\nsecond paragraph that is much longer",
+    "label": "paragraph_boundary",
+    "max": 40,
+    "out": "first paragraph here.\n\nsecond paragraph…"
+  },
+  {
+    "in": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "label": "no_boundary_after_half",
+    "max": 40,
+    "out": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
+  },
+  {
+    "in": "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii",
+    "label": "space_boundary",
+    "max": 30,
+    "out": "aaaa bbbb cccc dddd eeee ffff…"
+  },
+  {
+    "in": "intro text {{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}} tail",
+    "label": "template_cut_inside",
+    "max": 30,
+    "out": "intro text…"
+  },
+  {
+    "in": "intro {{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}",
+    "label": "template_whole_kept",
+    "max": 60,
+    "out": "intro {{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}"
+  },
+  {
+    "in": "{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}} and more",
+    "label": "template_exactly_at_cut",
+    "max": 50,
+    "out": "{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}…"
+  },
+  {
+    "in": "line one\nline two is here and it keeps going",
+    "label": "newline_then_space",
+    "max": 25,
+    "out": "line one\nline two is…"
+  },
+  {
+    "in": "{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}",
+    "label": "many_templates",
+    "max": 80,
+    "out": "{{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}…"
+  },
+  {
+    "in": "abcdefgh        ",
+    "label": "trailing_whitespace",
+    "max": 8,
+    "out": "abcdefgh…"
+  },
+  {
+    "in": "aaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "label": "half_boundary_is_ok",
+    "max": 20,
+    "out": "aaaaa bbbbbbbbbbbbbb…"
+  },
+  {
+    "in": "abcdef",
+    "label": "max_zero",
+    "max": 0,
+    "out": "…"
+  },
+  {
+    "in": "ação çãõ ê ü — travessão",
+    "label": "unicode",
+    "max": 10,
+    "out": "ação çãõ…"
+  }
+]

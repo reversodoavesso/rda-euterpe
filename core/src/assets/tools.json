@@ -1,0 +1,792 @@
+{
+  "_generated": "agent/tools/export-goldens.mjs — NÃO editar à mão (fonte: agent/src/tools/defs.ts)",
+  "client": [
+    {
+      "description": "CREATES a new playlist and ADDS the given tracks in one shot. Every creation is confirmed by the user. Show the list with per-track justification in chat first.",
+      "name": "create_playlist",
+      "parameters": {
+        "properties": {
+          "description": {
+            "description": "optional description",
+            "type": "string"
+          },
+          "name": {
+            "description": "playlist name",
+            "type": "string"
+          },
+          "tracks": {
+            "description": "track URIs",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "tracks"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Adds tracks to an existing playlist. Mutation confirmed by the user.",
+      "name": "add_tracks",
+      "parameters": {
+        "properties": {
+          "playlist_id": {
+            "type": "string"
+          },
+          "uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "playlist_id",
+          "uris"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Removes tracks from a playlist. Mutation confirmed by the user.",
+      "name": "remove_tracks",
+      "parameters": {
+        "properties": {
+          "playlist_id": {
+            "type": "string"
+          },
+          "uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "playlist_id",
+          "uris"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Updates a playlist's name and/or description. Mutation confirmed by the user.",
+      "name": "set_playlist_details",
+      "parameters": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "playlist_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "playlist_id"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Replaces ALL tracks of a playlist with the given list (used for undo and hygiene). Mutation confirmed by the user.",
+      "name": "replace_playlist_tracks",
+      "parameters": {
+        "properties": {
+          "playlist_id": {
+            "type": "string"
+          },
+          "uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "playlist_id",
+          "uris"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Changes a playlist's cover (JPEG image in base64, max 256KB). Mutation confirmed by the user.",
+      "name": "set_playlist_cover",
+      "parameters": {
+        "properties": {
+          "image_b64": {
+            "description": "JPEG base64",
+            "type": "string"
+          },
+          "playlist_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "playlist_id",
+          "image_b64"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Your recently played tracks from the client's history (RecentsAPI). Returns up to `limit` items with track name, artists, album, URI, `added_at`, `fully_played`, `resume_position_ms`. Use instead of the rate-limited `get_top_tracks`/`get_top_artists` to understand what you actually listened to recently.",
+      "name": "get_listening_recents",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "max 50",
+            "type": "integer"
+          },
+          "time_range": {
+            "description": "short_term, medium_term, long_term (ignored; history is unbounded)",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "What is playing RIGHT NOW in the Spotify client (track, artists, album, is_playing, progress, context). Use this FIRST whenever the user says 'this song', 'what is playing', 'a música que está tocando', or refers to the current track. Returns null when nothing is playing.",
+      "name": "get_currently_playing",
+      "parameters": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Full playback state of the Spotify client: is_playing, progress/duration, volume, muted, shuffle, repeat, speed, sleep timer, playback quality, context URI, index, restrictions, plus the current track. Use when the user wants the full picture of what the player is doing.",
+      "name": "get_player_state",
+      "parameters": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "The client playback queue: the current item, what is next up, and manually queued items. Use when the user asks what is coming next or reasons about the queue.",
+      "name": "get_player_queue",
+      "parameters": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Spotify Connect devices visible to the client (name, type, active state, volume). Use when the user asks where the music is playing or wants to move playback.",
+      "name": "get_connect_devices",
+      "parameters": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Controls playback in the client. action is one of: play, pause, toggle, next, previous, seek (needs position_ms), shuffle (needs shuffle: boolean), repeat (needs repeat: 0 off | 1 context | 2 track), volume (needs volume: 0..1), mute (needs mute: boolean), speed (needs speed: number), sleep_timer (needs minutes, null clears). Transient and instantly reversible. Only call it when the user actually asks to control playback.",
+      "name": "player_control",
+      "parameters": {
+        "properties": {
+          "action": {
+            "enum": [
+              "play",
+              "pause",
+              "toggle",
+              "next",
+              "previous",
+              "seek",
+              "shuffle",
+              "repeat",
+              "volume",
+              "mute",
+              "speed",
+              "sleep_timer"
+            ],
+            "type": "string"
+          },
+          "minutes": {
+            "description": "for sleep_timer",
+            "type": "integer"
+          },
+          "mute": {
+            "description": "for mute",
+            "type": "boolean"
+          },
+          "position_ms": {
+            "description": "for seek",
+            "type": "integer"
+          },
+          "repeat": {
+            "description": "for repeat: 0 off, 1 context, 2 track",
+            "type": "integer"
+          },
+          "shuffle": {
+            "description": "for shuffle",
+            "type": "boolean"
+          },
+          "speed": {
+            "description": "for speed, e.g. 1.0",
+            "type": "number"
+          },
+          "volume": {
+            "description": "for volume, 0..1",
+            "type": "number"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Manipulates the playback queue. action is one of: add (needs uri), insert_next (needs uri), remove (needs index), reorder (needs from and to), clear. Transient and reversible.",
+      "name": "player_queue_control",
+      "parameters": {
+        "properties": {
+          "action": {
+            "enum": [
+              "add",
+              "insert_next",
+              "remove",
+              "reorder",
+              "clear"
+            ],
+            "type": "string"
+          },
+          "from": {
+            "description": "for reorder",
+            "type": "integer"
+          },
+          "index": {
+            "description": "for remove",
+            "type": "integer"
+          },
+          "to": {
+            "description": "for reorder",
+            "type": "integer"
+          },
+          "uri": {
+            "description": "for add / insert_next",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Lists the user's playlists. Returns {source, total, playlists[]} with id/uri, name, track count and image. Use before referencing a playlist.",
+      "name": "get_playlists",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "max 50",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Returns the tracks of a playlist (uri, name, artists, album, duration).",
+      "name": "get_playlist_tracks",
+      "parameters": {
+        "properties": {
+          "playlist_id": {
+            "description": "playlist ID or URI",
+            "type": "string"
+          }
+        },
+        "required": [
+          "playlist_id"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "The user's saved (liked) tracks, paginated.",
+      "name": "get_saved_tracks",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "max 50 per page",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "The user's most played artists, with genres.",
+      "name": "get_top_artists",
+      "parameters": {
+        "properties": {
+          "time_range": {
+            "enum": [
+              "short_term",
+              "medium_term",
+              "long_term"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "The user's most played tracks.",
+      "name": "get_top_tracks",
+      "parameters": {
+        "properties": {
+          "time_range": {
+            "enum": [
+              "short_term",
+              "medium_term",
+              "long_term"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Searches the Spotify catalog (track/artist/album/playlist). Resolves names to URIs. Use to find mentioned artists and tracks.",
+      "name": "search_spotify",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "max 50",
+            "type": "integer"
+          },
+          "q": {
+            "description": "search term",
+            "type": "string"
+          },
+          "types": {
+            "description": "track,artist,album,playlist (comma separated)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Artists related to an artist (Spotify's primary similarity).",
+      "name": "get_related_artists",
+      "parameters": {
+        "properties": {
+          "artist_id": {
+            "description": "artist ID or URI",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artist_id"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Artist data from the Spotify client: name, biography, followers, monthly listeners and image. Note: genres/popularity may come back empty — Spotify no longer exposes genres internally and the public Web API is rate limited. Use artist_info (Last.fm) for genres/tags and artist_info/web_search for extra biography context.",
+      "name": "get_artist",
+      "parameters": {
+        "properties": {
+          "artist_id": {
+            "description": "artist ID or URI",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artist_id"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Generates recommendations from seeds (artists/tracks/genres). Use to build candidates.",
+      "name": "get_recommendations",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "max 100",
+            "type": "integer"
+          },
+          "seed_artists": {
+            "description": "artist IDs (up to 5 seeds total)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "seed_genres": {
+            "description": "genres",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "seed_tracks": {
+            "description": "track IDs",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Metadata of up to 50 artists at once (genres, popularity, image).",
+      "name": "get_several_artists",
+      "parameters": {
+        "properties": {
+          "ids": {
+            "description": "artist IDs, up to 50",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "Metadata of up to 50 tracks at once.",
+      "name": "get_several_tracks",
+      "parameters": {
+        "properties": {
+          "ids": {
+            "description": "track IDs, up to 50",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
+      "description": "New releases from the catalog (browse/new-releases). Use for the release radar.",
+      "name": "new_releases",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "max 50",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    }
+  ],
+  "mutating": [
+    "add_tracks",
+    "create_playlist",
+    "remove_tracks",
+    "replace_playlist_tracks",
+    "set_playlist_cover",
+    "set_playlist_details"
+  ],
+  "server": [
+    {
+      "description": "CENTRAL CROSS-REFERENCE ORCHESTRATOR: receives track IDs and returns unified entities (metadata, artists, genres, audio features and lyrics where available). PREFER this tool to analyze any music collection.",
+      "name": "enrich_tracks",
+      "parameters": {
+        "properties": {
+          "ids": {
+            "description": "track IDs (up to 100)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Fetches lyrics in batch for a list of tracks (limited fan-out). Returns per track with the source marked.",
+      "name": "lyrics_bulk",
+      "parameters": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "properties": {
+                "album": {
+                  "type": "string"
+                },
+                "artist": {
+                  "type": "string"
+                },
+                "duration_ms": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "uri": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracks"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Queries Spotify Charts (global or by region) and returns the position of the given tracks.",
+      "name": "chart_lookup",
+      "parameters": {
+        "properties": {
+          "region": {
+            "description": "e.g. global, BR, US (default global)",
+            "type": "string"
+          },
+          "uris": {
+            "description": "track URIs",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "uris"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Downloads the image at a URL, resizes and compresses to JPEG ≤ 256KB and returns it in base64, ready for set_playlist_cover.",
+      "name": "prepare_cover",
+      "parameters": {
+        "properties": {
+          "max_kb": {
+            "description": "default 256",
+            "type": "integer"
+          },
+          "url": {
+            "description": "image URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Gathers data for the weekly report: top artists, top tracks, saved tracks and playlists. Returns the data so you can write the summary.",
+      "name": "weekly_report",
+      "parameters": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Searches images by concept (Openverse, commercial license). Returns results with thumbnail/url to use as playlist cover.",
+      "name": "image_search",
+      "parameters": {
+        "properties": {
+          "per_page": {
+            "description": "max 20",
+            "type": "integer"
+          },
+          "q": {
+            "description": "search terms",
+            "type": "string"
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Undoes the last mutation made on a playlist (restores the previous snapshot). The restore is also confirmed by the user.",
+      "name": "undo_last_mutation",
+      "parameters": {
+        "properties": {
+          "playlist_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "playlist_id"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Text search on the web via SearXNG. Use for similar artists by external opinion, trends, releases, shows, cultural context, or as a generic fallback when another tool fails.",
+      "name": "web_search",
+      "parameters": {
+        "properties": {
+          "categories": {
+            "description": "general,music,news,images",
+            "type": "string"
+          },
+          "q": {
+            "description": "query",
+            "type": "string"
+          },
+          "time_range": {
+            "enum": [
+              "day",
+              "month",
+              "year"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Fetches the lyrics of a song (LRCLIB → Lyrics.ovh). Returns text and source. If not found, say you could not find them (never invent lyrics).",
+      "name": "lyrics_lookup",
+      "parameters": {
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "artist": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artist",
+          "title"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Similar artists from external sources (Deezer + Last.fm when configured). Complements get_related_artists from Spotify.",
+      "name": "similar_artists",
+      "parameters": {
+        "properties": {
+          "artist": {
+            "description": "artist name",
+            "type": "string"
+          },
+          "limit": {
+            "description": "max 15 per source",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artist"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    },
+    {
+      "description": "Artist biography and info from Last.fm (bio text, tags/genres, similar artists). Returns source marked as 'lastfm'. Falls back to web_search when Last.fm is not configured/unavailable.",
+      "name": "artist_info",
+      "parameters": {
+        "properties": {
+          "artist": {
+            "description": "artist name",
+            "type": "string"
+          },
+          "limit": {
+            "description": "max similar artists (default 10)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artist"
+        ],
+        "type": "object"
+      },
+      "side": "server"
+    }
+  ]
+}

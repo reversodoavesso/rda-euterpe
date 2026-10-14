@@ -1,0 +1,58 @@
+[package]
+name = "euterpe"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.83"
+description = "Euterpe daemon: WS bridge for the Spotify client + MCP server + agentic chat loop"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "euterpe"
+path = "src/main.rs"
+
+[lib]
+name = "euterpe"
+path = "src/lib.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["ws", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "process", "time", "fs", "sync", "net", "io-util"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+# native-tls (SChannel no Windows) em vez de rustls: rustls 0.23 traz `aws-lc-rs`
+# por padrão, que exige cmake+nasm para compilar. Ver core/README.md (§Desvios).
+reqwest = { version = "0.12", features = ["json", "stream", "gzip", "native-tls"], default-features = false }
+tokio-tungstenite = { version = "0.23", features = ["handshake"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
+image = { version = "0.25", features = ["jpeg", "png", "webp"], default-features = false }
+base64 = "0.22"
+rand = "0.8"
+regex = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+anyhow = "1"
+thiserror = "1"
+async-trait = "0.1"
+chrono = "0.4"
+urlencoding = "2"
+uuid = { version = "1", features = ["v4"] }
+parking_lot = "0.12"
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"
+http-body-util = "0.1"
+
+[profile.release]
+# `strip = true` (binário sem símbolos, ~5 MB) é um clássico falso-positivo do
+# ML do Windows Defender (aqui deu `Trojan:Win32/Bearfoos.A!ml`). Mantemos os
+# símbolos: o custo é alguns MB e o ganho é o daemon não ser bloqueado.
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+strip = false

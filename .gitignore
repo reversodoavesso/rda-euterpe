@@ -7,6 +7,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Rust
+core/target/
+**/*.rs.bk
+
 # Logs
 *.log
 logs/

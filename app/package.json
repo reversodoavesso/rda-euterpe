@@ -1,0 +1,13 @@
+{
+  "name": "euterpe-app",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Fonte do Custom App Euterpe (bundle esbuild -> euterpe-app/dist/index.js).",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

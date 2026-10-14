@@ -14,17 +14,17 @@ import type { ServerMessage, ToolCallRequest } from "./protocol.js";
    ============================================================ */
 
 const STREAM_CHUNK_CHARS = 40;
-const STREAM_DELAY_MS = 20;
+export const STREAM_DELAY_MS = 20;
 const LLM_TIMEOUT_MS = 120_000;
 const SUGGESTIONS_TIMEOUT_MS = 10_000;
-const SUGGESTIONS_MAX_TOKENS = 800;
+export const SUGGESTIONS_MAX_TOKENS = 800;
 /** Safety ceiling for the final answer (chars). The prompt asks for
     conciseness; this cap prevents huge dumps in degraded states. */
-const MAX_FINAL_LENGTH = 4000;
+export const MAX_FINAL_LENGTH = 4000;
 
 /** System instruction injected when the Spotify tools are throttled
     (2x rate_limited): forces an answer without tools, short and objective. */
-const FORCE_ANSWER_MSG =
+export const FORCE_ANSWER_MSG =
   "The Spotify tools are temporarily throttled (rate_limited). Do not call any more tools. Answer the user now with what you already have, CONCISE and objective (max ~1500 characters), and explain that Spotify is currently limiting queries. Answer in the language of the conversation.";
 
 /* ============================================================
@@ -37,7 +37,7 @@ function LANGUAGE_RULE(locale?: string): string {
   return `Always reply in ${target}. If the user writes in another language, reply in that language. Give a per-track justification whenever you recommend songs.`;
 }
 
-function buildSystemPrompt(locale?: string): string {
+export function buildSystemPrompt(locale?: string): string {
   return `You are Euterpe, an agentic music curation assistant that runs inside Spotify desktop.
 
 HOW TO BEHAVE
@@ -93,7 +93,7 @@ ${config.debug
    - Never breaks the flow: any failure returns [] and the app falls back.
    ============================================================ */
 
-const SUGGESTIONS_PROMPT = (locale?: string): string => `You are Euterpe's follow-up suggestor. Based on the conversation, propose 3 short follow-up actions the user can take next, as if they were clickable buttons to continue the chat.
+export const SUGGESTIONS_PROMPT = (locale?: string): string => `You are Euterpe's follow-up suggestor. Based on the conversation, propose 3 short follow-up actions the user can take next, as if they were clickable buttons to continue the chat.
 Rules:
 - Return ONLY a JSON object in this exact shape: {"suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]} with exactly 3 strings.
 - Each suggestion must be concrete and specific to THIS conversation (reference names, tracks, artists or playlists mentioned), actionable, and understandable without reading the whole chat.
@@ -445,7 +445,7 @@ async function runAgentLoop(
   return { text: trimFinal(finalText, MAX_FINAL_LENGTH), degraded };
 }
 
-function buildRoutingPrompt(locale?: string): string {
+export function buildRoutingPrompt(locale?: string): string {
   return `You are Euterpe's router. The user is listening to a song right now. Your task: decide whether it fits into any of the user's playlists. Use get_playlists to see the list. If it fits, call add_tracks (the user confirms the addition). If it does not fit any, answer with at most one line saying it does not fit. ${LANGUAGE_RULE(locale)} Reply briefly.`;
 }
 

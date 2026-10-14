@@ -1,0 +1,54 @@
+//! Rotas HTTP. Contrato congelado C5 + rotas aditivas do PLAN-REFACTOR §71.
+
+pub mod bridge_config;
+pub mod chat_sse;
+pub mod health;
+pub mod probe;
+pub mod providers;
+pub mod sessions;
+pub mod settings;
+
+use axum::routing::{delete, get, post, put};
+use axum::Router;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
+
+use crate::AppState;
+
+/// Monta o router completo.
+pub fn router(state: AppState) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    Router::new()
+        // C5 — congeladas
+        .route("/config", get(bridge_config::config))
+        .route("/health", get(health::health))
+        .route("/sessions", get(sessions::list))
+        .route("/sessions/:id", get(sessions::read))
+        .route("/probe", get(probe::probe))
+        .route("/ws", get(crate::ws::ws_handler))
+        // Aditivas
+        .route("/chat", post(chat_sse::chat))
+        .route("/providers", get(providers::list).post(providers::upsert))
+        .route("/providers/:id", delete(providers::remove))
+        .route("/providers/test", post(providers::test))
+        .route("/models", get(providers::models))
+        .route(
+            "/settings",
+            get(settings::get_settings).put(settings::put_settings),
+        )
+        // MCP (Streamable HTTP): initialize / tools/list / tools/call / resources
+        .route(
+            "/mcp",
+            get(crate::mcp::http::get).post(crate::mcp::http::post),
+        )
+        .route("/mcp", delete(crate::mcp::http::delete))
+        // Placeholder para quem chamar PUT no /mcp por engano.
+        .route("/mcp/:verb", put(crate::mcp::http::method_not_allowed))
+        .layer(TraceLayer::new_for_http())
+        .layer(cors)
+        .with_state(state)
+}

@@ -984,11 +984,31 @@
     }
 
     async function runProbe() {
-      const out = { guard: {}, platform: {}, graphql: {}, shapes: {} };
+      const out = { guard: {}, platform: {}, graphql: {}, shapes: {}, runtime: {} };
       out.guard.spicetifyVersion = Spicetify && Spicetify.Config ? Spicetify.Config.version : null;
       out.guard.spotifyVersion = Spicetify && Spicetify.Platform ? Spicetify.Platform.version : null;
       out.guard.hasGraphQL = !!(Spicetify && Spicetify.GraphQL);
       out.guard.userAgent = navigator.userAgent;
+
+      // Fase 0 (PLAN-REFACTOR.md, D2): decide how the daemon autostarts.
+      // node == true  -> the extension can spawn euterpe.exe itself
+      //                  (with a port guard against double-binding 8337);
+      // node == false -> fall back to a Startup shortcut + `euterpe --ensure`.
+      out.runtime = {
+        node: typeof require === "function" || typeof process !== "undefined",
+        electron: (typeof process !== "undefined" && process.versions && process.versions.electron) || null,
+        nodeVersion: (typeof process !== "undefined" && process.versions && process.versions.node) || null,
+        requireType: typeof require,
+        spawnAvailable: (() => {
+          try {
+            if (typeof require !== "function") return false;
+            const cp = require("child_process");
+            return typeof cp?.spawn === "function";
+          } catch (err) {
+            return false;
+          }
+        })(),
+      };
 
       const namespaces = [
         "LibraryAPI", "PlaylistAPI", "RootlistAPI", "PlayerAPI", "PlayHistoryAPI",

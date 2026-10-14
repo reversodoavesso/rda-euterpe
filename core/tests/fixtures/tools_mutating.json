@@ -1,0 +1,8 @@
+[
+  "add_tracks",
+  "create_playlist",
+  "remove_tracks",
+  "replace_playlist_tracks",
+  "set_playlist_cover",
+  "set_playlist_details"
+]

@@ -10,7 +10,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "tsx tests/parse-suggestions.mjs && node --test tests/",
-    "test:integration": "node tests/orchestrators.mjs && node tests/mutation-gate.mjs && node tests/agent-loop.mjs"
+    "test:integration": "node tests/orchestrators.mjs && node tests/mutation-gate.mjs && node tests/agent-loop.mjs",
+    "goldens": "tsc && node tools/export-goldens.mjs",
+    "replay-corpus": "node tools/export-replay-corpus.mjs"
   },
   "dependencies": {
     "@fastify/websocket": "^8.3.1",

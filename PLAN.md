@@ -27,6 +27,8 @@ Centro agentic pessoal dentro do client oficial do Spotify (desktop, Windows/Lin
 | Embeddings/MCP | Embeddings fora do MVP; **MCP passa a ser escopo** — ver D5/D6 em `PLAN-REFACTOR.md` |
 | Distribuição | Uso pessoal, repositório privado/local |
 | Idioma | PT-BR |
+| **D2 (refatoração v2)** | **Autostart = atalho de Startup (`tools/install-startup.ps1` / `euterpe install-startup`)**. Plano A (spawn pelo renderer) fica habilitado mas **não** é o default: o probe da Fase 0 passou a medir `runtime.node`, `runtime.electron`, `runtime.nodeVersion` e `runtime.spawnAvailable` (`app/euterpe-extension/euterpe.js`, nó `runtime` do `runProbe()`), e essa medição só existe depois de rodar o mod com o daemon de pé. Nada depende dela: o daemon é **idempotente** (`serve` sai 0 se já houver um Euterpe na porta, comparando `app:"euterpe"` no `/health`), então os dois caminhos convivem sem risco de duplicar processo. |
+| **D1/D5/D6 (refatoração v2)** | Aplicadas: daemon Rust autocontido (`core/`), catálogo único de tools (D5) consumido pelo loop LLM e pelo MCP, e a chave da 8337 com `/chat` espelhável via `CHAT_UPSTREAM` (D6). Detalhes em `PLAN-REFACTOR.md` e o que ficou pendente em `CHANGES.md`. |
 
 > **Refatoração v2 (especificação aprovada):** `PLAN-REFACTOR.md` — MCP nativo, providers de LLM
 > configuráveis, UI de setup e daemon autocontido em Rust. Decisões D1-D6, contrato congelado

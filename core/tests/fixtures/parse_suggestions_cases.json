@@ -1,0 +1,120 @@
+[
+  {
+    "in": "{\"suggestions\": [\"a\", \"b\", \"c\"]}",
+    "label": "plain_object",
+    "out": [
+      "a",
+      "b",
+      "c"
+    ]
+  },
+  {
+    "in": "[\"a\", \"b\", \"c\"]",
+    "label": "bare_array",
+    "out": [
+      "a",
+      "b",
+      "c"
+    ]
+  },
+  {
+    "in": "```json\n{\"suggestions\": [\"a\", \"b\", \"c\"]}\n```",
+    "label": "fenced",
+    "out": [
+      "a",
+      "b",
+      "c"
+    ]
+  },
+  {
+    "in": "{\"suggestions\": [\"a\", \"b\", \"c\",]}",
+    "label": "trailing_comma",
+    "out": [
+      "a",
+      "b",
+      "c"
+    ]
+  },
+  {
+    "in": "{\"suggestions\": [\"a\", \"b\", \"c\", \"d\", \"e\"]}",
+    "label": "more_than_three",
+    "out": [
+      "a",
+      "b",
+      "c"
+    ]
+  },
+  {
+    "in": "{\"suggestions\":[\"ok\",\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"ok2\"]}",
+    "label": "too_long_dropped",
+    "out": [
+      "ok",
+      "ok2"
+    ]
+  },
+  {
+    "in": "{\"suggestions\": [\"a\", 1, null, \"b\"]}",
+    "label": "non_string_dropped",
+    "out": [
+      "a",
+      "b"
+    ]
+  },
+  {
+    "in": "{\"suggestions\":[\"veja {{spotify:track:4cOdK2wGLETKBW3PvgPWqT|Creep}}\",\"curto\"]}",
+    "label": "template_to_label",
+    "out": [
+      "veja Creep",
+      "curto"
+    ]
+  },
+  {
+    "in": "{\"suggestions\": [\"a {{foo:bar}} b\", \"c\"]}",
+    "label": "unknown_template_removed",
+    "out": [
+      "a b",
+      "c"
+    ]
+  },
+  {
+    "in": "not json at all",
+    "label": "garbage",
+    "out": []
+  },
+  {
+    "in": "",
+    "label": "empty_string",
+    "out": []
+  },
+  {
+    "in": "[]",
+    "label": "empty_array",
+    "out": []
+  },
+  {
+    "in": "{\"suggestions\": {\"a\": 1}}",
+    "label": "no_array",
+    "out": []
+  },
+  {
+    "in": "{\"suggestions\": [\"  a    b   \", \"c\"]}",
+    "label": "whitespace_collapse",
+    "out": [
+      "a b",
+      "c"
+    ]
+  },
+  {
+    "in": "[ \"a\" }",
+    "label": "reversed_brackets",
+    "out": []
+  },
+  {
+    "in": "```\n```json\n[\"a\",\"b\"]\n```\n```",
+    "label": "nested_code_block",
+    "out": [
+      "a",
+      "b"
+    ]
+  }
+]
