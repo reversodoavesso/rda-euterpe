@@ -233,7 +233,7 @@ Track {
 | Risco | Mitigação |
 |---|---|
 | Update do Spotify quebra spicetify | `spicetify restore backup apply`; compatibilidades no README |
-| API interna muda | Camada única de acesso (`tools/spotify.ts`); fallback conceitual pra Web API |
+| API interna muda | **Implementado**: camada única de acesso (`Access`) em `app/euterpe-extension/euterpe.js`, em 3 tiers (Platform → GraphQL → Web) com fallback automático. Medições e resultados em `PLAN-INTERNAL-API.md` §11–§12 |
 | LRCLIB/ovh sem letra | Cadeia color-lyrics → LRCLIB → ovh; inferência rotulada |
 | DeepSeek tool-calling divergir do schema | `strict` mode (beta) + validação zod |
 | Instâncias públicas SearXNG sem JSON | Self-host via docker-compose (default) |

@@ -76,3 +76,34 @@ translated to English.
 - **Phase 4 — Tests**: comments/mocks in English.
 - **Phase 5 — Validation**: typecheck, test suite, smoke tests (normal +
   rate-limited), reinstall, restart.
+
+---
+
+## Internal API adapter (2026-10-13)
+
+Full plan, phase-0 measurements and per-phase results live in
+[`PLAN-INTERNAL-API.md`](./PLAN-INTERNAL-API.md). Summary of what changed:
+
+- **`app/euterpe-extension/euterpe.js`**
+  - New `Access` layer with three tiers — `Platform` (client store, ~zero
+    network) -> `GraphQL` (Pathfinder) -> `Web` (original calls). Every platform
+    resolver answers `null` on unavailable/empty/throw, so the original Web API
+    path still runs: no regression if a signature drifts.
+  - Tier 1 wired for **9 tools**: `get_playlists`, `get_playlist_tracks`,
+    `get_saved_tracks`, `create_playlist`, `add_tracks`, `remove_tracks`,
+    `set_playlist_details`, `set_playlist_cover` (`PlaylistAPI.uploadImage`) and
+    `get_recommendations` (`PlaylistAPI.getRecommendedTracks`, guarded).
+  - `get_related_artists` gained a GraphQL resilience path, because
+    `/related-artists` has been deprecated since 2024-11.
+  - Web API calls now go through throttling: minimum spacing, in-flight GET
+    coalescing, and exponential backoff with jitter (honouring `Retry-After`).
+  - `GRAPHQL_HASHES` fallback: a persisted query can be issued by hash through
+    `CosmosAsync` if a future spicetify drops the definition.
+  - New read-only `probe` tool (see below).
+- **`agent/src/index.ts`** — `GET /probe` calls the client's `probe` tool over
+  the existing WebSocket and writes the result to `agent/data/probes/*.json`,
+  so inventories are analysed from disk instead of pasted from DevTools.
+- **`agent/tests/extension-adapter.test.mjs`** + a new `npm test` script — the
+  adapter's fail-closed contract (Platform wins / falls back on throw or empty)
+  is now covered by tests. `tests/parse-suggestions.mjs` imports a `.ts` file
+  directly, so it must run under `tsx`; that is now wired into `npm test`.

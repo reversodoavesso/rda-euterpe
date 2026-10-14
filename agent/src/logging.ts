@@ -24,7 +24,7 @@ function ensureDir(): void {
   mkdirSync(LOG_DIR, { recursive: true });
 }
 
-/** Grava um evento JSONL da sessão (para debug). */
+/** Appends a JSONL session event (for debug). */
 export function logSession(sessionId: string, event: string, payload?: unknown): void {
   try {
     ensureDir();
@@ -32,7 +32,7 @@ export function logSession(sessionId: string, event: string, payload?: unknown):
     if (payload !== undefined) line.payload = payload;
     appendFileSync(fileOf(sessionId), JSON.stringify(line) + "\n");
   } catch (err) {
-    console.error("[euterpe] falha ao gravar log de sessão", err);
+    console.error("[euterpe] failed to write session log", err);
   }
 }
 
@@ -44,18 +44,27 @@ export interface SessionSummary {
   events: number;
 }
 
+function countJsonlLines(file: string): number {
+  try {
+    return readFileSync(file, "utf8").split("\n").filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+}
+
 export function listSessions(): SessionSummary[] {
   if (!existsSync(LOG_DIR)) return [];
   return readdirSync(LOG_DIR)
     .filter((f) => f.endsWith(".log"))
     .map((f) => {
-      const st = statSync(resolve(LOG_DIR, f));
+      const file = resolve(LOG_DIR, f);
+      const st = statSync(file);
       return {
         id: f.replace(/\.log$/, ""),
         file: f,
         size: st.size,
         modified: new Date(st.mtimeMs).toISOString(),
-        events: st.size ? st.size - 0 : 0,
+        events: countJsonlLines(file),
       };
     })
     .sort((a, b) => (a.modified < b.modified ? 1 : -1));

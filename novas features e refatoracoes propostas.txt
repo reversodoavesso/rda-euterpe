@@ -1,0 +1,10 @@
+Separar o que controle as apis nativas do spotify dentro do mod como um mcp, esse mcp pode ser usando dentro do contexto da janela de chat do mod, ou via painel externo agentico da preferencia do usuario, opencode, claude code, agy, etc. 
+
+A interface do mod dentro do spotify deve ter ambos os recursos disponiveis sendo sugeridos para o usuario, ou para ele configurar o mcp dentro do agent, ai com estrucoes praticas e/ou configurar e usar uma api de llm agentico dentro da propria interface.
+
+A interface de chat deve ser mais robusta, com copia/refenrencia de interfaces já bem utilziadas para modelos agenticos. Além disso, deve ter um setup rapido, e configs que permitam cadastrar o provider da api do agente, bem como escolher o modelo que deseja. Pensar nos principais e nos principais contratos, mas tmb permitir cadastra personalizado no contrato tradicional para isso.
+
+O mod/servidor mcp/agentic chat -> deve ser autocondido em um executavel que inicia junto com o spotify sem precisar subir container docker ou coisa do tipo... refazer o mod em rust ou webassemble ou tecnologia parecida. 
+
+
+

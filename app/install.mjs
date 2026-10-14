@@ -31,8 +31,8 @@ function tryApply() {
 
 function install() {
   const dest = spicetifyDir()
-  if (!dest) throw new Error('Não foi possível achar o diretório do spicetify')
-  if (!existsSync(dest)) throw new Error(`Diretório do spicetify não existe: ${dest}`)
+  if (!dest) throw new Error('Could not find the spicetify directory')
+  if (!existsSync(dest)) throw new Error(`The spicetify directory does not exist: ${dest}`)
 
   const customAppsDir = join(dest, 'CustomApps')
   const extDir = join(dest, 'Extensions')
@@ -45,29 +45,29 @@ function install() {
   mkdirSync(appDest, { recursive: true })
   for (const f of ['index.js', 'manifest.json']) {
     copyFileSync(join(appSrc, f), join(appDest, f))
-    console.log(`copiado  ${join(appSrc, f)}  ->  ${appDest}`)
+    console.log(`copied  ${join(appSrc, f)}  ->  ${appDest}`)
   }
 
   const extSrc = join(__dirname, 'euterpe-extension', 'euterpe.js')
   const extDest = join(extDir, 'euterpe.js')
   copyFileSync(extSrc, extDest)
-  console.log(`copiado  ${extSrc}  ->  ${extDest}`)
+  console.log(`copied  ${extSrc}  ->  ${extDest}`)
 
   run('spicetify config custom_apps euterpe-app')
   run('spicetify config extensions euterpe.js')
 
   if (!tryApply()) {
-    console.log('\nApply falhou (provável mismatch de versão do backup). Recriando backup e tentando de novo...')
+    console.log('\nApply failed (likely a backup version mismatch). Recreating the backup and trying again...')
     run('spicetify backup apply')
-    if (!tryApply()) throw new Error('spicetify apply falhou após backup apply. Rode "spicetify backup apply" manualmente.')
+    if (!tryApply()) throw new Error('spicetify apply failed after backup apply. Run "spicetify backup apply" manually.')
   }
 
-  console.log('\nInstalado. Reinicie o Spotify (se estiver aberto) e abra "Euterpe" na sidebar.')
+  console.log('\nInstalled. Restart Spotify (if open) and open "Euterpe" in the sidebar.')
 }
 
 try {
   install()
 } catch (err) {
-  console.error(`\nErro: ${err.message}`)
+  console.error(`\nError: ${err.message}`)
   process.exit(1)
 }

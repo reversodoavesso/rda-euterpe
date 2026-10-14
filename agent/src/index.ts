@@ -5,17 +5,31 @@ import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
 import { openDb } from "./db.js";
-import { MessageSchema, VERSION, type ServerMessage, type ToolCallRequest } from "./protocol.js";
+import { MessageSchema, VERSION, type ClientMessage, type ServerMessage, type ToolCallRequest } from "./protocol.js";
 import { handleChat, handleSongChange } from "./agent.js";
 import { clearHistory, saveSnapshot } from "./db.js";
 import { MUTATING_TOOLS } from "./tools/defs.js";
 import { logSession, listSessions, readSession } from "./logging.js";
 import { AGENT_STRINGS, makeT, normalizeLocale, type Translator } from "./i18n.js";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROBE_DIR = resolve(__dirname, "..", "data", "probes");
 
 const app = Fastify({ logger: { level: "info" } });
 await app.register(websocket);
 
 const db = openDb();
+
+// Most recent authenticated client socket. GET /probe uses it to run a
+// read-only inventory *inside* the Spotify client (extension `case "probe"`),
+// so results land in a file instead of being copy-pasted from DevTools.
+interface ActiveClient {
+  callTool: (call: ToolCallRequest) => Promise<{ ok: boolean; data?: unknown; code?: string }>;
+}
+let activeClient: ActiveClient | null = null;
 
 type WsSend = (msg: ServerMessage) => void;
 
@@ -33,22 +47,23 @@ interface PendingProposal {
   timer: NodeJS.Timeout;
 }
 
-function summarize(name: string, args: Record<string, unknown>): string {
+function summarize(t: Translator, name: string, args: Record<string, unknown>): string {
+  const count = (key: string): number => (Array.isArray(args[key]) ? (args[key] as unknown[]).length : 0);
   switch (name) {
     case "create_playlist":
-      return `Criar playlist "${args.name}" com ${Array.isArray(args.tracks) ? args.tracks.length : 0} faixas`;
+      return t("proposal.createPlaylist", { name: String(args.name ?? ""), count: count("tracks") });
     case "add_tracks":
-      return `Adicionar ${Array.isArray(args.uris) ? args.uris.length : 0} faixas à playlist`;
+      return t("proposal.addTracks", { count: count("uris") });
     case "remove_tracks":
-      return `Remover ${Array.isArray(args.uris) ? args.uris.length : 0} faixas da playlist`;
+      return t("proposal.removeTracks", { count: count("uris") });
     case "set_playlist_details":
-      return "Atualizar nome/descrição da playlist";
+      return t("proposal.setDetails");
     case "replace_playlist_tracks":
-      return `Substituir todas as faixas da playlist (${Array.isArray(args.uris) ? args.uris.length : 0} faixas)`;
+      return t("proposal.replaceTracks", { count: count("uris") });
     case "set_playlist_cover":
-      return "Alterar a capa da playlist";
+      return t("proposal.setCover");
     default:
-      return `Executar ${name}`;
+      return t("proposal.execute", { name });
   }
 }
 
@@ -58,13 +73,14 @@ function requestClientTool(
   pending: Map<string, PendingTool>,
   pendingProposals: Map<string, PendingProposal>,
   db: Database.Database,
-  getSessionId: () => string | null
+  getSessionId: () => string | null,
+  getT: () => Translator
 ) {
   return async (call: ToolCallRequest): Promise<{ ok: boolean; data?: unknown; code?: string }> => {
     const sid = getSessionId() ?? "unknown";
     if (MUTATING_TOOLS.has(call.name)) {
       const proposalId = randomUUID();
-      const summary = summarize(call.name, call.args);
+      const summary = summarize(getT(), call.name, call.args);
       logSession(sid, "proposal.created", { proposalId, title: summary, name: call.name, args: call.args });
       const approved = await new Promise<"approve" | "reject">((resolve) => {
         const timer = setTimeout(() => {
@@ -138,6 +154,33 @@ app.get<{ Params: { id: string } }>("/sessions/:id", async (req, reply) => {
   return readSession(req.params.id);
 });
 
+// Runs the read-only inventory probe inside the connected Spotify client and
+// persists it to agent/data/probes/. Keeps the HTTP response tiny (the payload
+// is large and meant to be read from disk, not pasted).
+app.get("/probe", async (_req, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  if (!activeClient) {
+    return reply.code(503).send({ error: "no_client_connected" });
+  }
+  const res = await activeClient.callTool({ id: `probe_${randomUUID()}`, name: "probe", args: {} });
+  if (!res.ok) {
+    return reply.code(502).send({ error: res.code ?? "probe_failed" });
+  }
+  let file: string | null = null;
+  let bytes = 0;
+  try {
+    const body = JSON.stringify(res.data, null, 2);
+    bytes = Buffer.byteLength(body);
+    mkdirSync(PROBE_DIR, { recursive: true });
+    file = resolve(PROBE_DIR, `probe-${Date.now()}.json`);
+    writeFileSync(file, body);
+  } catch (err) {
+    app.log.error(err);
+    return reply.code(500).send({ error: "probe_write_failed" });
+  }
+  return { ok: true, file, bytes };
+});
+
 app.register(async (fastify) => {
   fastify.get("/ws", { websocket: true }, (connection, _req) => {
     const socket = connection.socket;
@@ -146,15 +189,48 @@ app.register(async (fastify) => {
     const pendingProposals = new Map<string, PendingProposal>();
     let activeSessionId: string | null = null;
     let clientLocale: string | null = null;
+    let t: Translator = makeT(AGENT_STRINGS, "en");
     const deps = { locale: (): string | undefined => clientLocale ?? undefined };
-    const callClientTool = requestClientTool(socket, send, pending, pendingProposals, db, () => activeSessionId);
+    const callClientTool = requestClientTool(socket, send, pending, pendingProposals, db, () => activeSessionId, () => t);
     let authed = false;
 
-    socket.on("message", async (raw: RawData) => {
+    // Per-connection serial queue for chat-affecting messages. Without it, two
+    // chat.send (or a clear/songchange) processed while an LLM/tool flow is
+    // running would interleave stream deltas and per-connection state.
+    // Control messages (tool.result, proposal.decision, ping, hello) stay
+    // immediate so pending promises can resolve mid-flow without deadlocking.
+    let chain: Promise<void> = Promise.resolve();
+    const enqueue = (task: () => Promise<void>): void => {
+      chain = chain.then(task).catch((err) => app.log.error(err));
+    };
+
+    const handleQueuedMessage = async (msg: ClientMessage): Promise<void> => {
+      switch (msg.type) {
+        case "chat.send": {
+          const sessionId = msg.sessionId ?? randomUUID();
+          activeSessionId = sessionId;
+          await handleChat({ send, requestClientTool: callClientTool, locale: deps.locale() }, db, sessionId, msg.text);
+          break;
+        }
+        case "chat.clear": {
+          clearHistory(db, msg.sessionId);
+          logSession(msg.sessionId, "chat.clear");
+          send({ type: "chat.cleared", sessionId: msg.sessionId });
+          break;
+        }
+        case "event.songchange": {
+          logSession("routing", "songchange.event", { uri: msg.uri });
+          await handleSongChange({ send, requestClientTool: callClientTool, locale: deps.locale() }, db, msg.uri);
+          break;
+        }
+      }
+    };
+
+    socket.on("message", (raw: RawData) => {
       try {
         const parsed = MessageSchema.safeParse(JSON.parse(raw.toString()));
         if (!parsed.success) {
-          send({ type: "chat.status", status: "error", detail: "mensagem inválida" });
+          send({ type: "chat.status", status: "error", detail: t("status.invalidMessage") });
           return;
         }
         const msg = parsed.data;
@@ -168,10 +244,12 @@ app.register(async (fastify) => {
           if (msg.type === "hello" && msg.secret === config.wsSecret) {
             authed = true;
             clientLocale = msg.locale ?? null;
-            app.log.info({ locale: clientLocale }, "cliente autenticado");
+            t = makeT(AGENT_STRINGS, normalizeLocale(clientLocale));
+            app.log.info({ locale: clientLocale }, t("status.clientAuthenticated"));
             send({ type: "hello.ok", version: VERSION });
+            activeClient = { callTool: callClientTool };
           } else {
-            app.log.warn("handshake rejeitado");
+            app.log.warn(t("status.handshakeRejected"));
             socket.close(1008, "unauthorized");
           }
           return;
@@ -186,23 +264,11 @@ app.register(async (fastify) => {
             app.log.info({ client: true, level }, `[client] ${msg.detail}`);
             break;
           }
-          case "chat.send": {
-            const sessionId = msg.sessionId ?? randomUUID();
-            activeSessionId = sessionId;
-            await handleChat({ send, requestClientTool: callClientTool, locale: deps.locale() }, db, sessionId, msg.text);
+          case "chat.send":
+          case "chat.clear":
+          case "event.songchange":
+            enqueue(() => handleQueuedMessage(msg));
             break;
-          }
-          case "chat.clear": {
-            clearHistory(db, msg.sessionId);
-            logSession(msg.sessionId, "chat.clear");
-            send({ type: "chat.cleared", sessionId: msg.sessionId });
-            break;
-          }
-          case "event.songchange": {
-            logSession("routing", "songchange.event", { uri: msg.uri });
-            void handleSongChange({ send, requestClientTool: callClientTool, locale: deps.locale() }, db, msg.uri);
-            break;
-          }
           case "tool.result": {
             const p = pending.get(msg.id);
             if (p) {
@@ -222,16 +288,19 @@ app.register(async (fastify) => {
             break;
           }
           default:
-            app.log.info({ type: msg.type }, "mensagem recebida");
+            app.log.info({ type: msg.type }, t("status.messageReceived"));
         }
       } catch (err) {
         app.log.error(err);
       }
     });
 
-    socket.on("close", () => app.log.info("cliente desconectado"));
+    socket.on("close", () => {
+      if (activeClient && activeClient.callTool === callClientTool) activeClient = null;
+      app.log.info(t("status.clientDisconnected"));
+    });
   });
 });
 
 await app.listen({ host: config.host, port: config.port });
-app.log.info(`Euterpe agente ouvindo em ws://${config.host}:${config.port}`);
+app.log.info(makeT(AGENT_STRINGS, "en")("status.agentListening", { host: config.host, port: config.port }));

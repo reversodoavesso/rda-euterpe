@@ -88,6 +88,76 @@ export const clientTools: ToolDef[] = [
     "client"
   ),
   def(
+    "get_listening_recents",
+    "Your recently played tracks from the client's history (RecentsAPI). Returns up to `limit` items with track name, artists, album, URI, `added_at`, `fully_played`, `resume_position_ms`. Use instead of the rate-limited `get_top_tracks`/`get_top_artists` to understand what you actually listened to recently.",
+    {
+      limit: { type: "integer", description: "max 50" },
+      time_range: { type: "string", description: "short_term, medium_term, long_term (ignored; history is unbounded)" },
+    },
+    [],
+    "client"
+  ),
+  def(
+    "get_currently_playing",
+    "What is playing RIGHT NOW in the Spotify client (track, artists, album, is_playing, progress, context). Use this FIRST whenever the user says 'this song', 'what is playing', 'a música que está tocando', or refers to the current track. Returns null when nothing is playing.",
+    {},
+    [],
+    "client"
+  ),
+  def(
+    "get_player_state",
+    "Full playback state of the Spotify client: is_playing, progress/duration, volume, muted, shuffle, repeat, speed, sleep timer, playback quality, context URI, index, restrictions, plus the current track. Use when the user wants the full picture of what the player is doing.",
+    {},
+    [],
+    "client"
+  ),
+  def(
+    "get_player_queue",
+    "The client playback queue: the current item, what is next up, and manually queued items. Use when the user asks what is coming next or reasons about the queue.",
+    {},
+    [],
+    "client"
+  ),
+  def(
+    "get_connect_devices",
+    "Spotify Connect devices visible to the client (name, type, active state, volume). Use when the user asks where the music is playing or wants to move playback.",
+    {},
+    [],
+    "client"
+  ),
+  def(
+    "player_control",
+    "Controls playback in the client. action is one of: play, pause, toggle, next, previous, seek (needs position_ms), shuffle (needs shuffle: boolean), repeat (needs repeat: 0 off | 1 context | 2 track), volume (needs volume: 0..1), mute (needs mute: boolean), speed (needs speed: number), sleep_timer (needs minutes, null clears). Transient and instantly reversible. Only call it when the user actually asks to control playback.",
+    {
+      action: {
+        type: "string",
+        enum: ["play", "pause", "toggle", "next", "previous", "seek", "shuffle", "repeat", "volume", "mute", "speed", "sleep_timer"],
+      },
+      position_ms: { type: "integer", description: "for seek" },
+      shuffle: { type: "boolean", description: "for shuffle" },
+      repeat: { type: "integer", description: "for repeat: 0 off, 1 context, 2 track" },
+      volume: { type: "number", description: "for volume, 0..1" },
+      mute: { type: "boolean", description: "for mute" },
+      speed: { type: "number", description: "for speed, e.g. 1.0" },
+      minutes: { type: "integer", description: "for sleep_timer" },
+    },
+    ["action"],
+    "client"
+  ),
+  def(
+    "player_queue_control",
+    "Manipulates the playback queue. action is one of: add (needs uri), insert_next (needs uri), remove (needs index), reorder (needs from and to), clear. Transient and reversible.",
+    {
+      action: { type: "string", enum: ["add", "insert_next", "remove", "reorder", "clear"] },
+      uri: { type: "string", description: "for add / insert_next" },
+      index: { type: "integer", description: "for remove" },
+      from: { type: "integer", description: "for reorder" },
+      to: { type: "integer", description: "for reorder" },
+    },
+    ["action"],
+    "client"
+  ),
+  def(
     "get_playlists",
     "Lists the user's playlists. Returns {source, total, playlists[]} with id/uri, name, track count and image. Use before referencing a playlist.",
     { limit: { type: "integer", description: "max 50" } },
@@ -142,7 +212,7 @@ export const clientTools: ToolDef[] = [
   ),
   def(
     "get_artist",
-    "Official artist metadata from Spotify (name, genres, popularity, followers, image). Does NOT include a biography — use artist_info (Last.fm) or web_search for biography.",
+    "Artist data from the Spotify client: name, biography, followers, monthly listeners and image. Note: genres/popularity may come back empty — Spotify no longer exposes genres internally and the public Web API is rate limited. Use artist_info (Last.fm) for genres/tags and artist_info/web_search for extra biography context.",
     { artist_id: { type: "string", description: "artist ID or URI" } },
     ["artist_id"],
     "client"
@@ -157,13 +227,6 @@ export const clientTools: ToolDef[] = [
       limit: { type: "integer", description: "max 100" },
     },
     [],
-    "client"
-  ),
-  def(
-    "get_audio_features_bulk",
-    "Audio features (valence, energy, danceability, tempo...) of up to 100 tracks at once. Use to analyze mood/Music DNA.",
-    { ids: { type: "array", items: { type: "string" }, description: "track IDs, up to 100" } },
-    ["ids"],
     "client"
   ),
   def(

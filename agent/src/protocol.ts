@@ -31,16 +31,8 @@ export const MessageSchema = z.discriminatedUnion("type", [
     decision: z.enum(["approve", "reject"]),
   }),
   z.object({
-    type: z.literal("undo.request"),
-    playlistId: z.string(),
-  }),
-  z.object({
     type: z.literal("event.songchange"),
     uri: z.string(),
-  }),
-  z.object({
-    type: z.literal("cover.select"),
-    url: z.string(),
   }),
   z.object({
     type: z.literal("ping"),
@@ -63,18 +55,19 @@ export interface ToolCallRequest {
   args: Record<string, unknown>;
 }
 
-export interface ServerMessage {
-  type:
-    | "hello.ok"
-    | "chat.stream"
-    | "chat.done"
-    | "chat.status"
-    | "chat.cleared"
-    | "tool.call"
-    | "proposal.create"
-    | "undo.ok"
-    | "pong";
-  /** Sugestões de continuação da conversa (geradas pelo agente), opcional. */
-  suggestions?: string[];
-  [key: string]: unknown;
-}
+export type ServerMessage =
+  | { type: "hello.ok"; version: string }
+  | { type: "pong" }
+  | { type: "chat.status"; sessionId?: string; status: string; detail?: string }
+  | { type: "chat.stream"; sessionId?: string; delta: string }
+  | { type: "chat.done"; sessionId?: string; suggestions?: string[] }
+  | { type: "chat.cleared"; sessionId: string }
+  | { type: "tool.call"; id: string; name: string; args: Record<string, unknown> }
+  | {
+      type: "proposal.create";
+      proposalId: string;
+      kind: string;
+      title: string;
+      name: string;
+      args: Record<string, unknown>;
+    };

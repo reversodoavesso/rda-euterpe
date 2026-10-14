@@ -33,9 +33,9 @@ const mockLlm = http.createServer((req, res) => {
         ],
       };
     } else if (calls === 2) {
-      message = { role: "assistant", content: "Resposta de teste A" };
+      message = { role: "assistant", content: "Test answer A" };
     } else {
-      message = { role: "assistant", content: "Resposta de teste B (com contexto)" };
+      message = { role: "assistant", content: "Test answer B (with context)" };
     }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
@@ -103,7 +103,7 @@ async function waitHealth() {
     } catch {}
     await wait(250);
   }
-  throw new Error("agente não subiu");
+  throw new Error("agent did not start");
 }
 
 let ok = false;
@@ -134,7 +134,7 @@ try {
   ws.on("message", (raw) => {
     const msg = JSON.parse(raw.toString());
     if (msg.type === "tool.call" && msg.name === "get_playlists") {
-      ws.send(JSON.stringify({ type: "tool.result", id: msg.id, ok: true, data: { playlists: [{ id: "p1", name: "Minha" }] } }));
+      ws.send(JSON.stringify({ type: "tool.result", id: msg.id, ok: true, data: { playlists: [{ id: "p1", name: "My playlist" }] } }));
     }
     if (msg.type === "tool.call" && msg.name === "get_playlist_tracks") {
       ws.send(JSON.stringify({ type: "tool.result", id: msg.id, ok: false, code: "boom" }));
@@ -148,39 +148,39 @@ try {
   ws.send(JSON.stringify({ type: "hello", secret: cfg.secret, appVersion: "0.1.0" }));
   await wait(300);
 
-  // primeira mensagem (com tools)
-  ws.send(JSON.stringify({ type: "chat.send", text: "primeira pergunta", sessionId: "sessao-teste" }));
+  // first message (with tools)
+  ws.send(JSON.stringify({ type: "chat.send", text: "first question", sessionId: "test-session" }));
   await new Promise((res) => onDone(res));
 
-  // segunda mensagem na mesma sessão (verifica histórico)
-  ws.send(JSON.stringify({ type: "chat.send", text: "segunda pergunta", sessionId: "sessao-teste" }));
+  // second message in the same session (checks history)
+  ws.send(JSON.stringify({ type: "chat.send", text: "second question", sessionId: "test-session" }));
   await new Promise((res) => onDone(res));
 
   // clear
-  ws.send(JSON.stringify({ type: "chat.clear", sessionId: "sessao-teste" }));
+  ws.send(JSON.stringify({ type: "chat.clear", sessionId: "test-session" }));
   await wait(400);
 
   const toolCalls = got.filter((m) => m.type === "tool.call").map((m) => m.name);
   const finalA = got.filter((m) => m.type === "chat.stream").slice(0, 10).map((m) => m.delta).join("");
   const hasCleared = got.some((m) => m.type === "chat.cleared");
 
-  // histórico: a 3ª chamada ao LLM deve conter a 1ª pergunta e a resposta A
+  // history: the 3rd LLM call must contain the 1st question and answer A
   const call3Messages = receivedMessages[2] ?? [];
-  const hasFirstUser = call3Messages.some((m) => m.role === "user" && m.content === "primeira pergunta");
-  const hasAnswerA = call3Messages.some((m) => m.role === "assistant" && m.content === "Resposta de teste A");
+  const hasFirstUser = call3Messages.some((m) => m.role === "user" && m.content === "first question");
+  const hasAnswerA = call3Messages.some((m) => m.role === "assistant" && m.content === "Test answer A");
 
   console.log("LLM calls:", calls);
   console.log("tool.calls:", toolCalls.join(","));
-  console.log("resposta A:", finalA.includes("Resposta de teste A") ? "ok" : "FALTA");
-  console.log("histórico (1ª pergunta):", hasFirstUser ? "ok" : "FALTA");
-  console.log("histórico (resposta A):", hasAnswerA ? "ok" : "FALTA");
-  console.log("chat.cleared:", hasCleared ? "ok" : "FALTA");
+  console.log("answer A:", finalA.includes("Test answer A") ? "ok" : "MISSING");
+  console.log("history (1st question):", hasFirstUser ? "ok" : "MISSING");
+  console.log("history (answer A):", hasAnswerA ? "ok" : "MISSING");
+  console.log("chat.cleared:", hasCleared ? "ok" : "MISSING");
 
   ok =
     calls === 3 &&
     toolCalls.includes("get_playlists") &&
     toolCalls.includes("get_playlist_tracks") &&
-    finalA.includes("Resposta de teste A") &&
+    finalA.includes("Test answer A") &&
     hasFirstUser &&
     hasAnswerA &&
     hasCleared;

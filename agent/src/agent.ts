@@ -246,7 +246,13 @@ export async function handleChat(
   const t = makeT(AGENT_STRINGS, normalizeLocale(deps.locale));
 
   if (!config.deepseekApiKey) {
-    send({ type: "chat.done", sessionId, text: t("fallback.noApiKey") });
+    const fallback = t("fallback.noApiKey");
+    for (let i = 0; i < fallback.length; i += STREAM_CHUNK_CHARS) {
+      send({ type: "chat.stream", sessionId, delta: fallback.slice(i, i + STREAM_CHUNK_CHARS) });
+      await new Promise((r) => setTimeout(r, STREAM_DELAY_MS));
+    }
+    saveMessage(db, sessionId, "assistant", fallback);
+    send({ type: "chat.done", sessionId, suggestions: [] });
     return;
   }
 

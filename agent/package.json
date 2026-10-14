@@ -2,13 +2,15 @@
   "name": "euterpe-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "Euterpe - agente local do Spotify (DeepSeek + tools)",
+  "description": "Euterpe - local Spotify agent (DeepSeek + tools)",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx tests/parse-suggestions.mjs && node --test tests/",
+    "test:integration": "node tests/orchestrators.mjs && node tests/mutation-gate.mjs && node tests/agent-loop.mjs"
   },
   "dependencies": {
     "@fastify/websocket": "^8.3.1",

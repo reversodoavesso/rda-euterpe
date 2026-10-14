@@ -24,11 +24,11 @@ const mockLlm = http.createServer((req, res) => {
     if (calls === 1) {
       message = { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "get_playlists", arguments: "{}" } }] };
     } else if (calls === 2) {
-      message = { role: "assistant", content: null, tool_calls: [{ id: "c2", type: "function", function: { name: "create_playlist", arguments: '{"name":"Playlist Aprovada","tracks":["spotify:track:1"]}' } }] };
+      message = { role: "assistant", content: null, tool_calls: [{ id: "c2", type: "function", function: { name: "create_playlist", arguments: '{"name":"Approved Playlist","tracks":["spotify:track:1"]}' } }] };
     } else if (calls === 3) {
-      message = { role: "assistant", content: null, tool_calls: [{ id: "c3", type: "function", function: { name: "create_playlist", arguments: '{"name":"rejeitar esta","tracks":["spotify:track:2"]}' } }] };
+      message = { role: "assistant", content: null, tool_calls: [{ id: "c3", type: "function", function: { name: "create_playlist", arguments: '{"name":"reject this","tracks":["spotify:track:2"]}' } }] };
     } else {
-      message = { role: "assistant", content: "Fluxo de mutação finalizado." };
+      message = { role: "assistant", content: "Mutation flow finished." };
     }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
@@ -88,7 +88,7 @@ async function waitHealth() {
     } catch {}
     await wait(250);
   }
-  throw new Error("agente não subiu");
+  throw new Error("agent did not start");
 }
 
 let ok = false;
@@ -115,7 +115,7 @@ try {
   ws.on("message", (raw) => {
     const msg = JSON.parse(raw.toString());
     if (msg.type === "proposal.create") {
-      const decision = msg.title && msg.title.toLowerCase().includes("rejeitar") ? "reject" : "approve";
+      const decision = msg.title && msg.title.toLowerCase().includes("reject") ? "reject" : "approve";
       ws.send(JSON.stringify({ type: "proposal.decision", proposalId: msg.proposalId, decision }));
     }
     if (msg.type === "tool.call" && msg.name === "get_playlists") {
@@ -133,7 +133,7 @@ try {
   ws.send(JSON.stringify({ type: "hello", secret: cfg.secret, appVersion: "0.1.0" }));
   await wait(300);
 
-  ws.send(JSON.stringify({ type: "chat.send", text: "cria playlists", sessionId: "sess-mut" }));
+  ws.send(JSON.stringify({ type: "chat.send", text: "create playlists", sessionId: "sess-mut" }));
   await new Promise((res) => (pendingDone = res));
 
   const proposals = got.filter((m) => m.type === "proposal.create");
@@ -142,10 +142,10 @@ try {
   console.log("LLM calls:", calls);
   console.log("proposals:", proposals.length);
   console.log("create_playlist tool.call:", createCalls);
-  console.log("texto final:", finalText);
+  console.log("final text:", finalText);
 
-  // esperado: 1 proposta aprovada (tool.call executado) + 1 rejeitada (sem tool.call)
-  ok = calls === 4 && proposals.length === 2 && createCalls === 1 && finalText.includes("finalizado");
+  // expected: 1 approved proposal (tool.call executed) + 1 rejected (no tool.call)
+  ok = calls === 4 && proposals.length === 2 && createCalls === 1 && finalText.includes("finished");
   ws.close();
   console.log(ok ? "PASS" : "FAIL");
 } finally {

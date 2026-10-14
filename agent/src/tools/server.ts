@@ -294,14 +294,6 @@ export async function enrichTracks(ids: string[], ctx: ServerToolContext): Promi
   if (!tracksRes.ok) return tracksRes;
   const tracks = (tracksRes.data as Array<{ uri: string; name: string; artists: string[]; artist_ids: string[]; album?: string; duration_ms?: number }>) ?? [];
 
-  const featuresRes = await ctx.requestClientTool({ id: "enrich_features", name: "get_audio_features_bulk", args: { ids: idsArr } });
-  const featuresById = new Map<string, unknown>();
-  if (featuresRes.ok) {
-    for (const f of (featuresRes.data as Array<{ id?: string } & Record<string, unknown>>) ?? []) {
-      if (f.id) featuresById.set(f.id, f);
-    }
-  }
-
   const artistIds = [...new Set(tracks.flatMap((t) => t.artist_ids ?? []))];
   const artistById = new Map<string, { name: string; genres: string[] }>();
   if (artistIds.length) {
@@ -334,7 +326,6 @@ export async function enrichTracks(ids: string[], ctx: ServerToolContext): Promi
       duration_ms: t.duration_ms ?? null,
       artists: t.artists ?? [],
       genres: [...new Set(art.flatMap((a) => a?.genres ?? []))],
-      audio_features: featuresById.get(id) ?? null,
       lyrics: lyricsByKey.get(t.uri)?.text ? { text: lyricsByKey.get(t.uri)!.text, source: lyricsByKey.get(t.uri)!.source } : null,
     };
   });
@@ -379,15 +370,14 @@ export async function imageSearch(q: string, perPage = 10): Promise<ToolResult> 
 }
 
 export async function weeklyReport(ctx: ServerToolContext): Promise<ToolResult> {
-  const topArtists = await ctx.requestClientTool({ id: "weekly_topartists", name: "get_top_artists", args: { time_range: "long_term" } });
-  const topTracks = await ctx.requestClientTool({ id: "weekly_toptracks", name: "get_top_tracks", args: { time_range: "long_term" } });
+  const recents = await ctx.requestClientTool({ id: "weekly_recents", name: "get_listening_recents", args: { limit: 50, time_range: "long_term" } });
   const saved = await ctx.requestClientTool({ id: "weekly_saved", name: "get_saved_tracks", args: {} });
+  const recentsCount = recents.ok && Array.isArray(recents.data) ? recents.data.length : null;
   return {
     ok: true,
     data: {
-      top_artists: topArtists.ok ? topArtists.data : null,
-      top_tracks: topTracks.ok ? topTracks.data : null,
-      saved_tracks: saved.ok ? (saved.data as Array<unknown>).length : null,
+      recent_tracks: recents.ok ? recents.data : null,
+      saved_tracks: saved.ok && Array.isArray(saved.data) ? (saved.data as unknown[]).length : null,
     },
   };
 }

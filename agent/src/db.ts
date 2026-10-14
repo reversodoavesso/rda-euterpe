@@ -63,7 +63,7 @@ export function saveMessage(db: Database.Database, sessionId: string, role: stri
       Date.now()
     );
   } catch (err) {
-    console.error("[euterpe] falha ao salvar conversa", err);
+    console.error("[euterpe] failed to save conversation", err);
   }
 }
 
@@ -76,7 +76,7 @@ export function getHistory(db: Database.Database, sessionId: string, limit = 20)
       .all(sessionId, limit)
       .reverse() as HistoryMessage[];
   } catch (err) {
-    console.error("[euterpe] falha ao ler histórico", err);
+    console.error("[euterpe] failed to read history", err);
     return [];
   }
 }
@@ -85,7 +85,7 @@ export function clearHistory(db: Database.Database, sessionId: string): void {
   try {
     db.prepare("DELETE FROM conversations WHERE session_id = ?").run(sessionId);
   } catch (err) {
-    console.error("[euterpe] falha ao limpar histórico", err);
+    console.error("[euterpe] failed to clear history", err);
   }
 }
 
@@ -107,7 +107,7 @@ export function setCache(db: Database.Database, key: string, value: string, ttlM
     const expires = ttlMs > 0 ? Date.now() + ttlMs : null;
     db.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)").run(key, value, expires);
   } catch (err) {
-    console.error("[euterpe] falha ao gravar cache", err);
+    console.error("[euterpe] failed to write cache", err);
   }
 }
 
@@ -117,7 +117,7 @@ export function saveSnapshot(db: Database.Database, playlistId: string, uris: st
       "INSERT INTO snapshots (playlist_id, snapshot, created_at) VALUES (?, ?, ?)"
     ).run(playlistId, JSON.stringify(uris), Date.now());
   } catch (err) {
-    console.error("[euterpe] falha ao gravar snapshot", err);
+    console.error("[euterpe] failed to save snapshot", err);
   }
 }
 
@@ -129,7 +129,7 @@ export function getLatestSnapshot(db: Database.Database, playlistId: string): st
     if (!row) return null;
     return JSON.parse(row.snapshot) as string[];
   } catch (err) {
-    console.error("[euterpe] falha ao ler snapshot", err);
+    console.error("[euterpe] failed to read snapshot", err);
     return null;
   }
 }
@@ -140,6 +140,6 @@ export function markSnapshotUndone(db: Database.Database, playlistId: string): v
       "UPDATE snapshots SET undone_at = ? WHERE playlist_id = ? AND undone_at IS NULL"
     ).run(Date.now(), playlistId);
   } catch (err) {
-    console.error("[euterpe] falha ao marcar snapshot", err);
+    console.error("[euterpe] failed to mark snapshot undone", err);
   }
 }

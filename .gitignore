@@ -17,6 +17,9 @@ Thumbs.db
 
 # Agent runtime
 agent/data/ws-secret
+# Evidencia de probe: regeneravel via GET /probe e acoplada a versao do Spotify
+# (evita sujar o working tree a cada execucao durante a migracao)
+agent/data/probes/
 agent/data/*.db
 agent/data/*.db-journal
 agent/data/*.db-wal

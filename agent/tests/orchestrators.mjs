@@ -29,7 +29,7 @@ const mockLlm = http.createServer((req, res) => {
     if (calls === 1) {
       message = { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "enrich_tracks", arguments: '{"ids":["t1","t2"]}' } }] };
     } else {
-      message = { role: "assistant", content: "Análise enriquecida pronta." };
+      message = { role: "assistant", content: "Enriched analysis ready." };
     }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
@@ -89,7 +89,7 @@ async function waitHealth() {
     } catch {}
     await wait(250);
   }
-  throw new Error("agente não subiu");
+  throw new Error("agent did not start");
 }
 
 let ok = false;
@@ -132,7 +132,7 @@ try {
   });
   ws.send(JSON.stringify({ type: "hello", secret: cfg.secret, appVersion: "0.1.0" }));
   await wait(300);
-  ws.send(JSON.stringify({ type: "chat.send", text: "analisa essas faixas", sessionId: "sess-enrich" }));
+  ws.send(JSON.stringify({ type: "chat.send", text: "analyze these tracks", sessionId: "sess-enrich" }));
   await done;
 
   const enriched = enrichResultRaw ? JSON.parse(enrichResultRaw) : null;

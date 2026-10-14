@@ -1,11 +1,92 @@
 // Euterpe - Custom App (chat panel)
 const { React } = Spicetify;
 
+// TEMP DIAGNOSTICS — report app errors to the agent log (client.debug)
+// and keep a copy on the page. Remove once the loading issue is fixed.
+(function diag() {
+  const report = (level, detail) => {
+    try {
+      if (window.euterpe && typeof window.euterpe.send === "function") {
+        window.euterpe.send({ type: "client.debug", level, detail: "[euterpe-app] " + String(detail) });
+      }
+    } catch (_) {}
+  };
+  window.addEventListener("error", (e) => report("error", (e && e.message ? e.message : e) + " @ " + (e && e.filename ? e.filename : "?") + ":" + (e && e.lineno ? e.lineno : "?")));
+  window.addEventListener("unhandledrejection", (e) => report("error", "unhandledrejection: " + (e && e.reason ? e.reason : e)));
+})();
+
 /* ============================================================
-   Sessões de conversa
-   - A lista de sessões vive em LocalStorage ("euterpe:sessions")
-   - As mensagens de cada sessão ficam em "euterpe:messages:<id>"
-   - A sessão ativa é usada em todo chat.send / chat.clear
+   i18n — interface-facing strings.
+   Default: en. Resolved from the Spotify locale (pt-br when the
+   Spotify UI is Brazilian Portuguese).
+   ============================================================ */
+const UI_STRINGS = {
+  "session.new": { en: "Conversation", "pt-br": "Conversa" },
+  "chip.artistTitle": { en: "Open artist page in Spotify", "pt-br": "Abrir página do artista no Spotify" },
+  "chip.play": { en: "Play", "pt-br": "Tocar" },
+  "chip.open": { en: "Open in Spotify", "pt-br": "Abrir no Spotify" },
+  "code.copy": { en: "copy", "pt-br": "copiar" },
+  "status.connected": { en: "connected", "pt-br": "conectado" },
+  "status.disconnected": { en: "disconnected", "pt-br": "desconectado" },
+  "status.connecting": { en: "connecting…", "pt-br": "conectando…" },
+  "status.sending": { en: "sending…", "pt-br": "enviando…" },
+  "status.cleared": { en: "conversation cleared", "pt-br": "conversa limpa" },
+  "header.connected": { en: "connected to agent", "pt-br": "conectado ao agente" },
+  "header.connectedVersion": { en: "connected to agent · v{version}", "pt-br": "conectado ao agente · v{version}" },
+  "error.extensionNotLoaded": {
+    en: "The 'euterpe.js' extension is not loaded. Install it in the spicetify Extensions folder and reopen Spotify.",
+    "pt-br": "A extension 'euterpe.js' não está carregada. Instale-a na pasta Extensions do spicetify e reabra o Spotify.",
+  },
+  "action.clear": { en: "Clear conversation", "pt-br": "Limpar conversa" },
+  "action.clearTitle": { en: "Delete this conversation's messages", "pt-br": "Apagar as mensagens desta conversa" },
+  "action.closeSession": { en: "Close session", "pt-br": "Fechar sessão" },
+  "action.newSession": { en: "New conversation", "pt-br": "Nova conversa" },
+  "empty.title": { en: "Your music assistant", "pt-br": "Seu assistente musical" },
+  "empty.subtitle": {
+    en: "Ask about playlists, artists, moods and releases — after each answer, Euterpe suggests next steps.",
+    "pt-br": "Pergunte sobre playlists, artistas, mood e lançamentos — depois de cada resposta, o Euterpe sugere os próximos passos.",
+  },
+  "action.confirm": { en: "Confirm", "pt-br": "Confirmar" },
+  "action.cancel": { en: "Cancel", "pt-br": "Cancelar" },
+  "input.placeholder": {
+    en: "e.g. take the artists from my playlist X and find breakup songs…",
+    "pt-br": "Ex.: pega os artistas da minha playlist X e busca músicas de término…",
+  },
+  "action.send": { en: "Send", "pt-br": "Enviar" },
+};
+
+function normalizeLocale(raw) {
+  const lang = String(raw || "").split("-")[0].trim().toLowerCase();
+  return lang === "pt" ? "pt-br" : "en";
+}
+
+function appLocale() {
+  try {
+    if (Spicetify && Spicetify.Locale && typeof Spicetify.Locale.getLocale === "function") {
+      const l = Spicetify.Locale.getLocale();
+      if (l) return normalizeLocale(l);
+    }
+  } catch (err) {}
+  try {
+    return normalizeLocale(navigator.language);
+  } catch (err) {}
+  return "en";
+}
+
+const tr = (key, vars) => {
+  const entry = UI_STRINGS[key];
+  let out = (entry && (entry[appLocale()] ?? entry.en)) || key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{${k}}`, String(v));
+  }
+  return out;
+};
+
+/* ============================================================
+   Conversation sessions
+   - The session list lives in LocalStorage ("euterpe:sessions")
+   - Each session's messages live in "euterpe:messages:<id>"
+   - The active session is used for every chat.send / chat.clear
    ============================================================ */
 const SESSIONS_KEY = "euterpe:sessions";
 const LEGACY_SESSION_KEY = "euterpe:session";
@@ -19,12 +100,12 @@ function newSessionId() {
 
 function sessionTitle(messages) {
   const first = (messages || []).find((m) => m.role === "user");
-  if (!first) return "Conversa";
+  if (!first) return tr("session.new");
   const text = String(first.content || "").replace(/<[^>]+>/g, "").trim();
-  return text.length > SESSION_TITLE_MAX ? text.slice(0, SESSION_TITLE_MAX) + "…" : text || "Conversa";
+  return text.length > SESSION_TITLE_MAX ? text.slice(0, SESSION_TITLE_MAX) + "…" : text || tr("session.new");
 }
 
-/* Camada única de persistência de sessões/mensagens. */
+/* Single persistence layer for sessions/messages. */
 const sessionStore = {
   list() {
     try {
@@ -61,7 +142,7 @@ const sessionStore = {
       Spicetify.LocalStorage.remove(MSG_PREFIX + id);
     } catch (err) {}
   },
-  /* Migra a sessão única antiga (euterpe:session) para a lista. */
+  /* Migrates the old single session (euterpe:session) into the list. */
   migrateLegacy() {
     try {
       const legacyId = Spicetify.LocalStorage.get(LEGACY_SESSION_KEY);
@@ -74,38 +155,38 @@ const sessionStore = {
   },
 };
 
-/* Hook de sessões: estado + operações + persistência. */
+/* Sessions hook: state + operations + persistence. */
 function useSessions() {
   const { useState, useEffect } = React;
   const [sessions, setSessions] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [messages, setMessages] = useState([]);
 
-  // Inicialização: restaura sessões salvas, migra a legada ou cria uma nova.
+  // Initialization: restore saved sessions, migrate the legacy one or create a new one.
   useEffect(() => {
     let list = sessionStore.list();
     if (!list || !list.length) list = sessionStore.migrateLegacy();
-    if (!list || !list.length) list = [{ id: newSessionId(), title: "Conversa" }];
+    if (!list || !list.length) list = [{ id: newSessionId(), title: tr("session.new") }];
     setSessions(list);
     const last = list[list.length - 1];
     setCurrentId(last.id);
     setMessages(sessionStore.messages(last.id));
   }, []);
 
-  // Persiste a lista de sessões.
+  // Persists the session list.
   useEffect(() => {
     if (!sessions.length) return;
     sessionStore.save(sessions);
   }, [sessions]);
 
-  // Persiste as mensagens da sessão atual (debounce).
+  // Persists the messages of the current session (debounced).
   useEffect(() => {
     if (!currentId || !messages.length) return;
-    const t = setTimeout(() => sessionStore.saveMessages(currentId, messages), 400);
-    return () => clearTimeout(t);
+    const tOut = setTimeout(() => sessionStore.saveMessages(currentId, messages), 400);
+    return () => clearTimeout(tOut);
   }, [messages, currentId]);
 
-  // Mantém o título da sessão atual sincronizado com a 1ª msg do usuário.
+  // Keeps the current session title synced with the 1st user message.
   useEffect(() => {
     if (!currentId) return;
     const title = sessionTitle(messages);
@@ -123,27 +204,26 @@ function useSessions() {
 
   const newSession = () => {
     const id = newSessionId();
-    setSessions((prev) => [...prev.slice(-(MAX_SESSIONS - 1)), { id, title: "Conversa" }]);
+    setSessions((prev) => [...prev.slice(-(MAX_SESSIONS - 1)), { id, title: tr("session.new") }]);
     setCurrentId(id);
     setMessages([]);
   };
 
   const closeSession = (id) => {
     sessionStore.removeMessages(id);
-    setSessions((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      if (id !== currentId) return next;
-      if (next.length) {
-        const last = next[next.length - 1];
-        setCurrentId(last.id);
-        setMessages(sessionStore.messages(last.id));
-        return next;
-      }
-      const fresh = { id: newSessionId(), title: "Conversa" };
+    const next = sessions.filter((s) => s.id !== id);
+    setSessions(next);
+    if (id !== currentId) return;
+    if (next.length) {
+      const last = next[next.length - 1];
+      setCurrentId(last.id);
+      setMessages(sessionStore.messages(last.id));
+    } else {
+      const fresh = { id: newSessionId(), title: tr("session.new") };
+      setSessions([fresh]);
       setCurrentId(fresh.id);
       setMessages([]);
-      return [fresh];
-    });
+    }
   };
 
   const clearMessages = () => {
@@ -221,8 +301,8 @@ function spotifyLinkIcon(size) {
   );
 }
 
-/* Logo Euterpe — mesma arte do ícone em manifest.json (duas colcheias com
-   barra dupla). Mantenha o path/elipses sincronizados com o manifest. */
+/* Euterpe logo — same art as the manifest.json icon (two beamed notes with a
+   double bar). Keep the path/ellipses in sync with the manifest. */
 function euterpeLogo(size) {
   return React.createElement(
     "svg",
@@ -277,7 +357,7 @@ function spotifyChip(raw, key) {
       {
         key,
         onClick: open,
-        title: "Abrir página do artista no Spotify",
+        title: tr("chip.artistTitle"),
         style: {
           background: "none",
           border: "none",
@@ -318,7 +398,7 @@ function spotifyChip(raw, key) {
       "button",
       {
         onClick: play,
-        title: "Tocar",
+        title: tr("chip.play"),
         style: {
           background: "none",
           border: "none",
@@ -335,8 +415,8 @@ function spotifyChip(raw, key) {
       "button",
       {
         onClick: open,
-        title: "Abrir no Spotify",
-        "aria-label": "Abrir no Spotify",
+        title: tr("chip.open"),
+        "aria-label": tr("chip.open"),
         style: {
           background: "none",
           border: "none",
@@ -477,7 +557,7 @@ function renderMarkdown(md, keyBase = "md") {
                 cursor: "pointer",
               },
             },
-            "copiar"
+            tr("code.copy")
           )
         )
       );
@@ -621,9 +701,10 @@ function renderMarkdown(md, keyBase = "md") {
 
 (function injectStyles() {
   try {
-    // Substitui em vez de retornar cedo: o <style> persiste entre navegações do
-    // custom app na mesma sessão do Spotify, e o arquivo pode ser relido após um
-    // update sem reiniciar o cliente — o CSS novo precisa chegar de novo.
+    // Replaces instead of returning early: the <style> persists across custom
+    // app navigations in the same Spotify session, and the file can be re-read
+    // after an update without restarting the client — the new CSS must arrive
+    // again.
     const existing = document.getElementById("euterpe-styles");
     if (existing) existing.remove();
     const s = document.createElement("style");
@@ -666,8 +747,8 @@ function renderMarkdown(md, keyBase = "md") {
   70% { box-shadow: 0 0 0 6px rgba(var(--spice-rgb-button, 29,185,84), 0); }
   100% { box-shadow: 0 0 0 0 rgba(var(--spice-rgb-button, 29,185,84), 0); }
 }
-/* Botões do app — classes utilitárias escopadas no root do app para vencer os
-   resets do Encore (specificity 0,2,0) com reset completo de estilo. */
+/* App buttons — utility classes scoped to the app root to beat the Encore
+   resets (specificity 0,2,0) with a full style reset. */
 .euterpe-app .euterpe-btn {
   appearance: none;
   display: inline-flex;
@@ -690,7 +771,7 @@ function renderMarkdown(md, keyBase = "md") {
 .euterpe-app .euterpe-btn:disabled { opacity: .5; cursor: not-allowed; }
 .euterpe-app .euterpe-btn-ghost { border-color: var(--euterpe-divider); }
 .euterpe-app .euterpe-btn-ghost:hover:not(:disabled) { background: var(--euterpe-surface-soft); border-color: var(--euterpe-border); }
-/* Quick replies — balões de sugestão dentro do thread de conversa. */
+/* Quick replies — suggestion bubbles inside the conversation thread. */
 .euterpe-app .euterpe-quickreply {
   appearance: none;
   display: block;
@@ -738,18 +819,30 @@ function Euterpe() {
     streamDelta,
     markLastDone,
   } = useSessions();
-  const [status, setStatus] = useState("conectando…");
+  const [bus, setBus] = useState(window.euterpe || null);
+  const [status, setStatus] = useState("");
   const [tool, setTool] = useState(null);
-  const [connected, setConnected] = useState(window.euterpe ? window.euterpe.connected : false);
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(true);
   const [proposal, setProposal] = useState(null);
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-  const [agentVersion, setAgentVersion] = useState(
-    window.euterpe && window.euterpe.agentVersion ? window.euterpe.agentVersion : null
-  );
+  const [agentVersion, setAgentVersion] = useState(null);
   const [focused, setFocused] = useState(false);
   const listRef = useRef(null);
-  const bus = window.euterpe;
+
+  // If the extension mounts after the app, poll for window.euterpe instead of
+  // getting stuck on "extension not loaded".
+  useEffect(() => {
+    if (bus) return;
+    const id = setInterval(() => {
+      if (window.euterpe) {
+        clearInterval(id);
+        setBus(window.euterpe);
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [bus]);
 
   useEffect(() => {
     if (!bus) return;
@@ -761,16 +854,16 @@ function Euterpe() {
         case "chat.done":
           markLastDone();
           setTool(null);
-          setStatus("conectado");
-          // Só mexe nas sugestões quando o agente mandou o campo — o routing
-          // (songchange) também emite chat.done sem suggestions e não deve
-          // resetar os pills contextuais da conversa.
+          setStatus("");
+          // Only touch suggestions when the agent sent the field — routing
+          // (songchange) also emits chat.done without suggestions and must not
+          // reset the contextual pills of the conversation.
           if (Array.isArray(msg.suggestions)) setSuggestions(msg.suggestions.slice(0, 3));
           break;
         case "chat.cleared":
           clearMessages();
           setTool(null);
-          setStatus("conversa limpa");
+          setStatus(tr("status.cleared"));
           setSuggestions([]);
           break;
         case "proposal.create":
@@ -782,8 +875,9 @@ function Euterpe() {
             setStatus("");
           } else if (msg.status === "offline") {
             setConnected(false);
+            setConnecting(false);
             setTool(null);
-            setStatus(msg.detail || "desconectado");
+            setStatus(msg.detail || tr("status.disconnected"));
           } else {
             setTool(null);
             setStatus(msg.detail || msg.status);
@@ -791,15 +885,21 @@ function Euterpe() {
           break;
         case "hello.ok":
           setConnected(true);
-          setStatus("conectado");
-          setAgentVersion(msg.version || (window.euterpe && window.euterpe.agentVersion) || null);
+          setConnecting(false);
+          setStatus("");
+          setAgentVersion(msg.version || (bus && bus.agentVersion) || null);
           break;
         default:
           break;
       }
     });
+    if (bus.connected) {
+      setConnected(true);
+      setConnecting(false);
+    }
+    if (bus.agentVersion) setAgentVersion(bus.agentVersion);
     return () => off();
-  }, []);
+  }, [bus]);
 
   const decide = (decision) => {
     if (!proposal || !bus) return;
@@ -817,7 +917,7 @@ function Euterpe() {
     pushUser(text);
     setInput("");
     setSuggestions([]);
-    setStatus("enviando…");
+    setStatus(tr("status.sending"));
     bus.send({ type: "chat.send", text, sessionId: currentId });
   };
 
@@ -833,11 +933,7 @@ function Euterpe() {
       "section",
       { className: "contentSpacing" },
       React.createElement("h1", null, "Euterpe"),
-      React.createElement(
-        "p",
-        null,
-        "A extension 'euterpe.js' não está carregada. Instale-a na pasta Extensions do spicetify e reabra o Spotify."
-      )
+      React.createElement("p", null, tr("error.extensionNotLoaded"))
     );
   }
 
@@ -886,7 +982,6 @@ function Euterpe() {
     overflow: "hidden",
     textOverflow: "ellipsis",
   };
-  const connecting = !connected && status === "conectando…";
   const dotStyle = {
     width: 8,
     height: 8,
@@ -897,9 +992,11 @@ function Euterpe() {
   };
   const subtitleText = connected
     ? agentVersion
-      ? `conectado ao agente · v${agentVersion}`
-      : "conectado ao agente"
-    : status || "desconectado";
+      ? tr("header.connectedVersion", { version: agentVersion })
+      : tr("header.connected")
+    : connecting
+      ? tr("status.connecting")
+      : tr("status.disconnected");
   const headerActionsStyle = {
     display: "flex",
     alignItems: "center",
@@ -994,7 +1091,7 @@ function Euterpe() {
             React.createElement(
               "div",
               { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 2, minWidth: 0 } },
-              React.createElement("span", { style: dotStyle, title: connected ? "conectado" : "desconectado" }),
+              React.createElement("span", { style: dotStyle, title: connected ? tr("status.connected") : tr("status.disconnected") }),
               React.createElement(
                 "span",
                 {
@@ -1019,11 +1116,11 @@ function Euterpe() {
             {
               className: "euterpe-btn euterpe-btn-ghost",
               onClick: clear,
-              title: "Apagar as mensagens desta conversa",
-              "aria-label": "Limpar conversa",
+              title: tr("action.clearTitle"),
+              "aria-label": tr("action.clear"),
             },
             nativeIcon("ban", 13),
-            "Limpar conversa"
+            tr("action.clear")
           )
         )
       )
@@ -1049,14 +1146,14 @@ function Euterpe() {
             {
               onClick: (e) => {
                 e.stopPropagation();
-                // Se fechou a sessão ativa, a thread muda — os quick replies da
-                // sessão anterior não podem vazar para a próxima.
+                // Closing the active session switches the thread — the quick
+                // replies of the previous session must not leak into the next.
                 if (s.id === currentId) setSuggestions([]);
                 closeSession(s.id);
               },
               style: tabCloseStyle,
-              title: "Fechar sessão",
-              "aria-label": "Fechar sessão",
+              title: tr("action.closeSession"),
+              "aria-label": tr("action.closeSession"),
             },
             "×"
           )
@@ -1070,8 +1167,8 @@ function Euterpe() {
             newSession();
           },
           style: tabNewStyle,
-          title: "Nova conversa",
-          "aria-label": "Nova conversa",
+          title: tr("action.newSession"),
+          "aria-label": tr("action.newSession"),
         },
         "+"
       )
@@ -1082,16 +1179,16 @@ function Euterpe() {
         ref: listRef,
         style: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", padding: "12px 0", scrollbarWidth: "thin" },
       },
-      !messages.length && !tool && (!status || status === "conectado")
+      !messages.length && !tool && !status
         ? React.createElement(
             "div",
             { style: emptyStateStyle },
             React.createElement("div", { style: emptyLogoStyle, "aria-hidden": true }, euterpeLogo(26)),
-            React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: "var(--euterpe-text)" } }, "Seu assistente musical"),
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: "var(--euterpe-text)" } }, tr("empty.title")),
             React.createElement(
               "div",
               { style: { fontSize: 13, lineHeight: 1.5, color: "var(--euterpe-subtext)" } },
-              "Pergunte sobre playlists, artistas, mood e lançamentos — depois de cada resposta, o Euterpe sugere os próximos passos."
+              tr("empty.subtitle")
             )
           )
         : null,
@@ -1162,10 +1259,10 @@ function Euterpe() {
             "div",
             { style: { color: "var(--euterpe-status)", fontSize: "12px", display: "flex", gap: "6px", alignItems: "center" } },
             React.createElement("span", { style: { display: "inline-block", width: 8, height: 8, borderRadius: 4, background: "var(--euterpe-accent)" } }),
-            tool.replace("usando ", "")
+            tool
           )
         : null,
-      status && !tool && status !== "conectado"
+      status && !tool
         ? React.createElement("div", { style: { color: "var(--euterpe-status)", fontSize: "12px" } }, status)
         : null
     ),
@@ -1207,7 +1304,7 @@ function Euterpe() {
                   cursor: "pointer",
                 },
               },
-              "Confirmar"
+              tr("action.confirm")
             ),
             React.createElement(
               "button",
@@ -1222,7 +1319,7 @@ function Euterpe() {
                   color: "var(--euterpe-text)",
                 },
               },
-              "Cancelar"
+              tr("action.cancel")
             )
           )
         )
@@ -1244,7 +1341,7 @@ function Euterpe() {
         },
         onFocus: () => setFocused(true),
         onBlur: () => setFocused(false),
-        placeholder: "Ex.: pega os artistas da minha playlist X e busca músicas de término…",
+        placeholder: tr("input.placeholder"),
         value: input,
         onChange: (e) => setInput(e.target.value),
         onKeyDown: (e) => {
@@ -1268,12 +1365,25 @@ function Euterpe() {
           onClick: send,
           disabled: !connected,
         },
-        "Enviar"
+        tr("action.send")
       )
     )
   );
 }
 
 function render() {
-  return React.createElement(Euterpe);
+  try {
+    return React.createElement(Euterpe);
+  } catch (err) {
+    try {
+      if (window.euterpe && typeof window.euterpe.send === "function") {
+        window.euterpe.send({ type: "client.debug", level: "error", detail: "[euterpe-app] RENDER FAIL: " + (err && err.stack ? err.stack : err) });
+      }
+    } catch (_) {}
+    return React.createElement(
+      "section",
+      { className: "contentSpacing" },
+      React.createElement("p", { style: { whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12 } }, String(err && err.stack ? err.stack : err))
+    );
+  }
 }
