@@ -132,7 +132,11 @@ async fn resources_and_prompts_are_exposed() {
         .collect();
     assert_eq!(
         uris,
-        vec!["euterpe://playlists", "euterpe://currently-playing"]
+        vec![
+            "euterpe://playlists",
+            "euterpe://currently-playing",
+            "euterpe://voice"
+        ]
     );
 
     let prompts = server::dispatch(&state, "prompts/list", &json!({}))
@@ -175,6 +179,21 @@ async fn reading_a_known_resource_without_a_client_reports_offline() {
     .await
     .unwrap_err();
     assert!(err.message.contains("client_offline"));
+}
+
+#[tokio::test]
+async fn reading_voice_resource_returns_voice_guidelines_without_client() {
+    let state = state();
+    let res = server::dispatch(
+        &state,
+        "resources/read",
+        &json!({ "uri": "euterpe://voice" }),
+    )
+    .await
+    .unwrap();
+    let text = res["contents"][0]["text"].as_str().unwrap();
+    assert!(text.contains("Euterpe"));
+    assert!(text.contains("thinkingVerbs"));
 }
 
 #[test]

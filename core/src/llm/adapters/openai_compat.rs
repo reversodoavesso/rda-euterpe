@@ -150,19 +150,13 @@ pub fn parse_completion(body: &Value) -> Completion {
                         .pointer("/function/name")
                         .and_then(|v| v.as_str())?
                         .to_string();
-                    Some(ToolCall {
-                        id: c
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
+                    Some(ToolCall::new(
+                        c.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                         name,
-                        arguments: c
-                            .pointer("/function/arguments")
+                        c.pointer("/function/arguments")
                             .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                    })
+                            .unwrap_or(""),
+                    ))
                 })
                 .collect();
         }
@@ -217,11 +211,9 @@ impl ToolCallAccumulator {
         order
             .into_iter()
             .filter_map(|i| {
-                self.by_index.get(&i).map(|(id, name, args)| ToolCall {
-                    id: id.clone(),
-                    name: name.clone(),
-                    arguments: args.clone(),
-                })
+                self.by_index
+                    .get(&i)
+                    .map(|(id, name, args)| ToolCall::new(id.clone(), name.clone(), args.clone()))
             })
             .collect()
     }
@@ -451,11 +443,7 @@ mod tests {
             Msg::user("hi"),
             Msg::Assistant {
                 text: None,
-                tool_calls: vec![ToolCall {
-                    id: "c1".into(),
-                    name: "get_playlists".into(),
-                    arguments: "{}".into(),
-                }],
+                tool_calls: vec![ToolCall::new("c1", "get_playlists", "{}")],
             },
             Msg::tool("c1", "{\"ok\":true}"),
         ];

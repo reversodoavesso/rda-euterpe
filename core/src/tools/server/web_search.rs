@@ -32,7 +32,15 @@ pub async fn web_search(
     if query.trim().is_empty() {
         return ToolResult::err("empty_query");
     }
-    let backend = ctx.cfg.web_search;
+    let backend = if let Some(store) = ctx.store {
+        if let Ok(cache) = crate::store::settings::SettingsCache::load(store) {
+            cache.effective(ctx.cfg).web_search
+        } else {
+            ctx.cfg.web_search
+        }
+    } else {
+        ctx.cfg.web_search
+    };
     if backend == WebSearchBackend::Off {
         return ToolResult::err("web_search_disabled");
     }

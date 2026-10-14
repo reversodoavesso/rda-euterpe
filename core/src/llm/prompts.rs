@@ -50,6 +50,20 @@ pub fn system_prompt(locale: Option<&str>, debug: bool) -> String {
         .unwrap_or_default()
 }
 
+/// Acrescenta as instruções do usuário (settings `instructions`) ao prompt de
+/// sistema. Fica **fora** do asset gerado de propósito: `prompts.json` é golden e
+/// `parity_prompts.rs` compara `system_prompt()` byte a byte — com instruções
+/// vazias este caminho nem é chamado.
+pub fn with_user_instructions(base: String, instructions: &str) -> String {
+    let extra = instructions.trim();
+    if extra.is_empty() {
+        return base;
+    }
+    format!(
+        "{base}\n\nUSER INSTRUCTIONS (highest priority — they never override the data rules above: never invent data, tracks or lyrics)\n{extra}"
+    )
+}
+
 /// Prompt das sugestões dinâmicas.
 pub fn suggestions_prompt(locale: Option<&str>) -> String {
     let base = crate::i18n::normalize_locale(locale);

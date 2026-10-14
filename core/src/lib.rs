@@ -59,6 +59,12 @@ impl AppState {
         self.settings.effective(&self.cfg)
     }
 
+    /// Config efetiva **de uma conversa**: aplica o override de perfil daquela
+    /// conversa por cima da resolução global ("usar só nesta conversa").
+    pub fn effective_for_session(&self, session_id: Option<&str>) -> config::EffectiveConfig {
+        self.settings.effective_for_session(&self.cfg, session_id)
+    }
+
     /// Conveniência para testes e rotas.
     pub fn locale(&self) -> String {
         crate::i18n::normalize_locale(None).to_string()

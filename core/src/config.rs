@@ -100,8 +100,11 @@ impl ProviderConfig {
                     "DeepSeek",
                     Wire::OpenaiCompat,
                     "https://api.deepseek.com",
-                    "deepseek-chat",
-                    "deepseek-reasoner",
+                    // `deepseek-chat`/`deepseek-reasoner` foram descontinuados em
+                    // 2026-07-24 (api-docs.deepseek.com/updates). Os nomes atuais
+                    // são `deepseek-flash` (V4.1-Flash) e `deepseek-v4-pro`.
+                    "deepseek-flash",
+                    "deepseek-v4-pro",
                 ),
                 "openai" => (
                     "OpenAI",
@@ -156,8 +159,8 @@ impl ProviderConfig {
                     "Google Gemini",
                     Wire::Gemini,
                     "https://generativelanguage.googleapis.com",
-                    "gemini-2.0-flash",
-                    "gemini-2.0-pro",
+                    "gemini-3.8-flash",
+                    "gemini-3.8-flash",
                 ),
                 "ollama" => (
                     "Ollama",
@@ -370,7 +373,7 @@ impl Config {
             .iter()
             .find(|p| p.id == active_provider)
             .and_then(|p| p.default_model.clone())
-            .unwrap_or_else(|| "deepseek-chat".to_string());
+            .unwrap_or_else(|| "deepseek-flash".to_string());
         let default_curation = providers
             .iter()
             .find(|p| p.id == active_provider)
@@ -430,8 +433,8 @@ impl Config {
             db_path: data_dir.join("euterpe.db"),
             providers: vec![ProviderConfig::preset("deepseek").unwrap()],
             active_provider: "deepseek".into(),
-            active_model: "deepseek-chat".into(),
-            curation_model: "deepseek-reasoner".into(),
+            active_model: "deepseek-flash".into(),
+            curation_model: "deepseek-v4-pro".into(),
             mutation_policy: MutationPolicy::Allow,
             web_search: WebSearchBackend::Auto,
             searxng_url: "http://127.0.0.1:8888".into(),
@@ -455,12 +458,75 @@ impl Config {
     }
 }
 
+/// Papel do modelo: quem responde o chat.
+pub const ROLE_CHAT: &str = "chat";
+/// Papel do modelo: curadoria (proposta de playlist / pedido de criação).
+pub const ROLE_CURATION: &str = "curation";
+
+/// Perfil de modelo: um nome curto para `provider + modelo`. Substitui os dois
+/// selects do header — o chip do chat mostra o **perfil**, não o par solto.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModelProfile {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+    pub model: String,
+    /// Parâmetros do perfil. `None` = aplica o padrão do adapter. Todos com
+    /// `serde(default)` para que perfis já gravados continuem válidos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    /// Sobrescreve o `base_url` do provider (caso típico: servidor local).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+}
+
+impl ModelProfile {
+    pub fn new(id: &str, name: &str, provider: &str, model: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            provider: provider.to_string(),
+            model: model.to_string(),
+            temperature: None,
+            max_tokens: None,
+            base_url: None,
+        }
+    }
+
+    /// Perfil sintetizado da config, para `profiles` nunca ficar vazio (a UI
+    /// sempre tem um chip para mostrar).
+    pub fn default_from(provider: &str, model: &str) -> Self {
+        Self::new("default", "Padrão", provider, model)
+    }
+}
+
 /// Vista efetiva (env + `settings` do banco). É o que as rotas usam.
 #[derive(Debug, Clone, Serialize)]
 pub struct EffectiveConfig {
     pub active_provider: String,
     pub active_model: String,
+    /// Provider do papel de curadoria (pode diferir do provider do chat).
+    pub curation_provider: String,
     pub curation_model: String,
+    /// Perfis nomeados. Nunca vazio (ver [`ModelProfile::default_from`]).
+    pub profiles: Vec<ModelProfile>,
+    /// Id do perfil ativo (o que o chip do chat mostra).
+    pub active_profile: String,
+    /// `papel → id de perfil` (`chat`, `curation`).
+    pub role_profiles: BTreeMap<String, String>,
+    /// `conversa → id de perfil` (override de uma conversa só).
+    pub session_overrides: BTreeMap<String, String>,
+    /// Instruções do usuário, acrescentadas ao system prompt em runtime. Nunca
+    /// gravadas no asset gerado (`prompts.json` é golden — ver `prompts.rs`).
+    pub instructions: String,
+    /// Parâmetros do perfil ativo do chat, aplicados à requisição real.
+    pub active_temperature: Option<f32>,
+    pub active_max_tokens: Option<u32>,
+    /// `base_url` do perfil ativo (None = a do provider).
+    pub active_base_url: Option<String>,
+    pub mcp_enabled: bool,
     pub mutation_policy: MutationPolicy,
     pub web_search: WebSearchBackend,
     pub debug: bool,
@@ -471,12 +537,76 @@ pub struct EffectiveConfig {
     pub chat_upstream: String,
 }
 
+impl EffectiveConfig {
+    /// Id do perfil que a conversa usa: override da conversa → papel `chat` →
+    /// perfil ativo global.
+    pub fn profile_id_for_session(&self, session_id: Option<&str>) -> String {
+        if let Some(id) = session_id.and_then(|s| self.session_overrides.get(s)) {
+            return id.clone();
+        }
+        if let Some(id) = self.role_profiles.get(ROLE_CHAT) {
+            return id.clone();
+        }
+        self.active_profile.clone()
+    }
+
+    /// Perfil por id, com fallback para o ativo e, por fim, para o sintetizado.
+    pub fn profile(&self, id: &str) -> ModelProfile {
+        self.profiles
+            .iter()
+            .find(|p| p.id == id)
+            .cloned()
+            .or_else(|| {
+                self.profiles
+                    .iter()
+                    .find(|p| p.id == self.active_profile)
+                    .cloned()
+            })
+            .unwrap_or_else(|| {
+                ModelProfile::default_from(&self.active_provider, &self.active_model)
+            })
+    }
+
+    /// Resolve o provider/modelo do chat para uma conversa, aplicando override e
+    /// papel. É o que o loop LLM consome.
+    pub fn chat_profile_for_session(&self, session_id: Option<&str>) -> ModelProfile {
+        self.profile(&self.profile_id_for_session(session_id))
+    }
+
+    /// Perfil do papel de curadoria (fallback: o modelo de curadoria da config).
+    pub fn curation_profile(&self) -> ModelProfile {
+        let id = self.role_profiles.get(ROLE_CURATION);
+        match id.and_then(|id| self.profiles.iter().find(|p| &p.id == id)) {
+            Some(p) => p.clone(),
+            None => ModelProfile::new(
+                "curation",
+                "Curadoria",
+                &self.curation_provider,
+                &self.curation_model,
+            ),
+        }
+    }
+}
+
 impl Config {
     pub fn default_effective(&self) -> EffectiveConfig {
         EffectiveConfig {
             active_provider: self.active_provider.clone(),
             active_model: self.active_model.clone(),
+            curation_provider: self.active_provider.clone(),
             curation_model: self.curation_model.clone(),
+            profiles: vec![ModelProfile::default_from(
+                &self.active_provider,
+                &self.active_model,
+            )],
+            active_profile: "default".to_string(),
+            role_profiles: BTreeMap::new(),
+            session_overrides: BTreeMap::new(),
+            instructions: String::new(),
+            active_temperature: None,
+            active_max_tokens: None,
+            active_base_url: None,
+            mcp_enabled: true,
             mutation_policy: self.mutation_policy,
             web_search: self.web_search,
             debug: self.debug,

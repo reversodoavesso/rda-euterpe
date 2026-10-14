@@ -95,11 +95,7 @@ impl LlmAdapter for ScriptedAdapter {
 }
 
 fn tool_call(id: &str, name: &str) -> ToolCall {
-    ToolCall {
-        id: id.to_string(),
-        name: name.to_string(),
-        arguments: json!({ "ids": ["a"] }).to_string(),
-    }
+    ToolCall::new(id, name, json!({ "ids": ["a"] }).to_string())
 }
 
 fn deps<'a>(
@@ -118,6 +114,7 @@ fn deps<'a>(
         locale: "en".to_string(),
         adapter: Some(adapter),
         stream_deltas: false,
+        cancel_token: None,
     }
 }
 
@@ -226,7 +223,7 @@ async fn a_model_error_is_answered_gracefully() {
     .await;
     assert_eq!(
         outcome.text,
-        "Sorry, I had a problem talking to the model just now. Try again in a moment."
+        "I could not reach the model just now. Try again in a moment."
     );
     assert!(outcome.degraded);
 }
@@ -266,7 +263,7 @@ async fn step_limit_produces_an_answer_not_a_hang() {
     )
     .await;
     assert!(
-        outcome.text.starts_with("I reached the step limit"),
+        outcome.text.starts_with("I hit the step limit"),
         "veio: {}",
         outcome.text
     );
@@ -289,6 +286,7 @@ async fn chat_done_is_always_emitted_even_on_failure() {
         locale: "en".to_string(),
         adapter: Some(adapter),
         stream_deltas: false,
+        cancel_token: None,
     };
     euterpe::llm::handle_chat(&deps, "oi").await;
 
@@ -305,7 +303,7 @@ async fn chat_done_is_always_emitted_even_on_failure() {
         }
     }
     assert!(saw_done, "chat.done é obrigatório em qualquer caminho");
-    assert!(deltas.contains("problem talking to the model"));
+    assert!(deltas.contains("could not reach the model"));
 }
 
 #[tokio::test]
@@ -323,6 +321,7 @@ async fn handle_chat_without_provider_streams_the_fallback_and_saves_history() {
         locale: "pt-br".to_string(),
         adapter: None,
         stream_deltas: false,
+        cancel_token: None,
     };
     euterpe::llm::handle_chat(&deps, "oi").await;
     let mut text = String::new();
@@ -364,8 +363,8 @@ async fn curation_requests_are_routed_to_the_curation_model() {
     ));
     let daemon = spawn().await;
     let eff = daemon.state.effective();
-    assert_eq!(eff.active_model, "deepseek-chat");
-    assert_eq!(eff.curation_model, "deepseek-reasoner");
+    assert_eq!(eff.active_model, "deepseek-flash");
+    assert_eq!(eff.curation_model, "deepseek-v4-pro");
     assert_ne!(eff.active_model, eff.curation_model);
 }
 

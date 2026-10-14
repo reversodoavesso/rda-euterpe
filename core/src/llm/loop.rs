@@ -40,9 +40,14 @@ pub struct ChatDeps<'a> {
     /// `true` no caminho SSE (streaming real de tokens); `false` no caminho WS
     /// (paridade com o Node: chunks de 40 chars após o loop).
     pub stream_deltas: bool,
+    pub cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 impl<'a> ChatDeps<'a> {
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel_token.as_ref().is_some_and(|t| t.is_cancelled())
+    }
+
     fn send(&self, msg: ServerMsg) {
         let _ = self.sink.send(msg);
     }
@@ -56,13 +61,15 @@ impl<'a> ChatDeps<'a> {
     }
 
     pub fn config_for(&self, call_id: &str) -> CallOptions<'a> {
-        CallOptions::agentic(
+        let mut opts = CallOptions::agentic(
             self.cfg,
             call_id,
             &self.session_id,
             &self.locale,
             self.store,
-        )
+        );
+        opts.mutation = self.eff.mutation_policy;
+        opts
     }
 }
 
@@ -75,19 +82,29 @@ async fn ask(
     messages: &[Msg],
     tools: Vec<serde_json::Value>,
 ) -> anyhow::Result<crate::llm::canonical::Completion> {
+    if deps.is_cancelled() {
+        anyhow::bail!("cancelled");
+    }
     let mut req = ChatRequest::new(model.to_string(), messages.to_vec());
     req.tools = tools;
     req.timeout_ms = deps.cfg.llm_timeout_ms;
+    // Parâmetros do PERFIL ativo (None = o adapter usa o próprio padrão).
+    req.temperature = deps.eff.active_temperature;
+    req.max_tokens = deps.eff.active_max_tokens;
     let caps = adapter.capabilities();
     if deps.stream_deltas && caps.streaming {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<LlmEvent>(64);
         let sink = deps.sink.clone();
         let session_id = deps.session_id.clone();
+        let cancel_token = deps.cancel_token.clone();
         let forwarder = tokio::spawn(async move {
             let mut completion = crate::llm::canonical::Completion::default();
             let mut text = String::new();
             let mut reasoning = String::new();
             while let Some(ev) = rx.recv().await {
+                if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                    break;
+                }
                 match ev {
                     LlmEvent::Delta(d) => {
                         text.push_str(&d);
@@ -146,6 +163,10 @@ pub async fn run_agent_loop(
     let mut force_answer = false;
 
     loop {
+        if deps.is_cancelled() {
+            tracing::info!(session_id = %deps.session_id, "chat loop cancelled by client");
+            break;
+        }
         if steps >= deps.eff.max_tool_steps {
             break;
         }
@@ -160,6 +181,9 @@ pub async fn run_agent_loop(
         let completion = match ask(deps, &adapter, model, &messages, tools).await {
             Ok(c) => c,
             Err(err) => {
+                if deps.is_cancelled() {
+                    break;
+                }
                 let detail = err.to_string();
                 crate::logging::log_session(
                     &deps.cfg.sessions_dir,
@@ -203,12 +227,24 @@ pub async fn run_agent_loop(
             );
 
             for call in &completion.tool_calls {
+                if deps.is_cancelled() {
+                    break;
+                }
                 let label = if deps.eff.debug {
                     call.name.clone()
                 } else {
                     prompts::friendly_tool_label(&deps.locale, &call.name)
                 };
                 deps.status("tool", label);
+
+                // Emite o evento ToolCall estruturado para o cliente (SSE: event: tool {id, name, args})
+                if deps.stream_deltas {
+                    deps.send(ServerMsg::ToolCall {
+                        id: call.id.clone(),
+                        name: call.name.clone(),
+                        args: call.parsed_args(),
+                    });
+                }
 
                 let started = std::time::Instant::now();
                 let result = if force_answer || rate_limited.contains(&call.name) {
@@ -337,9 +373,9 @@ pub async fn handle_chat(deps: &ChatDeps<'_>, text: &str) {
         return;
     }
 
-    let mut messages: Vec<Msg> = vec![Msg::system(prompts::system_prompt(
-        Some(&deps.locale),
-        deps.eff.debug,
+    let mut messages: Vec<Msg> = vec![Msg::system(prompts::with_user_instructions(
+        prompts::system_prompt(Some(&deps.locale), deps.eff.debug),
+        &deps.eff.instructions,
     ))];
     if deps.eff.chat_history_turns > 0 {
         let history = deps
@@ -381,6 +417,10 @@ pub async fn handle_chat(deps: &ChatDeps<'_>, text: &str) {
     );
 
     let outcome = run_agent_loop(deps, &model, messages.clone()).await;
+
+    if deps.is_cancelled() {
+        return;
+    }
 
     let suggestions =
         if deps.eff.suggestions && !outcome.degraded && !outcome.text.trim().is_empty() {

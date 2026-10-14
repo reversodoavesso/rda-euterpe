@@ -18,6 +18,12 @@ pub fn resources() -> Vec<Value> {
             "description": "O que está tocando agora no cliente Spotify",
             "mimeType": "application/json",
         }),
+        json!({
+            "uri": "euterpe://voice",
+            "name": "Brand voice & tone",
+            "description": "Diretrizes de tom de voz, identidade e estilo do assistente musical Euterpe",
+            "mimeType": "application/json",
+        }),
     ]
 }
 
@@ -75,7 +81,11 @@ mod tests {
             .collect();
         assert_eq!(
             uris,
-            vec!["euterpe://playlists", "euterpe://currently-playing"]
+            vec![
+                "euterpe://playlists",
+                "euterpe://currently-playing",
+                "euterpe://voice"
+            ]
         );
     }
 
@@ -83,6 +93,9 @@ mod tests {
     fn each_resource_maps_to_a_real_tool() {
         for r in resources() {
             let uri = r["uri"].as_str().unwrap();
+            if uri == "euterpe://voice" {
+                continue;
+            }
             let (tool, _) = resource_tool(uri).unwrap_or_else(|| panic!("resource {uri} sem tool"));
             assert!(
                 crate::tools::catalog::find(tool).is_some(),

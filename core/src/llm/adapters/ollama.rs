@@ -62,8 +62,15 @@ impl Ollama {
         if req.json_mode {
             body["format"] = json!("json");
         }
+        let mut opts = serde_json::Map::new();
         if let Some(t) = req.temperature {
-            body["options"] = json!({ "temperature": t });
+            opts.insert("temperature".into(), json!(t));
+        }
+        if let Some(m) = req.max_tokens {
+            opts.insert("num_predict".into(), json!(m));
+        }
+        if !opts.is_empty() {
+            body["options"] = Value::Object(opts);
         }
         body
     }
@@ -87,16 +94,13 @@ pub fn parse_response(body: &Value) -> Completion {
                     .pointer("/function/arguments")
                     .cloned()
                     .unwrap_or(json!({}));
-                out.tool_calls.push(ToolCall {
-                    // Ollama não manda id: usa o nome (com sufixo se repetir).
-                    id: if i == 0 {
-                        name.to_string()
-                    } else {
-                        format!("{name}#{i}")
-                    },
-                    name: name.to_string(),
-                    arguments: args.to_string(),
-                });
+                let id = if i == 0 {
+                    name.to_string()
+                } else {
+                    format!("{name}#{i}")
+                };
+                out.tool_calls
+                    .push(ToolCall::new(id, name, args.to_string()));
             }
         }
     }
@@ -310,5 +314,16 @@ mod tests {
         let body = o.body(&req, false);
         assert_eq!(body["format"], "json");
         assert_eq!(body["stream"], false);
+    }
+
+    #[test]
+    fn options_include_temperature_and_num_predict() {
+        let o = Ollama::new("http://127.0.0.1:11434", "llama3.2");
+        let mut req = ChatRequest::new("llama3.2", vec![Msg::user("x")]);
+        req.temperature = Some(0.5);
+        req.max_tokens = Some(2048);
+        let body = o.body(&req, false);
+        assert_eq!(body["options"]["temperature"], 0.5);
+        assert_eq!(body["options"]["num_predict"], 2048);
     }
 }

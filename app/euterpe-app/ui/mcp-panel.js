@@ -1,9 +1,14 @@
 // Painel MCP (Proposta 2): chip "MCP ativo · N clientes", URL do endpoint e os
 // três snippets de registro copiáveis. O endpoint é o Streamable HTTP do daemon
 // (POST /mcp na mesma porta 8337 do bridge) — não há servidor separado.
+//
+// Apresentação: token do Encore para cor/espaço, `TextComponent` nativo para o
+// texto e o bloco de código com o mesmo `--background-tinted-base` que a tela
+// nativa usa nos campos. Sem hex.
 import { tr } from "../lib/i18n.js";
 import { BASE, mcpInfo } from "../lib/daemon.js";
 import { copyText } from "./markdown.js";
+import { Badge, Button, Text, COLOR, TEXT } from "./ds.js";
 
 const { React } = Spicetify;
 
@@ -26,44 +31,29 @@ function snippetRows(dataDir) {
 function Snippet({ label, text, onCopy }) {
   return React.createElement(
     "div",
-    { style: { marginBottom: 10 } },
-    React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "var(--euterpe-subtext)", marginBottom: 4 } }, label),
+    { style: { display: "flex", flexDirection: "column", gap: "var(--encore-spacing-tighter-4, 4px)" } },
+    React.createElement(Text, { variant: TEXT.caption, color: COLOR.subdued }, label),
     React.createElement(
       "div",
       { style: { position: "relative" } },
+      React.createElement("pre", { className: "ds-code", style: { paddingRight: 72 } }, text),
       React.createElement(
-        "pre",
+        Button,
         {
-          style: {
-            margin: 0,
-            padding: "8px 46px 8px 10px",
-            background: "var(--euterpe-overlay)",
-            borderRadius: 8,
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-            color: "var(--euterpe-text)",
-          },
-        },
-        text
-      ),
-      React.createElement(
-        "button",
-        {
-          className: "euterpe-btn euterpe-btn-ghost",
-          style: { position: "absolute", top: 4, right: 4, padding: "3px 8px", fontSize: 10 },
+          kind: "secondary",
+          size: "small",
+          className: "ds-snippet-copy",
           onClick: () => onCopy(text),
           title: tr("action.copy"),
           "aria-label": tr("action.copy"),
         },
-        tr("action.copy")
-      )
-    )
+        tr("action.copy"),
+      ),
+    ),
   );
 }
 
-export function McpPanel({ onToast }) {
+export function McpPanel({ onToast, enabled = true }) {
   const { useState, useEffect } = React;
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -94,51 +84,22 @@ export function McpPanel({ onToast }) {
     if (onToast) onToast(ok ? tr("action.copied") : tr("error.title"), ok ? "info" : "error");
   };
 
-  const ok = !!(info && info.ok);
+  const ok = enabled && !!(info && info.ok);
   const clients = (info && info.clients) || 0;
-  const chip = ok ? tr("mcp.chip", { clients }) : tr("mcp.offline");
+  const chip = !enabled ? tr("mcp.offline") : ok ? tr("mcp.chip", { clients }) : tr("mcp.offline");
 
   return React.createElement(
     "div",
-    null,
+    { style: { display: "flex", flexDirection: "column", gap: "var(--encore-spacing-tighter-2, 8px)" } },
     React.createElement(
       "div",
-      { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" } },
-      React.createElement(
-        "span",
-        {
-          style: {
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 10px",
-            borderRadius: 500,
-            fontSize: 12,
-            fontWeight: 600,
-            background: ok ? "var(--euterpe-accent-soft)" : "var(--euterpe-danger-soft)",
-            border: `1px solid ${ok ? "var(--euterpe-accent-border-strong)" : "var(--euterpe-danger)"}`,
-            color: "var(--euterpe-text)",
-          },
-        },
-        React.createElement("span", {
-          style: {
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: ok ? "var(--euterpe-accent)" : "var(--euterpe-danger)",
-          },
-        }),
-        loading && !info ? tr("settings.loading") : chip
-      )
+      { style: { display: "flex", alignItems: "center", gap: "var(--encore-spacing-tighter-2, 8px)", flexWrap: "wrap" } },
+      React.createElement(Badge, { tone: ok ? "accent" : "danger", text: loading && !info ? tr("settings.loading") : chip }),
+      React.createElement(Text, { variant: TEXT.caption, color: COLOR.subdued }, `${tr("mcp.url")}: ${BASE}/mcp`),
     ),
-    React.createElement("p", { style: { fontSize: 12, lineHeight: 1.5, color: "var(--euterpe-subtext)", margin: "0 0 10px" } }, tr("mcp.help")),
-    React.createElement(
-      "div",
-      { style: { fontSize: 11, fontWeight: 700, color: "var(--euterpe-subtext)", marginBottom: 4 } },
-      `${tr("mcp.url")}: ${BASE}/mcp`
-    ),
+    React.createElement(Text, { as: "p", variant: TEXT.caption, color: COLOR.subdued, style: { margin: 0 } }, tr("mcp.help")),
     snippetRows(info && info.dataDir).map((row) =>
       React.createElement(Snippet, { key: row.key, label: row.label, text: row.text, onCopy: copy })
-    )
+    ),
   );
 }

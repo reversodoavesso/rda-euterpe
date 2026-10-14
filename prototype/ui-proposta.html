@@ -1,0 +1,1816 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Euterpe — protótipo de UI (contextos separados)</title>
+<style>
+/* ============================================================
+   Tokens: cópia fiel de app/euterpe-app/ui/chat.js:37-62
+   (--spice-* com fallback = mesma cadeia do injectStyles)
+   ============================================================ */
+:root{
+  --bg: var(--spice-main, #121212);
+  --surface: var(--spice-card, #181818);
+  --surface-raised: var(--spice-main-elevated, #242424);
+  --text: var(--spice-text, #ffffff);
+  --subtext: var(--spice-subtext, #b3b3b3);
+  --accent: var(--spice-button, #1db954);
+  --divider: rgba(255,255,255,.12);
+  --border: rgba(255,255,255,.25);
+  --overlay: rgba(0,0,0,.35);
+  --text-muted: rgba(255,255,255,.5);
+  --text-dim: rgba(255,255,255,.78);
+  --surface-soft: rgba(255,255,255,.08);
+  --btn-bg: rgba(255,255,255,.12);
+  --accent-soft: rgba(29,185,84,.2);
+  --accent-soft-2: rgba(29,185,84,.3);
+  --accent-border-strong: rgba(29,185,84,.4);
+  --chip-bg: rgba(29,185,84,.16);
+  --chip-border: rgba(29,185,84,.35);
+  --danger: #f15e6c;
+  --danger-soft: rgba(241,94,108,.2);
+  --warn: #ffa42b;
+  --warn-soft: rgba(255,164,43,.16);
+  --warn-border: rgba(255,164,43,.4);
+
+  --rail-w: 236px;
+  --nav-w: 208px;
+}
+*{box-sizing:border-box}
+/* [hidden] precisa vencer display:flex/block definidos por classe */
+[hidden]{display:none !important}
+html,body{height:100%}
+body{
+  margin:0;
+  background:#0b0b0b;
+  color:var(--text);
+  font-family:CircularSp, "Circular Std", -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  font-size:14px;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;color:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ============================================================
+   Chrome do Spotify (só para dar escala/perspectiva ao app)
+   ============================================================ */
+.spice{
+  position:fixed; inset:0;
+  display:grid;
+  grid-template-columns:72px 1fr;
+  grid-template-rows:1fr 72px;
+  background:#000;
+}
+.spice-rail{
+  grid-row:1/3;
+  background:#000;
+  display:flex; flex-direction:column; align-items:center;
+  gap:18px; padding:14px 0; border-right:1px solid rgba(255,255,255,.06);
+}
+.spice-logo{width:32px;height:32px;border-radius:50%;background:#1db954;display:grid;place-items:center;font-size:16px}
+.spice-icon{width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.1)}
+.spice-icon.on{background:rgba(255,255,255,.28)}
+.spice-main{
+  margin:8px 8px 0 8px;
+  background:var(--bg); /* o custom app herda o fundo do main */
+  border-radius:8px;
+  overflow:hidden;
+  display:flex; flex-direction:column;
+  min-width:0;
+}
+.spice-topbar{
+  height:56px; flex:none; display:flex; align-items:center; gap:10px;
+  padding:0 16px; background:rgba(0,0,0,.25);
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.spice-crumb{font-size:13px;color:var(--subtext);display:flex;align-items:center;gap:8px}
+.spice-crumb b{color:var(--text);font-weight:700}
+.spice-pill{
+  margin-left:auto; font-size:11px; font-weight:700; letter-spacing:.3px;
+  padding:5px 10px; border-radius:500px; background:var(--accent-soft);
+  border:1px solid var(--accent-border-strong);
+}
+.spice-player{
+  grid-column:2; display:flex; align-items:center; gap:12px; padding:0 16px;
+  background:#000; border-top:1px solid rgba(255,255,255,.06);
+}
+.spice-art{width:44px;height:44px;border-radius:6px;background:linear-gradient(135deg,#2a2a2a,#3d3d3d)}
+.spice-meta{font-size:12px;line-height:1.35}
+.spice-meta b{display:block;font-size:13px}
+.spice-meta span{color:var(--subtext)}
+
+/* ============================================================
+   Viewport do custom app (área útil real do Euterpe)
+   ============================================================ */
+.viewport{
+  position:relative; flex:1; min-height:0; overflow:hidden;
+  background:
+    radial-gradient(1200px 400px at 20% -10%, rgba(29,185,84,.10), transparent 60%),
+    var(--bg);
+}
+
+/* ---------- Superfície 1: CHAT ---------- */
+.app{
+  position:absolute; inset:0;
+  display:grid; grid-template-columns:var(--rail-w) 1fr;
+  transition:grid-template-columns .18s ease;
+}
+.app.rail-collapsed{grid-template-columns:0px 1fr}
+
+/* rail de conversas */
+.rail{
+  border-right:1px solid var(--divider);
+  background:rgba(0,0,0,.18);
+  display:flex; flex-direction:column; min-height:0; overflow:hidden;
+}
+.app.rail-collapsed .rail{border-right:0;opacity:0;pointer-events:none}
+.rail-head{padding:12px 10px 6px}
+.rail-search{
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface-soft); border:1px solid var(--divider);
+  border-radius:8px; padding:6px 8px;
+}
+.rail-search input{
+  border:0; background:transparent; outline:none; color:var(--text);
+  font-size:12px; width:100%;
+}
+.rail-new{
+  margin:8px 10px; display:flex; align-items:center; justify-content:center; gap:6px;
+  padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700;
+  background:var(--accent-soft); border:1px solid var(--accent-border-strong);
+}
+.rail-new:hover{background:var(--accent-soft-2)}
+.rail-list{overflow:auto; padding:4px 6px 12px; min-height:0}
+.rail-group{
+  font-size:10px; font-weight:700; letter-spacing:.6px; text-transform:uppercase;
+  color:var(--text-muted); padding:10px 8px 6px;
+}
+.conv{
+  position:relative; padding:8px 26px 8px 9px; border-radius:8px; cursor:pointer;
+  border:1px solid transparent;
+}
+.conv:hover{background:var(--surface-soft)}
+.conv.on{background:var(--accent-soft); border-color:var(--accent-border-strong)}
+.conv .t{font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.conv .p{font-size:11px; color:var(--subtext); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px}
+.conv .scope{
+  position:absolute; right:6px; top:8px; font-size:10px; color:var(--accent);
+  opacity:0; transition:opacity .12s;
+}
+.conv.on .scope{opacity:1}
+.conv .more{
+  position:absolute; right:4px; bottom:6px; opacity:0; cursor:pointer;
+  font-size:12px; color:var(--subtext); padding:0 4px; border:0; background:none;
+}
+.conv:hover .more{opacity:1}
+
+/* conteúdo da coluna esquerda: um por view */
+.railview{display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden}
+.railview[hidden]{display:none}
+.rail-caption{font-size:10.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--text-muted); padding:2px 4px}
+.rail-note{font-size:10.5px; color:var(--text-muted); line-height:1.45; padding:10px 10px 4px}
+.rail-foot{padding:8px 10px; border-top:1px solid var(--divider); margin-top:auto}
+.step-list{display:flex; flex-direction:column; gap:2px; padding:4px 6px}
+.step-list .step{padding:8px 9px; border-radius:8px; border:1px solid transparent; font-size:12.5px; cursor:pointer}
+.step-list .step:hover{background:var(--surface-soft)}
+.step-list .step.on{background:var(--accent-soft); border-color:var(--accent-border-strong)}
+.step-list .step.done .num{background:var(--accent); border-color:var(--accent); color:#000}
+
+/* coluna principal: header fixo + view swappável (nada abre por cima) */
+.main{display:flex; flex-direction:column; min-width:0; min-height:0}
+.content{flex:1; min-height:0; display:flex; flex-direction:column}
+.view{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden}
+.view[hidden]{display:none}
+.view-head{display:flex; align-items:center; gap:10px; padding:11px 16px; border-bottom:1px solid var(--divider); flex:none}
+.view-head h2{margin:0; font-size:15px; font-weight:800}
+.view-head .crumb{font-size:11.5px; color:var(--subtext); margin-left:2px}
+.view-scroll{flex:1; min-height:0; overflow:auto; padding:16px 20px 26px}
+.view-foot{flex:none; display:flex; align-items:center; gap:10px; padding:9px 16px; border-top:1px solid var(--divider); font-size:11px; color:var(--subtext)}
+.viewtabs{display:inline-flex; border:1px solid var(--divider); border-radius:8px; overflow:hidden; background:var(--surface-soft); margin-left:8px}
+.viewtabs .vtab{border:0; background:transparent; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; color:var(--subtext)}
+.viewtabs .vtab + .vtab{border-left:1px solid var(--divider)}
+.viewtabs .vtab:hover{color:var(--text)}
+.viewtabs .vtab.on{background:var(--accent-soft); color:var(--text)}
+.chead{
+  flex:none; display:flex; align-items:center; gap:10px;
+  padding:12px 16px; border-bottom:1px solid var(--divider);
+}
+.rail-toggle{
+  width:28px;height:28px; border-radius:8px; display:grid; place-items:center; cursor:pointer;
+  background:transparent; border:1px solid var(--divider); font-size:12px; flex:none;
+}
+.rail-toggle:hover{background:var(--surface-soft)}
+.brand{display:flex; align-items:center; gap:10px; min-width:0}
+.logo{
+  width:28px;height:28px;border-radius:50%; flex:none;
+  background:radial-gradient(circle at 30% 25%, var(--accent), #0f7a36);
+  display:grid; place-items:center; font-size:14px;
+}
+.brand h1{margin:0; font-size:14px; font-weight:800; letter-spacing:.2px}
+.brand .sub{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--subtext); margin-top:1px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent); flex:none}
+.head-actions{margin-left:auto; display:flex; align-items:center; gap:8px}
+
+.btn{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 10px; border-radius:8px; font-size:12px; font-weight:600;
+  background:var(--btn-bg); border:1px solid transparent; cursor:pointer;
+  white-space:nowrap;
+}
+.btn:hover{filter:brightness(1.12)}
+.btn-ghost{background:transparent; border-color:var(--divider)}
+.btn-ghost:hover{background:var(--surface-soft); border-color:var(--border)}
+.btn-icon{padding:6px 8px}
+
+/* chip de perfil (substitui os DOIS <select> do header) */
+.chip{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  padding:6px 10px; border-radius:500px;
+  background:var(--chip-bg); border:1px solid var(--chip-border);
+  font-size:12px; font-weight:600;
+}
+.chip:hover{filter:brightness(1.1)}
+.chip .who{font-weight:800}
+.chip .mid{color:var(--text-dim); font-weight:500}
+.chip .caret{color:var(--subtext); font-size:9px}
+
+.msgs{flex:1; overflow:auto; padding:18px 20px 6px; min-height:0}
+.msg{max-width:760px; margin:0 auto 14px; display:flex; gap:10px}
+.msg .avatar{
+  width:26px;height:26px;border-radius:50%; flex:none; display:grid; place-items:center;
+  font-size:12px; background:var(--surface-soft); border:1px solid var(--divider);
+}
+.msg.user .bubble{
+  background:rgba(29,185,84,.16); border:1px solid var(--accent-border-strong);
+}
+.msg .bubble{
+  background:rgba(255,255,255,.06); border:1px solid var(--divider);
+  border-radius:12px; padding:10px 12px; font-size:13.5px; line-height:1.55;
+  min-width:0;
+}
+.msg .bubble p{margin:0 0 8px}
+.msg .bubble p:last-child{margin:0}
+.msg .who-row{
+  font-size:10.5px; color:var(--text-muted); font-weight:700; letter-spacing:.3px;
+  margin-bottom:6px; text-transform:uppercase;
+}
+.toolcard{
+  border:1px solid var(--divider); border-radius:10px; background:var(--overlay);
+  padding:8px 10px; margin:8px 0 0; font-size:11.5px;
+}
+.toolcard .tc-head{display:flex; align-items:center; gap:8px; font-weight:700}
+.toolcard .tc-body{
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:11px;
+  color:var(--text-dim); margin-top:6px; white-space:pre-wrap; word-break:break-word;
+}
+.tag{
+  font-size:10px; font-weight:700; padding:2px 7px; border-radius:500px;
+  background:var(--surface-soft); border:1px solid var(--divider); color:var(--subtext);
+}
+.msg .acts{display:flex; gap:4px; margin-top:8px; opacity:.55}
+.msg .acts:hover{opacity:1}
+.msg .acts button{border:0;background:transparent;cursor:pointer;font-size:11px;color:var(--subtext);padding:2px 6px;border-radius:6px}
+.msg .acts button:hover{background:var(--btn-bg);color:var(--text)}
+
+/* composer */
+.composer{flex:none; padding:10px 20px 16px; max-width:820px; width:100%; margin:0 auto}
+.composer .box{
+  border:1px solid var(--border); border-radius:14px; background:var(--surface);
+  padding:10px 12px; display:flex; flex-direction:column; gap:8px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+.composer textarea{
+  border:0; background:transparent; resize:none; outline:none; color:var(--text);
+  font-family:inherit; font-size:13.5px; line-height:1.5; height:44px;
+}
+.composer .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.scope-badge{
+  display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+  padding:4px 9px; border-radius:500px;
+  background:var(--surface-soft); border:1px solid var(--divider); color:var(--text-dim);
+}
+.scope-badge.override{background:var(--warn-soft); border-color:var(--warn-border); color:var(--warn)}
+.scope-badge .lnk{
+  border:0; background:transparent; color:inherit; text-decoration:underline;
+  cursor:pointer; font-size:11px; font-weight:700; padding:0;
+}
+.send{
+  margin-left:auto; padding:7px 14px; border-radius:8px; cursor:pointer;
+  background:var(--accent); color:#000; font-weight:800; font-size:12px; border:0;
+}
+
+.quick{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
+.qr{
+  font-size:12px; padding:6px 11px; border-radius:500px; cursor:pointer;
+  background:transparent; border:1px solid var(--divider); color:var(--text-dim);
+}
+.qr:hover{background:var(--accent-soft); border-color:var(--accent-border-strong); color:var(--text)}
+
+/* popover do seletor de perfis */
+.pop{
+  position:absolute; z-index:40; width:340px;
+  background:var(--surface-raised); border:1px solid var(--border);
+  border-radius:12px; padding:8px; box-shadow:0 24px 60px rgba(0,0,0,.6);
+  display:none;
+}
+.pop.open{display:block}
+.pop-title{
+  font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+  color:var(--text-muted); padding:8px 8px 6px;
+}
+.pop-item{
+  display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; cursor:pointer;
+}
+.pop-item:hover{background:var(--surface-soft)}
+.pop-item .nm{font-size:12.5px; font-weight:700}
+.pop-item .mt{font-size:11px; color:var(--subtext); margin-top:2px}
+.pop-item .k{margin-left:auto; color:var(--accent); font-weight:800; font-size:12px}
+.pop-item .lat{font-size:10.5px; color:var(--text-muted); margin-left:auto}
+.pop-sep{height:1px;background:var(--divider);margin:6px 4px}
+.pop-foot{display:flex; align-items:center; gap:8px; padding:6px 8px 4px}
+.pop-foot .lnk{
+  border:0;background:transparent;color:var(--accent);cursor:pointer;
+  font-size:11.5px;font-weight:700;padding:0;text-decoration:underline;
+}
+.pop-fix{
+  display:flex; align-items:flex-start; gap:10px; padding:8px; border-radius:8px;
+  background:var(--surface-soft); cursor:pointer;
+}
+.pop-fix .hint{font-size:10.5px; color:var(--subtext); line-height:1.4; margin-top:2px}
+
+/* ============================================================
+   View 2: PREFERÊNCIAS — vive na coluna esquerda + área de conteúdo
+   (a navegação de seções é o conteúdo do rail, não um modal)
+   ============================================================ */
+.nav{
+  padding:2px 6px 14px; overflow:auto; min-height:0;
+  display:flex; flex-direction:column; gap:2px;
+}
+.nav-group{
+  font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+  color:var(--text-muted); padding:10px 8px 4px;
+}
+.nav-group.warn{color:var(--warn)}
+.nav-item{
+  display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:8px;
+  font-size:12.5px; cursor:pointer; border:1px solid transparent;
+}
+.nav-item:hover{background:var(--surface-soft)}
+.nav-item.on{background:var(--accent-soft); border-color:var(--accent-border-strong); font-weight:700}
+.nav-item .bdg{
+  margin-left:auto; font-size:9.5px; font-weight:800; padding:1px 6px; border-radius:500px;
+  background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn-border);
+}
+.saved{display:inline-flex; align-items:center; gap:6px}
+.saved .dot{background:var(--accent); width:6px; height:6px}
+
+.page[hidden]{display:none}
+.page-head{margin-bottom:14px}
+.page-head h3{margin:0 0 4px; font-size:15.5px; font-weight:800}
+.page-head p{margin:0; font-size:12px; color:var(--subtext); line-height:1.5; max-width:70ch}
+.section{
+  border:1px solid var(--divider); border-radius:12px; background:var(--surface);
+  padding:4px 14px 6px; margin-bottom:14px;
+}
+.section.warn{border-color:var(--warn-border); background:linear-gradient(180deg,var(--warn-soft),transparent 60%),var(--surface)}
+.section-title{
+  display:flex; align-items:center; gap:8px;
+  font-size:10.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+  color:var(--text-muted); padding:12px 0 2px;
+}
+.section.warn .section-title{color:var(--warn)}
+.field{
+  display:flex; align-items:flex-start; gap:18px;
+  padding:11px 0; border-top:1px solid var(--divider);
+}
+.section-title + .field{border-top:0}
+.field .meta{min-width:0; flex:1}
+.field .lbl{font-size:12.5px; font-weight:700}
+.field .hint{font-size:11.5px; color:var(--subtext); line-height:1.5; margin-top:3px; max-width:62ch}
+.field .ctl{flex:none; display:flex; align-items:center; gap:8px; padding-top:1px; flex-wrap:wrap; justify-content:flex-end}
+.field .err{font-size:11px; color:var(--danger); margin-top:4px}
+input[type=text],input[type=number],input[type=password],select{
+  background:var(--surface-soft); border:1px solid var(--divider); border-radius:8px;
+  padding:6px 8px; color:var(--text); font-family:inherit; font-size:12px; outline:none;
+}
+input:focus,select:focus{border-color:var(--accent-border-strong)}
+input[type=number]{width:86px}
+select{max-width:260px}
+.seg{display:inline-flex; border:1px solid var(--divider); border-radius:8px; overflow:hidden; background:var(--surface-soft)}
+.seg button{
+  border:0; background:transparent; padding:6px 11px; font-size:11.5px; font-weight:600;
+  cursor:pointer; color:var(--subtext);
+}
+.seg button + button{border-left:1px solid var(--divider)}
+.seg button.on{background:var(--accent-soft); color:var(--text)}
+.seg.warn button.on{background:var(--warn-soft); color:var(--warn)}
+.sw{position:relative; width:38px; height:21px; border-radius:500px; background:var(--btn-bg); cursor:pointer; border:1px solid var(--divider); flex:none}
+.sw::after{content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:var(--text); transition:left .15s}
+.sw.on{background:var(--accent-soft-2); border-color:var(--accent-border-strong)}
+.sw.on::after{left:19px}
+
+.pcard{
+  border:1px solid var(--divider); border-radius:12px; padding:12px; margin-bottom:10px;
+  background:var(--surface-raised);
+}
+.pcard.on{border-color:var(--accent-border-strong); box-shadow:0 0 0 1px var(--accent-border-strong) inset}
+.pcard .top{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.pcard .nm{font-size:13px; font-weight:800}
+.pcard .mt{font-size:11px; color:var(--subtext)}
+.pcard .params{display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--text-dim)}
+.pcard .params b{font-weight:700; color:var(--text)}
+.badge{
+  font-size:10px; font-weight:800; padding:2px 8px; border-radius:500px;
+  background:var(--chip-bg); border:1px solid var(--accent-border-strong);
+}
+.badge.danger{background:var(--danger-soft); border-color:var(--danger)}
+.badge.muted{background:var(--surface-soft); border-color:var(--divider); color:var(--subtext)}
+.badge.warn{background:var(--warn-soft); border-color:var(--warn-border); color:var(--warn)}
+.secret{
+  display:inline-flex; align-items:center; gap:8px; font-size:12px;
+  background:var(--surface-soft); border:1px solid var(--divider); border-radius:8px; padding:6px 10px;
+}
+.secret code{font-family:ui-monospace,Consolas,monospace; letter-spacing:1px; color:var(--text-dim)}
+.rolemap{
+  display:grid; grid-template-columns:auto 1fr; gap:8px 14px; align-items:center;
+  font-size:12px; padding:10px 0;
+}
+.rolemap .r{font-weight:700; color:var(--text-dim)}
+.empty{
+  border:1px dashed var(--border); border-radius:12px; padding:16px; text-align:center;
+  font-size:12px; color:var(--subtext);
+}
+pre.snip{
+  margin:0; padding:8px 46px 8px 10px; background:var(--overlay); border-radius:8px;
+  font-family:ui-monospace,Consolas,monospace; font-size:11px; white-space:pre-wrap;
+  word-break:break-all; color:var(--text);
+}
+.snip-wrap{position:relative; margin-bottom:10px}
+.snip-wrap .btn{
+  position:absolute; top:4px; right:4px; padding:3px 8px; font-size:10px;
+  background:var(--surface-raised);
+}
+
+/* toast */
+.toasts{position:absolute; right:16px; bottom:16px; z-index:60; display:flex; flex-direction:column; gap:8px}
+.toast{
+  background:var(--surface-raised); border:1px solid var(--border); border-left:3px solid var(--accent);
+  border-radius:8px; padding:9px 12px; font-size:12px; box-shadow:0 10px 30px rgba(0,0,0,.5);
+  animation:in .18s ease;
+}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ============================================================
+   View 3: PRIMEIRO USO (intro + wizard de chaves) — também in-place
+   ============================================================ */
+.chip.danger{border-color:var(--danger);background:var(--danger-soft);color:var(--danger)}
+.onb-col{max-width:720px; margin:0 auto}
+.onb-hero{padding:0; display:flex; gap:14px; align-items:flex-start}
+.onb-logo{
+  width:44px;height:44px;border-radius:50%;flex:none;font-size:20px;
+  background:radial-gradient(circle at 30% 25%, var(--accent), #0f7a36);
+  display:grid;place-items:center;
+}
+.onb-hero h2{margin:0 0 5px; font-size:19px; font-weight:800}
+.onb-hero p{margin:0; font-size:12.5px; color:var(--subtext); line-height:1.55}
+.onb-body{padding:16px 0 0}
+.feat{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0 18px}
+.feat div{
+  border:1px solid var(--divider); border-radius:10px; padding:10px 11px;
+  background:var(--surface); font-size:11.5px; color:var(--text-dim); line-height:1.45;
+}
+.feat b{display:block; font-size:12px; color:var(--text); margin-bottom:3px}
+.cta-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.btn-primary{background:var(--accent); color:#000; font-weight:800; border:0}
+.btn-primary:disabled{opacity:.45; cursor:not-allowed}
+.pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:8px}
+.poptx{
+  border:1px solid var(--divider); border-radius:10px; padding:9px 10px;
+  background:var(--surface); cursor:pointer; text-align:left;
+}
+.poptx:hover{background:var(--surface-soft); border-color:var(--border)}
+.poptx.on{border-color:var(--accent-border-strong); background:var(--accent-soft)}
+.poptx .n{font-size:12.5px; font-weight:700; display:flex; align-items:center; gap:6px}
+.poptx .m{font-size:10.5px; color:var(--subtext); margin-top:3px}
+.onb-sep{height:1px; background:var(--divider); margin:20px 0 16px}
+.mcp-sug{border:1px solid var(--divider); border-radius:12px; background:var(--surface); padding:12px 14px}
+.mcp-sug p{font-size:11.5px; color:var(--subtext); margin:8px 0 0; line-height:1.5}
+.callout{
+  display:flex; gap:9px; align-items:flex-start; margin-top:10px; padding:9px 11px;
+  border:1px solid var(--warn-border); background:var(--warn-soft);
+  border-radius:9px; font-size:11.5px; color:var(--warn); line-height:1.5;
+}
+.step{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-muted)}
+.step .num{
+  width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+  font-size:10px;font-weight:800;border:1px solid var(--divider);background:var(--surface-soft);
+}
+.step.on{color:var(--text); font-weight:700}
+.step.on .num{background:var(--accent-soft-2); border-color:var(--accent-border-strong)}
+.step.done{color:var(--text-dim)}
+.wz-nav{display:flex; align-items:center; gap:10px; margin-top:18px; flex-wrap:wrap}
+.wz-list{border:1px solid var(--divider); border-radius:12px; background:var(--surface); overflow:hidden}
+.wz-row{
+  display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer;
+  border-top:1px solid var(--divider);
+}
+.wz-list .wz-row:first-child{border-top:0}
+.wz-row:hover{background:var(--surface-soft)}
+.wz-row.on{background:var(--accent-soft)}
+.wz-row .nm{font-size:12.5px; font-weight:700}
+.wz-row .mt{font-size:11px; color:var(--subtext); margin-top:2px}
+.wz-row .ck{margin-left:auto; color:var(--accent); font-weight:800}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:8px 14px; font-size:12px; padding:10px 0}
+.kv .k{color:var(--text-muted); font-weight:700}
+.out-ok{font-size:11.5px; color:var(--accent); display:flex; align-items:center; gap:6px}
+.out-err{font-size:11.5px; color:var(--danger); font-family:ui-monospace,Consolas,monospace}
+
+/* banner de estado degradado no chat */
+.chat-banner{
+  max-width:820px; width:100%; margin:0 auto 8px; padding:9px 12px;
+  border:1px solid var(--warn-border); background:var(--warn-soft); color:var(--warn);
+  border-radius:10px; font-size:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.composer.off textarea{opacity:.45}
+.composer.off .send{opacity:.45; cursor:not-allowed}
+
+/* toolbar do protótipo */
+.proto{
+  position:fixed; right:14px; top:12px; z-index:100; display:flex; align-items:center; gap:8px;
+  background:rgba(20,20,20,.92); border:1px solid var(--border); border-radius:500px;
+  padding:6px 8px 6px 12px; backdrop-filter:blur(8px); font-size:11.5px;
+}
+.proto b{font-weight:800; letter-spacing:.3px}
+.proto button{
+  border:1px solid var(--divider); background:transparent; border-radius:500px;
+  padding:5px 10px; font-size:11.5px; cursor:pointer; color:var(--text-dim);
+}
+.proto button.on{background:var(--accent-soft); border-color:var(--accent-border-strong); color:var(--text); font-weight:700}
+.notes{
+  position:fixed; right:14px; bottom:74px; z-index:29; width:320px;
+  background:rgba(20,20,20,.94); border:1px solid var(--border); border-radius:12px;
+  padding:12px 14px; font-size:11.5px; line-height:1.55; color:var(--text-dim);
+  backdrop-filter:blur(8px); box-shadow:0 16px 40px rgba(0,0,0,.5);
+}
+.notes h4{margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-muted)}
+.notes ol{margin:0; padding-left:16px}
+.notes li{margin-bottom:5px}
+.notes li b{color:var(--text)}
+.notes .close{position:absolute; right:8px; top:8px; border:0; background:none; cursor:pointer; color:var(--subtext)}
+</style>
+</head>
+<body>
+
+<div class="spice">
+  <div class="spice-rail">
+    <div class="spice-logo">♫</div>
+    <div class="spice-icon"></div>
+    <div class="spice-icon"></div>
+    <div class="spice-icon on"></div>
+    <div class="spice-icon"></div>
+  </div>
+
+  <div class="spice-main">
+    <div class="spice-topbar">
+      <div class="spice-crumb">⌂ <span>/</span> <b>Euterpe</b></div>
+      <span class="spice-pill">CUSTOM APP · 127.0.0.1:8337</span>
+    </div>
+
+    <!-- ===================== VIEWPORT DO APP ===================== -->
+    <div class="viewport" id="viewport">
+
+      <!-- ---------- CHAT ---------- -->
+      <div class="app" id="app">
+        <aside class="rail" id="rail">
+
+          <!-- rail da view: CONVERSAS -->
+          <div class="railview" id="railConvs">
+            <div class="rail-head">
+              <div class="rail-search">🔍<input placeholder="Buscar conversas…" id="convSearch"></div>
+            </div>
+            <button class="rail-new">+ Nova conversa</button>
+            <div class="rail-list" id="convList">
+              <div class="rail-group">Hoje</div>
+              <div class="conv on" data-scope="1">
+                <div class="t">Playlist Noturno</div>
+                <div class="p">monte uma playlist de jazz…</div>
+                <span class="scope">⚡</span>
+                <button class="more">⋯</button>
+              </div>
+              <div class="conv">
+                <div class="t">Gêneros que dominam</div>
+                <div class="p">cruze curtidas com anos…</div>
+                <button class="more">⋯</button>
+              </div>
+              <div class="rail-group">Ontem</div>
+              <div class="conv">
+                <div class="t">Limpar duplicatas</div>
+                <div class="p">acha repetidas na playlist…</div>
+                <button class="more">⋯</button>
+              </div>
+              <div class="conv">
+                <div class="t">Top artistas 2026</div>
+                <div class="p">dá uma olhada no top…</div>
+                <button class="more">⋯</button>
+              </div>
+              <div class="rail-group">Anteriores</div>
+              <div class="conv">
+                <div class="t">Road trip</div>
+                <div class="p">preciso de algo animado…</div>
+                <button class="more">⋯</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- rail da view: SEÇÕES (preferências) -->
+          <div class="railview" id="railSections" hidden>
+            <div class="rail-head">
+              <div class="rail-search">🔍<input placeholder="Buscar ajuste…" id="fieldSearch"></div>
+            </div>
+            <nav class="nav" id="nav">
+              <div class="nav-group">Modelos</div>
+              <div class="nav-item on" data-page="perfis">Perfis de modelo</div>
+              <div class="nav-item" data-page="papeis">Papéis e padrões</div>
+              <div class="nav-item" data-page="overrides">Overrides por conversa <span class="bdg">1</span></div>
+
+              <div class="nav-group">Provedores</div>
+              <div class="nav-item" data-page="credenciais">Credenciais</div>
+              <div class="nav-item" data-page="endpoints">Endpoints</div>
+
+              <div class="nav-group warn">⚠ Agência &amp; segurança</div>
+              <div class="nav-item" data-page="mutacao">Mutação de ferramentas</div>
+              <div class="nav-item" data-page="limites">Aprovações e limites</div>
+
+              <div class="nav-group">Conversa</div>
+              <div class="nav-item" data-page="comportamento">Comportamento do chat</div>
+              <div class="nav-item" data-page="instrucoes">Instruções do sistema</div>
+
+              <div class="nav-group">Ferramentas &amp; MCP</div>
+              <div class="nav-item" data-page="mcp">Servidor MCP</div>
+              <div class="nav-item" data-page="busca">Busca na web</div>
+
+              <div class="nav-group">Dados &amp; logs</div>
+              <div class="nav-item" data-page="dados">Armazenamento</div>
+              <div class="nav-item" data-page="diagnostico">Diagnóstico</div>
+            </nav>
+          </div>
+
+          <!-- rail da view: PASSOS DO PRIMEIRO USO -->
+          <div class="railview" id="railSteps" hidden>
+            <div class="rail-head">
+              <div class="rail-caption">Configuração</div>
+            </div>
+            <div class="step-list" id="wzSteps"></div>
+            <div class="rail-note" id="railStepsNote">Nada é enviado para fora: a chave fica no keyring local.</div>
+            <div class="rail-foot">
+              <button class="btn btn-ghost" id="onbSkipRail">Ver a interface primeiro</button>
+            </div>
+          </div>
+
+        </aside>
+
+        <section class="main">
+          <header class="chead">
+            <button class="rail-toggle" id="railToggle" title="Mostrar/ocultar coluna esquerda">◀</button>
+            <div class="brand">
+              <div class="logo">♫</div>
+              <div>
+                <h1>Euterpe</h1>
+                <div class="sub"><span class="dot"></span> conectado · v0.2.0 · 3 tools</div>
+              </div>
+            </div>
+
+            <!-- navegação: a área muda de view, nada abre por cima -->
+            <div class="viewtabs" id="viewTabs">
+              <button class="vtab on" data-view="chat">Conversa</button>
+              <button class="vtab" data-view="prefs">Preferências</button>
+            </div>
+
+            <div class="head-actions">
+              <!-- UM controle só: o chip de perfil -->
+              <button class="chip" id="profileChip">
+                ⚡ <span class="who">Sol</span>
+                <span class="mid">deepseek/deepseek-v4.1</span>
+                <span class="caret">▾</span>
+              </button>
+              <button class="btn btn-ghost btn-icon" title="Limpar conversa">⊘</button>
+            </div>
+          </header>
+
+          <div class="content">
+
+          <div class="view" id="viewChat">
+          <div class="msgs">
+            <div class="msg user">
+              <div class="avatar">🙂</div>
+              <div class="bubble">
+                <p>monte uma playlist de jazz noturno com o que eu já curto</p>
+              </div>
+            </div>
+
+            <div class="msg">
+              <div class="avatar">♫</div>
+              <div class="bubble">
+                <div class="who-row">Euterpe · Sol</div>
+                <p>Encontrei 24 faixas de jazz nas suas curtidas. Vou criar a playlist.</p>
+                <div class="toolcard">
+                  <div class="tc-head">▸ tool · playlist_create <span class="tag">mutação · confirmada por você</span></div>
+                  <div class="tc-body">{"name": "Jazz Noturno", "public": false}</div>
+                </div>
+                <div class="acts">
+                  <button>copiar</button><button>regenerar</button><button>editar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="msg">
+              <div class="avatar">♫</div>
+              <div class="bubble">
+                <div class="who-row">Euterpe · Sol</div>
+                <p>Playlist <b>Jazz Noturno</b> criada com 24 faixas (1h52). Quer que eu ordene por energia decrescente?</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-banner" id="chatBanner" hidden>
+            ⚠ Nenhum perfil de modelo configurado — o chat fica indisponível até você escolher um.
+            <button class="btn btn-ghost" id="bannerCfg" style="border-color:var(--warn-border);color:var(--warn)">Configurar agora</button>
+          </div>
+
+          <div class="composer" id="composer">
+            <div class="quick">
+              <button class="qr">Ordenar por energia</button>
+              <button class="qr">Adicionar 5 faixas novas</button>
+              <button class="qr">Mostrar só 2010+</button>
+            </div>
+            <div class="box">
+              <textarea placeholder="pergunte algo sobre sua música…"></textarea>
+              <div class="row">
+                <!-- badge de escopo: diz de quem é o ajuste -->
+                <span class="scope-badge" id="scopeBadge">
+                  ⚡ Sol · padrão global
+                  <button class="lnk" id="scopeToggle">usar só nesta conversa</button>
+                </span>
+                <button class="send">enviar ⏎</button>
+              </div>
+            </div>
+          </div>
+          </div><!-- /viewChat -->
+
+      <!-- popover do seletor de perfis (ancorado no chip; não é modal) -->
+      <div class="pop" id="pop">
+        <div class="pop-title">Perfis disponíveis</div>
+
+        <div class="pop-item" data-profile="Sol">
+          <div>
+            <div class="nm">⚡ Sol</div>
+            <div class="mt">deepseek · deepseek-v4.1 · chat</div>
+          </div>
+          <span class="lat">1.2s · 32k</span>
+          <span class="k">✓</span>
+        </div>
+        <div class="pop-item" data-profile="Curador">
+          <div>
+            <div class="nm">Curador</div>
+            <div class="mt">deepseek · deepseek-v4-flash · sugestões</div>
+          </div>
+          <span class="lat">380ms</span>
+        </div>
+        <div class="pop-item" data-profile="Barato">
+          <div>
+            <div class="nm">Barato</div>
+            <div class="mt">groq · llama-3.3-70b · roteador</div>
+          </div>
+          <span class="lat">210ms</span>
+        </div>
+        <div class="pop-item" data-profile="Local">
+          <div>
+            <div class="nm">Local</div>
+            <div class="mt">vllm · qwen2.5-14b · offline</div>
+          </div>
+          <span class="lat">—</span>
+        </div>
+
+        <div class="pop-sep"></div>
+        <label class="pop-fix">
+          <span class="sw" id="popSwitch"></span>
+          <span>
+            <div class="nm" style="font-size:12px">Fixar nesta conversa</div>
+            <div class="hint">As outras conversas continuam seguindo o padrão global.</div>
+          </span>
+        </label>
+        <div class="pop-sep"></div>
+        <div class="pop-foot">
+          <button class="lnk" id="popManage">Gerenciar perfis…</button>
+        </div>
+      </div>
+
+      <!-- ---------- VIEW: PREFERÊNCIAS ---------- -->
+      <div class="view" id="viewPrefs" hidden>
+          <div class="view-head">
+            <h2>Preferências</h2>
+            <span class="crumb" id="crumb">Modelos › Perfis de modelo</span>
+            <div style="margin-left:auto; display:flex; gap:8px">
+              <button class="btn btn-ghost" id="restoreSection">Restaurar seção</button>
+            </div>
+          </div>
+
+          <div class="view-scroll" id="pages">
+
+              <!-- ===== Perfis de modelo ===== -->
+              <section class="page" data-page="perfis">
+                <div class="page-head">
+                  <h3>Perfis de modelo</h3>
+                  <p>Um perfil é <b>provider + modelo + parâmetros</b> com um nome curto. É ele que aparece no chip do chat — não mais dois selects separados.</p>
+                </div>
+
+                <div class="pcard on">
+                  <div class="top">
+                    <span class="nm">⚡ Sol</span>
+                    <span class="mt">deepseek · deepseek-v4.1</span>
+                    <span class="badge">padrão do chat</span>
+                    <button class="btn btn-ghost" style="margin-left:auto">editar</button>
+                    <button class="btn btn-ghost">duplicar</button>
+                    <button class="btn btn-ghost">testar</button>
+                  </div>
+                  <div class="params">
+                    <span>temperature <b>0.3</b></span>
+                    <span>máx. tokens <b>4096</b></span>
+                    <span>janela <b>32k</b></span>
+                    <span>último teste <b>OK · 1.2s</b></span>
+                  </div>
+                </div>
+
+                <div class="pcard">
+                  <div class="top">
+                    <span class="nm">Curador</span>
+                    <span class="mt">deepseek · deepseek-v4-flash</span>
+                    <span class="badge muted">sugestões</span>
+                    <button class="btn btn-ghost" style="margin-left:auto">editar</button>
+                    <button class="btn btn-ghost">duplicar</button>
+                  </div>
+                  <div class="params"><span>temperature <b>0.7</b></span><span>último teste <b>OK · 380ms</b></span></div>
+                </div>
+
+                <div class="pcard">
+                  <div class="top">
+                    <span class="nm">Local</span>
+                    <span class="mt">vllm · qwen2.5-14b</span>
+                    <span class="badge warn">sem teste</span>
+                    <button class="btn btn-ghost" style="margin-left:auto">editar</button>
+                  </div>
+                  <div class="params"><span>base_url <b>http://127.0.0.1:8080/v1</b></span></div>
+                </div>
+
+                <button class="btn btn-ghost">+ Novo perfil</button>
+              </section>
+
+              <!-- ===== Papéis ===== -->
+              <section class="page" data-page="papeis" hidden>
+                <div class="page-head">
+                  <h3>Papéis e padrões</h3>
+                  <p>Qual perfil responde em cada papel. Hoje o daemon já guarda <code>curation_model</code>, mas a UI nunca mostrou isso.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Roteamento</div>
+                  <div class="rolemap">
+                    <span class="r">Chat</span>
+                    <div><span class="badge">⚡ Sol</span> <span class="mt" style="font-size:11px;color:var(--subtext)">deepseek-v4.1</span></div>
+                    <span class="r">Sugestões rápidas</span>
+                    <div><span class="badge muted">Curador</span> <span class="mt" style="font-size:11px;color:var(--subtext)">v4-flash</span></div>
+                    <span class="r">Roteador de tools</span>
+                    <div><span class="badge muted">Barato</span> <span class="mt" style="font-size:11px;color:var(--subtext)">llama-3.3-70b</span></div>
+                  </div>
+                </div>
+                <div class="section">
+                  <div class="section-title">Parâmetros padrão</div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">temperature padrão</div>
+                      <div class="hint">Aplicada a perfis novos. Cada perfil pode sobrescrever.</div>
+                    </div>
+                    <div class="ctl"><input type="number" step="0.1" value="0.3"></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">Roteamento automático</div>
+                      <div class="hint">Deixa o Euterpe escolher o perfil mais barato que resolve a tarefa.</div>
+                    </div>
+                    <div class="ctl"><span class="sw on"></span></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Overrides ===== -->
+              <section class="page" data-page="overrides" hidden>
+                <div class="page-head">
+                  <h3>Overrides por conversa</h3>
+                  <p>Conversas que apontam para um perfil diferente do padrão global. Limpar aqui devolve a conversa ao padrão.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">1 conversa com override</div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">Playlist Noturno</div>
+                      <div class="hint">usa <b>Local</b> (qwen2.5-14b) em vez do padrão global</div>
+                    </div>
+                    <div class="ctl"><button class="btn btn-ghost">limpar override</button></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Credenciais ===== -->
+              <section class="page" data-page="credenciais" hidden>
+                <div class="page-head">
+                  <h3>Credenciais</h3>
+                  <p>A chave é <b>escrita única</b>: o daemon nunca devolve o valor, só se existe. Por isso o estado precisa ser explícito na tela.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Provedores</div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">deepseek</div>
+                      <div class="hint">openai-compat · api.deepseek.com</div>
+                    </div>
+                    <div class="ctl">
+                      <span class="secret">definida <code>••••••••</code></span>
+                      <button class="btn btn-ghost" data-reveal="deepseek">substituir</button>
+                      <button class="btn btn-ghost">remover</button>
+                    </div>
+                  </div>
+                  <div class="field" id="reveal-deepseek" hidden>
+                    <div class="meta">
+                      <div class="lbl">Nova chave</div>
+                      <div class="hint">colada aqui não volta mais para a tela.</div>
+                    </div>
+                    <div class="ctl">
+                      <input type="password" placeholder="cole a chave" style="width:220px">
+                      <button class="btn" style="background:var(--accent);color:#000">salvar chave</button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">groq</div>
+                      <div class="hint">openai-compat · api.groq.com/openai/v1</div>
+                    </div>
+                    <div class="ctl">
+                      <span class="badge danger">sem chave</span>
+                      <input type="password" placeholder="cole a chave" style="width:200px">
+                      <button class="btn btn-ghost">salvar</button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">vllm (local)</div>
+                      <div class="hint">não exige chave</div>
+                    </div>
+                    <div class="ctl"><button class="btn btn-ghost">testar conexão</button><span class="badge">OK · 210ms</span></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Endpoints ===== -->
+              <section class="page" data-page="endpoints" hidden>
+                <div class="page-head">
+                  <h3>Endpoints</h3>
+                  <p>O que hoje só existe em <code>config.json</code> ganha formulário — com escape hatch para o arquivo bruto.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">vllm (local)</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">base_url</div><div class="hint">Raiz compatível com OpenAI.</div></div>
+                    <div class="ctl"><input type="text" value="http://127.0.0.1:8080/v1" style="width:260px"></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">headers</div><div class="hint">JSON livre, injetado em toda requisição.</div></div>
+                    <div class="ctl"><button class="btn btn-ghost">editar JSON</button></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">extra_body</div><div class="hint">Parâmetros extras no corpo do chat/completions.</div></div>
+                    <div class="ctl"><button class="btn btn-ghost">editar JSON</button></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">modelos</div><div class="hint">Lista manual quando o provider não expõe <code>/models</code>.</div></div>
+                    <div class="ctl"><button class="btn btn-ghost">carregar do endpoint</button><span class="badge muted">6 carregados</span></div>
+                  </div>
+                </div>
+                <button class="btn btn-ghost">abrir config.json</button>
+              </section>
+
+              <!-- ===== Mutação ===== -->
+              <section class="page" data-page="mutacao" hidden>
+                <div class="page-head">
+                  <h3>Agência &amp; segurança › Mutação de ferramentas</h3>
+                  <p>Controles de risco ficam <b>separados</b> de credencial e de chat — e com aviso visual.</p>
+                </div>
+                <div class="section warn">
+                  <div class="section-title">⚠ Política de mutação</div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">Ações que alteram sua biblioteca</div>
+                      <div class="hint"><b>allow</b> executa e mostra; <b>confirm</b> pede aprovação a cada chamada; <b>deny</b> bloqueia tudo.</div>
+                    </div>
+                    <div class="ctl">
+                      <span class="seg warn">
+                        <button>allow</button><button class="on">confirm</button><button>deny</button>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">Allowlist</div>
+                      <div class="hint">Tools que nunca pedem confirmação, mesmo em <code>confirm</code>.</div>
+                    </div>
+                    <div class="ctl"><button class="btn btn-ghost">editar allowlist</button><span class="badge muted">4 tools</span></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Limites ===== -->
+              <section class="page" data-page="limites" hidden>
+                <div class="page-head">
+                  <h3>Aprovações e limites</h3>
+                  <p>Timeouts existem no contrato (<code>llm_timeout_ms</code>, <code>tool_timeout_ms</code>, <code>proposal_timeout_ms</code>) e nunca tiveram UI.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Limites de execução</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Máx. passos de tool por turno</div><div class="hint">Teto de chamadas antes de o loop parar.</div></div>
+                    <div class="ctl"><input type="number" value="8"></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Timeout por chamada de LLM</div><div class="hint">Em milissegundos.</div></div>
+                    <div class="ctl"><input type="number" value="30000"></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Timeout de proposal (aprovação)</div><div class="hint">Tempo que o cartão de aprovação espera antes de expirar.</div></div>
+                    <div class="ctl"><input type="number" value="120000"></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Comportamento ===== -->
+              <section class="page" data-page="comportamento" hidden>
+                <div class="page-head">
+                  <h3>Comportamento do chat</h3>
+                  <p>O que hoje vive no fim da aba "Providers".</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Conversa</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Turnos de histórico enviados</div><div class="hint">Quanto da conversa vai junto em cada requisição.</div></div>
+                    <div class="ctl"><input type="number" value="8"></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Sugestões rápidas</div><div class="hint">Chips de continuação abaixo do composer.</div></div>
+                    <div class="ctl"><span class="sw on"></span></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Aprovar sempre em novo turno</div><div class="hint">Revalida a política de mutação a cada resposta.</div></div>
+                    <div class="ctl"><span class="sw"></span></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Instruções ===== -->
+              <section class="page" data-page="instrucoes" hidden>
+                <div class="page-head">
+                  <h3>Instruções do sistema</h3>
+                  <p>Padrão de extensões de agente em IDE: um bloco de instruções persistentes, sempre anexado.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Instruções personalizadas</div>
+                  <div class="field">
+                    <div class="meta">
+                      <div class="lbl">Sempre responder em pt-BR</div>
+                      <div class="hint">Tom, formato, o que evitar. Vai no topo de cada requisição.</div>
+                    </div>
+                  </div>
+                  <div style="padding-bottom:12px">
+                    <textarea style="width:100%;height:110px;background:var(--surface-soft);border:1px solid var(--divider);border-radius:8px;color:var(--text);font-family:inherit;font-size:12.5px;padding:10px;outline:none">Prefira jazz e MPB. Nunca crie playlist pública sem eu pedir. Respostas curtas, sem emoji.</textarea>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== MCP ===== -->
+              <section class="page" data-page="mcp" hidden>
+                <div class="page-head">
+                  <h3>Servidor MCP</h3>
+                  <p>Ferramentas expostas <b>para fora</b> (opencode, claude-code). É um contexto de integração — não fica ao lado de política de mutação.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Estado</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Endpoint</div><div class="hint">Streamable HTTP na mesma porta do bridge.</div></div>
+                    <div class="ctl"><span class="badge">● MCP ativo · 1 cliente</span></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Registrar em outro agente</div><div class="hint">3 formatos, copiáveis.</div></div>
+                  </div>
+                  <div class="snip-wrap">
+                    <pre class="snip">opencode mcp add euterpe --url http://127.0.0.1:8337/mcp</pre>
+                    <button class="btn btn-ghost">copiar</button>
+                  </div>
+                  <div class="snip-wrap" style="padding-bottom:10px">
+                    <pre class="snip">claude mcp add --transport http euterpe http://127.0.0.1:8337/mcp</pre>
+                    <button class="btn btn-ghost">copiar</button>
+                  </div>
+                </div>
+                <div class="section">
+                  <div class="section-title">Consumir MCP de terceiros</div>
+                  <div class="empty">Nenhum servidor MCP externo configurado. <br>(hoje o Euterpe só é servidor, nunca cliente — a UI deixa isso explícito.)</div>
+                </div>
+              </section>
+
+              <!-- ===== Busca ===== -->
+              <section class="page" data-page="busca" hidden>
+                <div class="page-head">
+                  <h3>Busca na web</h3>
+                </div>
+                <div class="section">
+                  <div class="section-title">Backend</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Provedor</div><div class="hint">auto usa searxng local quando disponível.</div></div>
+                    <div class="ctl">
+                      <select><option>auto</option><option>searxng</option><option>brave</option><option>tavily</option><option>duckduckgo</option><option>off</option></select>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">URL do searxng</div><div class="hint">Instância local do stack do repo.</div></div>
+                    <div class="ctl"><input type="text" value="http://127.0.0.1:8888" style="width:220px"></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Chave do Brave</div><div class="hint">escrita única</div></div>
+                    <div class="ctl"><span class="badge muted">não definida</span><button class="btn btn-ghost">definir</button></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Dados ===== -->
+              <section class="page" data-page="dados" hidden>
+                <div class="page-head">
+                  <h3>Armazenamento</h3>
+                  <p>Caminhos vêm do daemon (<code>data_dir</code>, <code>db_path</code>, <code>sessions_dir</code>) — read-only, com atalho para a pasta.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Localização</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">data_dir</div><div class="hint"><code style="font-size:11px">C:\Users\maico\AppData\Roaming\euterpe</code></div></div>
+                    <div class="ctl"><button class="btn btn-ghost">abrir pasta</button></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Histórico</div><div class="hint">Conversas ficam no LocalStorage do Spotify; o daemon guarda sessões e snapshots no SQLite.</div></div>
+                    <div class="ctl"><button class="btn btn-ghost">exportar</button><button class="btn btn-ghost">importar</button></div>
+                  </div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Limpar histórico</div><div class="hint">Apaga mensagens e sessões. Não mexe em playlist nenhuma.</div></div>
+                    <div class="ctl"><button class="btn btn-ghost" style="border-color:var(--danger);color:var(--danger)">limpar tudo</button></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ===== Diagnóstico ===== -->
+              <section class="page" data-page="diagnostico" hidden>
+                <div class="page-head">
+                  <h3>Diagnóstico</h3>
+                  <p>Se o daemon não responde, <b>esta página</b> mostra o erro — as outras continuam navegáveis e degradam sozinhas.</p>
+                </div>
+                <div class="section">
+                  <div class="section-title">Runtime</div>
+                  <div class="rolemap">
+                    <span class="r">Daemon</span><div><span class="badge">● ok · v0.2.0</span> <span style="font-size:11px;color:var(--subtext)">127.0.0.1:8337</span></div>
+                    <span class="r">Extensão</span><div><span class="badge">● ws conectado</span></div>
+                    <span class="r">Probe</span><div><span class="badge muted">503 · provider não configurado</span></div>
+                    <span class="r">Clientes MCP</span><div><span class="badge muted">1</span></div>
+                  </div>
+                </div>
+                <div class="section">
+                  <div class="section-title">Log</div>
+                  <div class="field">
+                    <div class="meta"><div class="lbl">Nível de debug</div><div class="hint">Aumenta o verboso do bridge e do loop LLM.</div></div>
+                    <div class="ctl"><span class="sw"></span></div>
+                  </div>
+                  <div class="snip-wrap" style="padding-bottom:10px">
+                    <pre class="snip">12:04:11 INFO  llm    provider=deepseek model=deepseek-v4.1 steps=2 tokens=1841
+12:04:12 INFO  tools  3 disponíveis, 1 mutante (confirm)
+12:04:14 DEBUG bridge ws client conectado (1 ativo)</pre>
+                    <button class="btn btn-ghost">copiar</button>
+                  </div>
+                </div>
+              </section>
+
+              <div class="empty" id="noResults" hidden>Nenhum ajuste corresponde à busca.</div>
+          </div>
+
+          <div class="view-foot">
+            <span class="saved"><span class="dot"></span> Salvo · há 2s</span>
+            <span style="margin-left:auto">Preferências salvas direto no daemon (fonte de verdade)</span>
+          </div>
+        </div>
+
+      <!-- ---------- VIEW: PRIMEIRO USO (intro + wizard) ---------- -->
+      <div class="view" id="viewOnb" hidden>
+        <div class="view-scroll">
+          <div class="onb-col" id="onbIntro">
+            <div class="onb-hero">
+              <div class="onb-logo">♫</div>
+              <div style="flex:1">
+                <h2>Bem-vindo ao Euterpe</h2>
+                <p>Ele conversa com a sua biblioteca do Spotify por <b>tools</b> — mas ainda não sabe com qual modelo pensar. Escolher leva uns 40 segundos.</p>
+              </div>
+            </div>
+
+            <div class="onb-body">
+              <div class="feat">
+                <div><b>Converse sobre sua música</b>Curtidas, playlists, artistas, gêneros e histórico.</div>
+                <div><b>Você aprova o que muda</b>Toda ação que altera a biblioteca passa pela política de mutação.</div>
+                <div><b>Roda local</b>Daemon em 127.0.0.1:8337. A chave fica na sua máquina, em keyring.</div>
+              </div>
+
+              <div class="cta-row">
+                <button class="btn btn-primary" id="onbStart">Configurar agora</button>
+                <button class="btn btn-ghost" id="onbSkip">Ver a interface primeiro</button>
+                <span style="font-size:11px;color:var(--text-muted)">depois: Preferências (Ctrl+,)</span>
+              </div>
+
+              <div style="margin-top:18px">
+                <div class="section-title" style="padding:0 0 8px">Ou comece por um preset</div>
+                <div class="pgrid" id="presetGrid"></div>
+              </div>
+
+              <div class="onb-sep"></div>
+
+              <div class="mcp-sug">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <b style="font-size:12.5px">Não quer usar esta interface? Use o Euterpe como servidor MCP</b>
+                  <span class="badge muted">opcional</span>
+                  <button class="btn btn-ghost" style="margin-left:auto" id="mcpToggle">ver como registrar</button>
+                </div>
+                <p>O mesmo daemon já expõe as tools em <code>http://127.0.0.1:8337/mcp</code> (Streamable HTTP, na mesma porta do bridge). Assim o opencode ou o claude-code falam com a sua biblioteca usando o modelo deles.</p>
+
+                <div id="mcpBody" hidden>
+                  <div class="snip-wrap" style="margin-top:10px">
+                    <pre class="snip">opencode mcp add euterpe --url http://127.0.0.1:8337/mcp</pre>
+                    <button class="btn btn-ghost" data-copy="opencode mcp add euterpe --url http://127.0.0.1:8337/mcp">copiar</button>
+                  </div>
+                  <div class="snip-wrap">
+                    <pre class="snip">claude mcp add --transport http euterpe http://127.0.0.1:8337/mcp</pre>
+                    <button class="btn btn-ghost" data-copy="claude mcp add --transport http euterpe http://127.0.0.1:8337/mcp">copiar</button>
+                  </div>
+                  <div class="snip-wrap">
+                    <pre class="snip">{"mcpServers":{"euterpe":{"command":"C:\\Users\\&lt;user&gt;\\AppData\\Roaming\\euterpe\\euterpe.exe","args":["mcp","--stdio"]}}}</pre>
+                    <button class="btn btn-ghost" data-copy='{"mcpServers":{"euterpe":{"command":"C:\\Users\\<user>\\AppData\\Roaming\\euterpe\\euterpe.exe","args":["mcp","--stdio"]}}}'>copiar</button>
+                  </div>
+                  <div class="callout">
+                    <span>⚠</span>
+                    <span>O servidor MCP sobe sem provedor configurado, mas as tools que dependem de LLM (curadoria/sugestões) só funcionam depois deste setup — <b>confirmar no daemon quais tools de leitura sobrevivem sem provider</b>.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- wizard -->
+          <div class="onb-col" id="onbWizard" hidden>
+            <div class="onb-hero" style="padding:0 0 14px">
+              <div>
+                <h2 style="font-size:16.5px">Configurar modelo</h2>
+                <p id="wzSub">Escolha quem vai pensar.</p>
+              </div>
+            </div>
+
+            <div class="onb-body">
+              <!-- passo 1: provedor -->
+              <section data-wz="1">
+                <div class="section-title" style="padding:0 0 8px">Provedor</div>
+                <div class="pgrid" id="wzPresets"></div>
+                <div id="wzCustomWrap" hidden style="margin-top:12px">
+                  <div class="field" style="border-top:0">
+                    <div class="meta"><div class="lbl">base_url</div><div class="hint">Raiz compatível com OpenAI, ex.: <code>http://127.0.0.1:8080/v1</code></div></div>
+                    <div class="ctl"><input type="text" id="wzBaseUrl" placeholder="https://…/v1" style="width:230px"></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- passo 2: chave -->
+              <section data-wz="2" hidden>
+                <div class="section-title" style="padding:0 0 8px">Chave da API</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <input type="password" id="wzKey" placeholder="cole a chave" style="flex:1;min-width:220px">
+                  <button class="btn btn-ghost" id="wzTest">Testar conexão</button>
+                </div>
+                <div id="wzTestOut" style="margin-top:8px;min-height:16px"></div>
+                <div class="hint" style="font-size:11.5px;color:var(--subtext);margin-top:8px;line-height:1.5;max-width:62ch">
+                  A chave é <b>escrita única</b>: vai para o keyring local e nunca volta para a tela. Depois disso o campo só mostra “definida”.
+                </div>
+                <div style="margin-top:10px">
+                  <button class="btn btn-ghost" id="wzWhere">onde pego essa chave?</button>
+                </div>
+              </section>
+
+              <!-- passo 3: modelo -->
+              <section data-wz="3" hidden>
+                <div class="section-title" style="padding:0 0 8px" id="wzModelTitle">Modelo</div>
+                <div class="hint" id="wzModelHint" style="font-size:11.5px;color:var(--subtext);margin:0 0 10px;line-height:1.5">
+                  Lista vem de <code>GET /models</code>. O preset já sugere um default.
+                </div>
+                <div class="wz-list" id="wzModels"></div>
+                <label style="display:flex;gap:9px;align-items:flex-start;margin-top:12px;cursor:pointer">
+                  <span class="sw on" id="wzCurSwitch"></span>
+                  <span>
+                    <div style="font-size:12.5px;font-weight:700">Usar este perfil também para as sugestões rápidas</div>
+                    <div style="font-size:11px;color:var(--subtext);margin-top:2px">Preenche <code>curation_model</code> — hoje sem UI nenhuma.</div>
+                  </span>
+                </label>
+              </section>
+
+              <!-- passo 4: pronto -->
+              <section data-wz="4" hidden>
+                <div class="section-title" style="padding:0 0 8px">Tudo pronto</div>
+                <div class="kv" id="wzSummary"></div>
+                <div class="callout" style="border-color:var(--accent-border-strong);background:var(--accent-soft);color:var(--text)">
+                  <span>✓</span>
+                  <span>Nada foi enviado para fora: <code>POST /providers</code> grava a chave no keyring e <code>PUT /settings</code> define o perfil ativo — o daemon é a fonte de verdade.</span>
+                </div>
+              </section>
+
+              <div class="wz-nav">
+                <button class="btn btn-ghost" id="wzBack">Voltar</button>
+                <span id="wzHint" style="font-size:11px;color:var(--text-muted)"></span>
+                <button class="btn btn-primary" id="wzNext" style="margin-left:auto">Continuar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+          </div><!-- /content -->
+        </section><!-- /main -->
+      </div><!-- /app -->
+
+      <div class="toasts" id="toasts"></div>
+    </div>
+
+    <div class="spice-player">
+      <div class="spice-art"></div>
+      <div class="spice-meta"><b>Kind of Blue</b><span>Miles Davis</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="proto">
+  <b>Protótipo</b>
+  <button data-view="chat" class="on">Chat</button>
+  <button data-view="onb">Primeiro uso</button>
+  <button data-view="prefs">Preferências</button>
+  <button data-view="prefs-mutacao">Agência</button>
+  <button id="railBtn">Rail</button>
+</div>
+
+<div class="notes" id="notes">
+  <button class="close" id="notesClose">✕</button>
+  <h4>O que mudou vs. hoje</h4>
+  <ol>
+    <li><b>1 controle de modelo</b> no header (chip) em vez de 2 selects + select duplicado nos cards.</li>
+    <li><b>Preferências com sidebar de escopos</b> em vez de modal de 2 abas que mistura chave, política e debug.</li>
+    <li><b>Rail de conversas</b> no lugar da faixa de 12 abas.</li>
+    <li><b>Badge de escopo</b> no composer: global vs. só nesta conversa.</li>
+    <li><b>Chave é escrita única</b> — estado "definida / substituir / remover" explícito.</li>
+    <li><b>Diagnóstico isolado</b>: daemon inseguro não apaga a navegação toda.</li>
+    <li><b>Primeiro uso</b>: intro + wizard de chaves (presets reais do daemon), com o uso como MCP oferecido embaixo.</li>
+  </ol>
+</div>
+
+<script>
+(function(){
+  var $ = function(s, r){ return (r||document).querySelector(s); };
+  var $$ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  function toast(text){
+    var box = $("#toasts");
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = text;
+    box.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 2600);
+  }
+
+  /* ---------- nav de páginas ---------- */
+  var crumb = $("#crumb");
+  function show(page){
+    $$(".page[data-page]").forEach(function(p){ p.hidden = p.dataset.page !== page; });
+    $$(".nav-item").forEach(function(n){ n.classList.toggle("on", n.dataset.page === page); });
+    var item = $('.nav-item[data-page="' + page + '"]');
+    if (item){
+      var group = item.previousElementSibling;
+      while (group && !group.classList.contains("nav-group")) group = group.previousElementSibling;
+      crumb.textContent = (group ? group.textContent.replace(/^⚠\s*/,"") + " › " : "") + item.textContent.replace(/\s*\d+$/,"").trim();
+    }
+    $("#pages").scrollTop = 0;
+  }
+  $$(".nav-item").forEach(function(n){ n.addEventListener("click", function(){ show(n.dataset.page); }); });
+
+  /* ---------- roteador de views: a área troca de conteúdo, nada abre por cima ---------- */
+  var VIEWS = { chat: "viewChat", prefs: "viewPrefs", onb: "viewOnb" };
+  var RAILS = { chat: "railConvs", prefs: "railSections", onb: "railSteps" };
+  var view = "chat";
+
+  function setView(next){
+    view = VIEWS[next] ? next : "chat";
+    Object.keys(VIEWS).forEach(function(k){
+      $("#" + VIEWS[k]).hidden = k !== view;
+      $("#" + RAILS[k]).hidden = k !== view;
+    });
+    $$(".vtab").forEach(function(t){ t.classList.toggle("on", t.dataset.view === view); });
+    $("#pop").classList.remove("open");
+    if (view === "onb") renderSteps();
+    if (view === "chat"){ var tx = $(".composer textarea"); if (tx && !tx.disabled) tx.focus(); }
+  }
+
+  $$(".vtab").forEach(function(t){ t.addEventListener("click", function(){ setView(t.dataset.view); }); });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape") setView("chat");
+    if (e.key === "," && (e.ctrlKey || e.metaKey)){ e.preventDefault(); setView("prefs"); }
+  });
+
+  /* ---------- popover de perfis ---------- */
+  var pop = $("#pop"), chip = $("#profileChip");
+  chip.addEventListener("click", function(e){
+    e.stopPropagation();
+    if (!configured){ setView("onb"); return; }
+    var open = pop.classList.toggle("open");
+    if (open){
+      var r = chip.getBoundingClientRect(), v = $("#viewport").getBoundingClientRect();
+      pop.style.top = (r.bottom - v.top + 8) + "px";
+      pop.style.right = (v.right - r.right) + "px";
+      pop.style.left = "auto";
+    }
+  });
+  document.addEventListener("click", function(e){
+    if (!pop.contains(e.target) && e.target !== chip) pop.classList.remove("open");
+  });
+  var currentProfile = "Sol", fixed = false;
+  $$(".pop-item").forEach(function(it){
+    it.addEventListener("click", function(){
+      currentProfile = it.dataset.profile;
+      $$(".pop-item .k").forEach(function(k){ k.remove(); });
+      it.insertAdjacentHTML("beforeend", '<span class="k">✓</span>');
+      renderScope();
+      toast("Perfil " + currentProfile + (fixed ? " fixado nesta conversa" : " aplicado (padrão global)"));
+    });
+  });
+  var popSwitch = $("#popSwitch");
+  popSwitch.addEventListener("click", function(e){
+    e.preventDefault(); e.stopPropagation();
+    fixed = !fixed;
+    popSwitch.classList.toggle("on", fixed);
+    renderScope();
+    toast(fixed ? "Override: só a conversa ativa usa " + currentProfile : "Voltou a seguir o padrão global");
+  });
+  $("#popManage").addEventListener("click", function(){ pop.classList.remove("open"); setView("prefs"); show("perfis"); });
+
+  /* ---------- badge de escopo do composer ---------- */
+  var scopeBadge = $("#scopeBadge");
+  function renderScope(){
+    scopeBadge.classList.toggle("override", fixed);
+    scopeBadge.innerHTML =
+      "⚡ " + currentProfile + " · " + (fixed ? "nesta conversa" : "padrão global") +
+      ' <button class="lnk" id="scopeToggle">' + (fixed ? "voltar ao padrão" : "usar só nesta conversa") + "</button>";
+    $("#scopeToggle").addEventListener("click", function(){
+      fixed = !fixed; popSwitch.classList.toggle("on", fixed); renderScope();
+      toast(fixed ? "Escopo: só esta conversa" : "Escopo: global");
+    });
+  }
+
+  /* ---------- rail ---------- */
+  $("#railToggle").addEventListener("click", function(){
+    var app = $("#app");
+    app.classList.toggle("rail-collapsed");
+    this.textContent = app.classList.contains("rail-collapsed") ? "▶" : "◀";
+  });
+  $$(".conv").forEach(function(c){
+    c.addEventListener("click", function(){
+      $$(".conv").forEach(function(o){ o.classList.remove("on"); });
+      c.classList.add("on");
+    });
+  });
+  var convSearch = $("#convSearch");
+  convSearch.addEventListener("input", function(){
+    var q = convSearch.value.toLowerCase();
+    $$(".conv").forEach(function(c){
+      c.style.display = c.querySelector(".t").textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";
+    });
+    $$(".rail-group").forEach(function(g){ g.style.display = q ? "none" : ""; });
+  });
+
+  /* ---------- busca de ajustes (filtra campos) ---------- */
+  var fieldSearch = $("#fieldSearch");
+  fieldSearch.addEventListener("input", function(){
+    var q = fieldSearch.value.trim().toLowerCase();
+    $$(".page[data-page], .nav-item, .field").forEach(function(el){ el.style.display = ""; });
+    $("#noResults").hidden = true;
+    if (!q) return;
+    var any = false;
+    $$(".field").forEach(function(f){
+      var hit = (f.textContent || "").toLowerCase().indexOf(q) >= 0;
+      f.style.display = hit ? "" : "none";
+      if (hit) any = true;
+    });
+    if (!any) $("#noResults").hidden = false;
+    $$(".nav-item").forEach(function(n){
+      var p = $('.page[data-page="' + n.dataset.page + '"]');
+      var visible = p && $$(".field", p).some(function(f){ return f.style.display !== "none"; });
+      n.style.display = visible ? "" : "none";
+    });
+    $$(".page[data-page]").forEach(function(p){
+      if ($$(".field", p).some(function(f){ return f.style.display !== "none"; })) show(p.dataset.page);
+    });
+  });
+
+  /* ---------- revelar campo de chave ---------- */
+  $$("[data-reveal]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var row = $("#reveal-" + b.dataset.reveal);
+      if (row) row.hidden = !row.hidden;
+    });
+  });
+
+  /* ---------- sw / seg ---------- */
+  document.addEventListener("click", function(e){
+    var sw = e.target.closest(".sw");
+    if (sw && !sw.closest(".pop")) { sw.classList.toggle("on"); toast("Ajuste salvo (autosave · 600ms)"); return; }
+    var seg = e.target.closest(".seg button");
+    if (seg){
+      $$("button", seg.parentElement).forEach(function(b){ b.classList.remove("on"); });
+      seg.classList.add("on");
+      toast("Política de mutação: " + seg.textContent + " — PUT /settings");
+    }
+    if (e.target.closest(".send")) toast("(protótipo) POST /chat em SSE");
+    if (e.target.closest(".rail-new")) toast("(protótipo) nova conversa");
+    if (e.target.closest("#restoreSection")) toast("Seção restaurada ao padrão");
+  });
+
+  /* ---------- toolbar ---------- */
+  $$(".proto button[data-view]").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$(".proto button[data-view]").forEach(function(o){ o.classList.remove("on"); });
+      b.classList.add("on");
+      var v = b.dataset.view;
+      if (v === "chat") setView("chat");
+      else if (v === "prefs"){ setView("prefs"); show("perfis"); }
+      else if (v === "onb") enterIntro();
+      else { setView("prefs"); show("mutacao"); }
+    });
+  });
+  $("#railBtn").addEventListener("click", function(){ $("#railToggle").click(); });
+  $("#notesClose").addEventListener("click", function(){ $("#notes").remove(); });
+
+  /* ============================================================
+     PRIMEIRO USO — intro + wizard de chaves
+     Presets espelham ProviderConfig::preset_ids() (core/src/config.rs:196)
+     ============================================================ */
+  var PRESETS = [
+    { id:"deepseek",   name:"DeepSeek",       hint:"deepseek-flash",        key:true,  models:["deepseek-flash","deepseek-v4-pro","deepseek-reasoner"] },
+    { id:"openai",     name:"OpenAI",         hint:"gpt-4o-mini",           key:true,  models:["gpt-4o-mini","gpt-4o","gpt-4.1"] },
+    { id:"gemini",     name:"Google Gemini",  hint:"gemini-2.0-flash",      key:true,  models:["gemini-2.0-flash","gemini-2.0-pro"] },
+    { id:"groq",       name:"Groq",           hint:"llama-3.3-70b",         key:true,  models:["llama-3.3-70b-versatile"] },
+    { id:"anthropic",  name:"Anthropic",      hint:"claude-3-5-haiku",      key:true,  models:["claude-3-5-haiku-latest","claude-3-5-sonnet-latest"] },
+    { id:"openrouter", name:"OpenRouter",     hint:"gpt-4o-mini",           key:true,  models:["openai/gpt-4o-mini","anthropic/claude-3.5-sonnet"] },
+    { id:"mistral",    name:"Mistral",        hint:"mistral-small",         key:true,  models:["mistral-small-latest","mistral-large-latest"] },
+    { id:"xai",        name:"xAI",            hint:"grok-2",                key:true,  models:["grok-2-latest"] },
+    { id:"together",   name:"Together",       hint:"llama-3.3-70b",         key:true,  models:["meta-llama/Llama-3.3-70B-Instruct-Turbo"] },
+    { id:"ollama",     name:"Ollama",         hint:"local · sem chave",     key:false, models:["llama3.2","qwen2.5:14b","mistral:7b"] },
+    { id:"lmstudio",   name:"LM Studio",      hint:"local · sem chave",     key:false, models:["local-model"] },
+    { id:"custom",     name:"Custom",         hint:"OpenAI-compat",         key:true,  models:[] }
+  ];
+  var configured = true;            // vira false no "ver a interface primeiro"
+  var ACTIVE = { preset:"deepseek", model:"deepseek-flash" };
+
+  function presetById(id){
+    for (var i = 0; i < PRESETS.length; i++) if (PRESETS[i].id === id) return PRESETS[i];
+    return PRESETS[0];
+  }
+
+  function presetTile(p, selected, onPick){
+    var el = document.createElement("button");
+    el.className = "poptx" + (selected ? " on" : "");
+    el.dataset.preset = p.id;
+    el.innerHTML = '<div class="n">' + p.name + (p.key ? "" : ' <span class="tag">local</span>') + "</div>" +
+                   '<div class="m">' + p.hint + "</div>";
+    el.addEventListener("click", function(){ onPick(p); });
+    return el;
+  }
+
+  function fillPresets(container, selectedId, onPick){
+    container.innerHTML = "";
+    PRESETS.forEach(function(p){ container.appendChild(presetTile(p, p.id === selectedId, onPick)); });
+  }
+
+  /* ---------- wizard ---------- */
+  var wz = { i:0, preset:"deepseek", model:"", key:"", tested:false, curation:true, baseUrl:"" };
+
+  function stages(){
+    return presetById(wz.preset).key ? ["provider","key","model","done"] : ["provider","model","done"];
+  }
+  function stage(){ return stages()[wz.i]; }
+  var STAGE_LABEL = { provider:"Provedor", key:"Chave", model:"Modelo", done:"Pronto" };
+  /* O número do painel é fixo por estágio — não é o índice da etapa.
+     (Em provedor local a etapa "Chave" não existe, e o índice desalinharia.) */
+  var STAGE_PANE = { provider:1, key:2, model:3, done:4 };
+
+  /* O checklist de etapas vive no rail da view de primeiro uso. */
+  function renderSteps(){
+    var box = $("#wzSteps"); box.innerHTML = "";
+    stages().forEach(function(s, idx){
+      var el = document.createElement("div");
+      el.className = "step" + (idx === wz.i ? " on" : idx < wz.i ? " done" : "");
+      el.innerHTML = '<span class="num">' + (idx < wz.i ? "✓" : idx + 1) + "</span>" + STAGE_LABEL[s];
+      el.addEventListener("click", function(){ if (idx <= wz.i){ wz.i = idx; renderWizard(); } });
+      box.appendChild(el);
+    });
+  }
+
+  function renderWizard(){
+    var p = presetById(wz.preset);
+    renderSteps();
+    $$("[data-wz]").forEach(function(s){ s.hidden = s.dataset.wz !== String(STAGE_PANE[stage()]); });
+    $("#wzSub").textContent = "Passo " + (wz.i + 1) + " de " + stages().length + (p.key ? "" : " · provedor local, sem chave");
+    $("#wzHint").textContent = "";
+
+    if (stage() === "provider"){
+      fillPresets($("#wzPresets"), wz.preset, function(pick){
+        wz.preset = pick.id;
+        wz.model = pick.models[0] || "";
+        wz.tested = false;
+        renderWizard();
+      });
+      $("#wzCustomWrap").hidden = wz.preset !== "custom";
+    }
+
+    if (stage() === "key"){
+      $("#wzKey").placeholder = "cole a chave do " + p.name;
+      $("#wzTestOut").innerHTML = "";
+    }
+
+    if (stage() === "model"){
+      var local = !p.key;
+      var port = p.id === "ollama" ? "127.0.0.1:11434" : "127.0.0.1:1234";
+      $("#wzModelTitle").textContent = local ? "Modelos em " + port : "Modelos disponíveis";
+      $("#wzModelHint").innerHTML = local
+        ? "Lista vem de <code>GET /models?provider=" + p.id + "</code> — nenhuma chave necessária."
+        : "Lista vem de <code>GET /models?provider=" + p.id + "</code>. O preset já sugere um default.";
+      var box = $("#wzModels"); box.innerHTML = "";
+      if (!p.models.length){
+        box.innerHTML = '<div class="wz-row" style="cursor:default"><div><div class="nm">Nenhum modelo listado</div><div class="mt">Provider custom: informe o modelo em Preferências → Endpoints.</div></div></div>';
+      }
+      p.models.forEach(function(m){
+        var row = document.createElement("div");
+        row.className = "wz-row" + (m === wz.model ? " on" : "");
+        row.innerHTML = '<div><div class="nm">' + m + "</div><div class=\"mt\">" +
+          (m === p.models[0] ? "default sugerido pelo preset" : "disponível neste provider") + "</div></div>" +
+          (m === wz.model ? '<span class="ck">✓</span>' : "");
+        row.addEventListener("click", function(){ wz.model = m; renderWizard(); });
+        box.appendChild(row);
+      });
+    }
+
+    if (stage() === "done"){
+      $("#wzSummary").innerHTML =
+        '<span class="k">Perfil criado</span><span>⚡ <b>Sol</b> — ' + p.name + " · " + (wz.model || "local-model") + "</span>" +
+        '<span class="k">Provedor</span><span>' + p.id + ' <span style="color:var(--text-muted);font-size:11px">(' + (p.key ? "openai-compat" : "local") + ")</span></span>" +
+        '<span class="k">Chave</span><span>' + (p.key ? (wz.tested ? "definida · testada OK" : "definida") : "não exigida") + "</span>" +
+        '<span class="k">Sugestões rápidas</span><span>' + (wz.curation ? "mesmo perfil (curation_model)" : "não definido") + "</span>" +
+        '<span class="k">Política de mutação</span><span>herdada do global (<code>allow</code>)</span>';
+    }
+
+    var last = wz.i === stages().length - 1;
+    $("#wzNext").textContent = last ? "Começar a conversar" : "Continuar";
+    $("#wzBack").disabled = wz.i === 0;
+  }
+
+  function openWizard(presetId){
+    wz.i = 0; wz.key = ""; wz.tested = false; wz.curation = true;
+    if (presetId){ wz.preset = presetId; wz.model = presetById(presetId).models[0] || ""; wz.i = 1; }
+    $("#wzKey").value = "";
+    $("#onbIntro").hidden = true;
+    $("#onbWizard").hidden = false;
+    setView("onb");
+    renderWizard();
+  }
+
+  function enterIntro(){
+    $("#onbIntro").hidden = false;
+    $("#onbWizard").hidden = true;
+    setView("onb");
+  }
+
+  /* ---------- estado configurado / degradado ---------- */
+  function setConfigured(on){
+    configured = on;
+    var tx = document.querySelector(".composer textarea");
+    var send = document.querySelector(".composer .send");
+    if (on){
+      chip.classList.remove("danger");
+      chip.innerHTML = '⚡ <span class="who">Sol</span> <span class="mid">' + ACTIVE.preset + "/" + ACTIVE.model + '</span> <span class="caret">▾</span>';
+      $("#chatBanner").hidden = true;
+      $("#composer").classList.remove("off");
+      tx.disabled = false; tx.placeholder = "pergunte algo sobre sua música…";
+      send.disabled = false;
+      currentProfile = "Sol"; fixed = false;
+      $("#popSwitch").classList.remove("on");
+      renderScope();
+    } else {
+      chip.classList.add("danger");
+      chip.innerHTML = '⚠ <span class="who">sem modelo</span> <span class="caret">▾</span>';
+      $("#chatBanner").hidden = false;
+      $("#composer").classList.add("off");
+      tx.disabled = true; tx.placeholder = "configure um modelo para começar…";
+      send.disabled = true;
+      scopeBadge.classList.add("override");
+      scopeBadge.innerHTML = "⚠ nenhum perfil ativo";
+    }
+  }
+
+  /* ---------- fios do primeiro uso ---------- */
+  fillPresets($("#presetGrid"), "deepseek", function(p){ openWizard(p.id); });
+  $("#onbStart").addEventListener("click", function(){ openWizard(); });
+  $("#onbSkip").addEventListener("click", function(){
+    setConfigured(false); setView("chat");
+    toast("Sem modelo configurado — o chat fica indisponível até você escolher um.");
+  });
+  $("#onbSkipRail").addEventListener("click", function(){
+    setConfigured(false); setView("chat");
+    toast("Sem modelo configurado — o chat fica indisponível até você escolher um.");
+  });
+  $("#bannerCfg").addEventListener("click", enterIntro);
+  $("#mcpToggle").addEventListener("click", function(){
+    var body = $("#mcpBody");
+    body.hidden = !body.hidden;
+    this.textContent = body.hidden ? "ver como registrar" : "ocultar";
+  });
+  $("#wzWhere").addEventListener("click", function(){
+    toast("Deve abrir a página de chaves do provedor — link por preset.");
+  });
+  $("#wzCurSwitch").addEventListener("click", function(){
+    wz.curation = !wz.curation;
+    this.classList.toggle("on", wz.curation);
+  });
+  $("#wzTest").addEventListener("click", function(){
+    var key = $("#wzKey").value.trim();
+    var out = $("#wzTestOut");
+    if (key.length < 8){
+      out.innerHTML = '<span class="out-err">401 · chave inválida para ' + presetById(wz.preset).hint + " (cole a chave completa)</span>";
+      return;
+    }
+    out.innerHTML = '<span class="out-ok">● OK · ' + presetById(wz.preset).name + " respondeu em 1.1s — modelo <b>" +
+                    (wz.model || presetById(wz.preset).models[0]) + "</b> disponível</span>";
+    wz.tested = true;
+  });
+  $("#wzBack").addEventListener("click", function(){ if (wz.i){ wz.i--; renderWizard(); } });
+  $("#wzNext").addEventListener("click", function(){
+    var s = stage();
+    if (s === "provider" && wz.preset === "custom"){
+      var bu = $("#wzBaseUrl").value.trim();
+      if (!bu){ toast("Informe a base_url do provider custom"); return; }
+      wz.baseUrl = bu;
+    }
+    if (s === "key" && !wz.tested){
+      if ($("#wzKey").value.trim().length < 8){
+        $("#wzTestOut").innerHTML = '<span class="out-err">401 · chave inválida — teste a conexão antes de continuar</span>';
+        return;
+      }
+      wz.tested = true;
+      toast("POST /providers · chave gravada no keyring");
+    }
+    if (wz.i === stages().length - 1){
+      ACTIVE = { preset: wz.preset, model: wz.model || "local-model" };
+      setConfigured(true);
+      setView("chat");
+      toast("PUT /settings · perfil Sol ativo (" + ACTIVE.preset + "/" + ACTIVE.model + ")");
+      return;
+    }
+    wz.i++; renderWizard();
+  });
+
+  /* copiar snippets do onboarding */
+  document.addEventListener("click", function(e){
+    var b = e.target.closest("[data-copy]");
+    if (!b) return;
+    var text = b.dataset.copy;
+    try {
+      navigator.clipboard.writeText(text);
+      toast("Copiado para a área de transferência");
+    } catch (err){
+      toast("Copie manualmente: " + text.slice(0, 40) + "…");
+    }
+  });
+
+  renderScope();
+  setView("chat");
+})();
+</script>
+</body>
+</html>

@@ -4,8 +4,10 @@
 
 /// `(key, en, pt-br)`.
 pub const STRINGS: &[(&str, &str, &str)] = &[
-    ("status.thinking", "Analyzing…", "Analisando…"),
-    ("status.working", "Working…", "Trabalhando…"),
+    // Tom de voz: BRAND-VOICE.md. Registro de ESPERA — nunca use em erro,
+    // quota, perda de dado ou confirmação.
+    ("status.thinking", "Picking the next record…", "Escolhendo o próximo disco…"),
+    ("status.working", "Fiddling with the records…", "Mexendo nos discos…"),
     ("status.invalidMessage", "Invalid message", "Mensagem inválida"),
     ("status.clientAuthenticated", "client authenticated", "cliente autenticado"),
     ("status.handshakeRejected", "handshake rejected", "handshake rejeitado"),
@@ -16,52 +18,67 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
         "Euterpe agent listening on ws://{host}:{port}",
         "Agente Euterpe ouvindo em ws://{host}:{port}",
     ),
-    ("status.clientOffline", "Spotify client is not connected", "Cliente do Spotify não está conectado"),
-    ("tool.get_playlists", "reading your playlists…", "lendo suas playlists…"),
-    ("tool.get_playlist_tracks", "reading playlist tracks…", "lendo faixas da playlist…"),
-    ("tool.get_saved_tracks", "reading saved tracks…", "lendo músicas salvas…"),
-    ("tool.get_top_artists", "analyzing your artists…", "analisando seus artistas…"),
-    ("tool.get_top_tracks", "analyzing your tracks…", "analisando suas músicas…"),
-    ("tool.search_spotify", "searching on Spotify…", "procurando no Spotify…"),
-    ("tool.get_related_artists", "looking up related artists…", "buscando artistas relacionados…"),
-    ("tool.get_artist", "fetching artist info…", "buscando informações do artista…"),
-    ("tool.get_recommendations", "building recommendations…", "montando recomendações…"),
-    ("tool.get_audio_features_bulk", "analyzing track features…", "analisando características musicais…"),
-    ("tool.get_several_artists", "fetching artists…", "buscando artistas…"),
-    ("tool.get_several_tracks", "fetching tracks…", "buscando faixas…"),
-    ("tool.new_releases", "fetching new releases…", "buscando lançamentos…"),
-    ("tool.create_playlist", "creating playlist…", "criando playlist…"),
-    ("tool.add_tracks", "adding tracks…", "adicionando faixas…"),
-    ("tool.remove_tracks", "removing tracks…", "removendo faixas…"),
-    ("tool.set_playlist_details", "updating playlist…", "atualizando playlist…"),
-    ("tool.replace_playlist_tracks", "updating tracks…", "atualizando faixas…"),
-    ("tool.set_playlist_cover", "updating cover…", "atualizando capa…"),
-    ("tool.web_search", "searching the web…", "pesquisando na web…"),
-    ("tool.similar_artists", "finding similar artists…", "buscando artistas similares…"),
-    ("tool.artist_info", "fetching artist bio…", "buscando biografia do artista…"),
-    ("tool.enrich_tracks", "enriching track data…", "enriquecendo dados das faixas…"),
-    ("tool.lyrics_bulk", "fetching lyrics…", "buscando letras…"),
-    ("tool.lyrics_lookup", "fetching lyrics…", "buscando letra…"),
-    ("tool.chart_lookup", "checking charts…", "consultando rankings…"),
-    ("tool.image_search", "looking for images…", "procurando imagens…"),
-    ("tool.weekly_report", "generating report…", "gerando relatório…"),
-    ("tool.prepare_cover", "preparing cover…", "preparando capa…"),
-    ("tool.undo_last_mutation", "undoing change…", "desfazendo alteração…"),
+    (
+        "status.clientOffline",
+        "Spotify is not answering here. Reopen the client and try again.",
+        "O Spotify não está respondendo aqui. Reabra o client e tente de novo.",
+    ),
+    // Linhas de sabor por ferramenta (BRAND-VOICE.md §6) — uma por tool real do
+    // catálogo. Sem rótulo, o cartão cai em `status.working`.
+    ("tool.get_playlists", "Opening the playlist drawer…", "Abrindo a gaveta das playlists…"),
+    ("tool.get_playlist_tracks", "Counting tracks without losing the hook…", "Contando as faixas sem perder o refrão…"),
+    ("tool.get_saved_tracks", "Revisiting what you saved (and forgot)…", "Revisitando o que você salvou (e nem lembra)…"),
+    ("tool.get_top_artists", "Weighing plays on the scale…", "Pesando os plays no prato da balança…"),
+    ("tool.get_top_tracks", "Settling the podium…", "Definindo o pódio…"),
+    ("tool.get_listening_recents", "Rewinding the last few spins…", "Rebobinando o que passou há pouco…"),
+    ("tool.get_currently_playing", "Checking what's on air right now…", "Checando o que está no ar agora…"),
+    ("tool.get_player_state", "Peeking at the transport controls…", "Espiando o transporte (play, pause e afins)…"),
+    ("tool.get_player_queue", "Reading the queue, professionally…", "Lendo a fila com cara de quem fiscaliza…"),
+    ("tool.get_connect_devices", "Hunting the speaker that wandered off…", "Procurando a caixa de som que fugiu…"),
+    ("tool.player_control", "Pressing the button (the right one)…", "Apertando o botão (o certo, dessa vez)…"),
+    ("tool.player_queue_control", "Rearranging the queue carefully…", "Mexendo na fila com cuidado…"),
+    ("tool.search_spotify", "Digging the whole catalog for one line…", "Vasculhando o catálogo inteiro por uma linha…"),
+    ("tool.get_related_artists", "Pulling the thread to the next artist…", "Puxando o fio até o artista vizinho…"),
+    ("tool.get_artist", "Reading the official bio (sourced)…", "Lendo a biografia oficial (com fonte)…"),
+    ("tool.get_recommendations", "Testing combos at the counter…", "Testando combinações no balcão…"),
+    // Nome aposentado que o modelo ainda alucina (core/tests/replay_sessions.rs).
+    ("tool.get_audio_features_bulk", "Weighing the audio features…", "Pesando as características musicais…"),
+    ("tool.get_several_artists", "Filling out the index cards…", "Montando a ficha de cada um…"),
+    ("tool.get_several_tracks", "Filling out the track cards…", "Montando a ficha de cada faixa…"),
+    ("tool.new_releases", "Checking what just dropped…", "Verificando o que acabou de sair…"),
+    ("tool.create_playlist", "Building a new playlist (with a label)…", "Montando a playlist nova (com etiqueta)…"),
+    ("tool.add_tracks", "Shelving the tracks…", "Arrumando as faixas na estante…"),
+    ("tool.remove_tracks", "Taking them out carefully…", "Tirando com cuidado…"),
+    ("tool.set_playlist_details", "Rewriting the description nicely…", "Reescrevendo a descrição bonitinha…"),
+    ("tool.replace_playlist_tracks", "Swapping the whole setlist…", "Trocando o repertório inteiro…"),
+    ("tool.set_playlist_cover", "Pasting the cover on…", "Colando a capa…"),
+    ("tool.web_search", "Stepping out to ask someone…", "Saindo para a rua perguntar a alguém…"),
+    ("tool.similar_artists", "Looking for the sonic next of kin…", "Procurando o parentesco sonoro…"),
+    ("tool.artist_info", "Checking the Last.fm take…", "Conferindo a versão da Last.fm…"),
+    ("tool.enrich_tracks", "Filing the proper index cards…", "Colocando ficha catalográfica nas faixas…"),
+    ("tool.lyrics_bulk", "Reading all the lyrics before judging…", "Lendo as letras todas antes de julgar…"),
+    ("tool.lyrics_lookup", "Reading the lyrics before judging…", "Lendo a letra antes de julgar…"),
+    ("tool.chart_lookup", "Checking the scoreboard…", "Olhando o placar…"),
+    ("tool.image_search", "Finding a cover that survives a zoom…", "Procurando uma capa que aguente o close…"),
+    ("tool.weekly_report", "Wrapping up the week…", "Fechando a semana em revista…"),
+    ("tool.prepare_cover", "Framing it properly…", "Ajustando o enquadramento…"),
+    ("tool.undo_last_mutation", "Undoing (the most underrated button)…", "Voltando atrás (o botão mais subestimado)…"),
     (
         "fallback.noApiKey",
         "Configure DEEPSEEK_API_KEY in agent/.env so the agent can reply.",
         "Configure DEEPSEEK_API_KEY no agent/.env para o agente responder.",
     ),
-    ("fallback.noAnswer", "I could not generate an answer.", "Não consegui gerar uma resposta."),
+    // Registro de RISCO: causa + o que fazer. Sem "desculpe", sem hipérbole.
+    ("fallback.noAnswer", "I could not put an answer together.", "Não consegui montar uma resposta."),
     (
         "fallback.stepLimit",
-        "I reached the step limit. Here is what I have so far — refine the request if you need.",
-        "Atingi o limite de passos. Respondo com o que consegui até aqui — refinem o pedido se precisar.",
+        "I hit the step limit. Here is what I have so far — refine the request if you need.",
+        "Atingi o limite de passos. Aqui está o que consegui até agora — refine o pedido se precisar.",
     ),
     (
         "fallback.llmError",
-        "Sorry, I had a problem talking to the model just now. Try again in a moment.",
-        "Desculpe, tive um problema ao me comunicar com o modelo agora. Tenta de novo em instantes.",
+        "I could not reach the model just now. Try again in a moment.",
+        "Não consegui falar com o modelo agora. Tente de novo em instantes.",
     ),
     (
         "fallback.noApiKeyRust",
@@ -161,7 +178,10 @@ mod tests {
             ),
             "Euterpe agent listening on ws://127.0.0.1:8337"
         );
-        assert_eq!(t("pt-br", "status.thinking", &[]), "Analisando…");
+        assert_eq!(
+            t("pt-br", "status.thinking", &[]),
+            "Escolhendo o próximo disco…"
+        );
         assert_eq!(t("en", "does.not.exist", &[]), "does.not.exist");
     }
 
@@ -169,8 +189,11 @@ mod tests {
     fn friendly_label_falls_back_to_working() {
         assert_eq!(
             friendly_tool_label("en", "get_playlists"),
-            "reading your playlists…"
+            "Opening the playlist drawer…"
         );
-        assert_eq!(friendly_tool_label("en", "totally_unknown"), "Working…");
+        assert_eq!(
+            friendly_tool_label("en", "totally_unknown"),
+            "Fiddling with the records…"
+        );
     }
 }

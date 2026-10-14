@@ -86,7 +86,9 @@ pub async fn upsert(State(state): State<AppState>, Json(body): Json<ProviderUpse
     }
 
     if let Some(key) = body.api_key.as_deref() {
-        if let Err(err) = crate::secrets::set_provider_key(&provider.id, key) {
+        if let Err(err) =
+            crate::secrets::set_provider_key_at(&state.cfg.data_dir, &provider.id, key)
+        {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "ok": false, "error": "secret_write_failed", "detail": err.to_string() })),
@@ -108,6 +110,33 @@ pub async fn upsert(State(state): State<AppState>, Json(body): Json<ProviderUpse
             crate::store::settings::KEY_ACTIVE_PROVIDER,
             &provider.id,
         );
+        if let Some(ref m) = provider.default_model {
+            let _ = state
+                .settings
+                .put(&state.store, crate::store::settings::KEY_ACTIVE_MODEL, m);
+        }
+        if let Some(mut list) = state
+            .settings
+            .get_json::<Vec<crate::config::ModelProfile>>(crate::store::settings::KEY_PROFILES)
+        {
+            let active_id = state
+                .settings
+                .get(crate::store::settings::KEY_ACTIVE_PROFILE)
+                .unwrap_or_else(|| "default".to_string());
+            if let Some(p) = list.iter_mut().find(|p| p.id == active_id) {
+                p.provider = provider.id.clone();
+                if let Some(ref m) = provider.default_model {
+                    p.model = m.clone();
+                }
+                if let Ok(json) = serde_json::to_value(&list) {
+                    let _ = state.settings.put_json(
+                        &state.store,
+                        crate::store::settings::KEY_PROFILES,
+                        &json,
+                    );
+                }
+            }
+        }
     }
     Json(json!({
         "ok": true,
@@ -116,17 +145,29 @@ pub async fn upsert(State(state): State<AppState>, Json(body): Json<ProviderUpse
             "name": provider.name,
             "kind": provider.kind,
             "baseUrl": provider.base_url,
-            "hasKey": crate::secrets::has_provider_key(&provider.id),
+            "hasKey": crate::secrets::has_provider_key_at(&state.cfg.data_dir, &provider.id),
         }
     }))
     .into_response()
 }
 
-pub async fn remove(State(_state): State<AppState>, Path(id): Path<String>) -> Response {
-    if let Err(err) = crate::secrets::delete_provider_key(&id) {
+pub async fn remove(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    if let Err(err) = crate::secrets::delete_provider_key_at(&state.cfg.data_dir, &id) {
         tracing::warn!(error = %err, "falha ao remover a chave do provider");
     }
+    let _ = remove_provider_from_config(&state, &id);
     Json(json!({ "ok": true, "id": id, "hasKey": false })).into_response()
+}
+
+fn remove_provider_from_config(state: &AppState, id: &str) -> anyhow::Result<()> {
+    let path = state.cfg.data_dir.join("config.json");
+    let existing = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let mut root: Value = serde_json::from_str(&existing).unwrap_or_else(|_| json!({}));
+    if let Some(arr) = root.get_mut("providers").and_then(|v| v.as_array_mut()) {
+        arr.retain(|p| p.get("id").and_then(|v| v.as_str()) != Some(id));
+        std::fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    }
+    Ok(())
 }
 
 /// Persiste a lista de providers em `config.json` **do diretório de dados em uso**
@@ -191,7 +232,7 @@ pub async fn models(State(state): State<AppState>, Query(q): Query<ModelsQuery>)
     let base_url = q.base_url.unwrap_or(base_url);
     let key = q
         .api_key
-        .or_else(|| crate::secrets::provider_key(&provider_id));
+        .or_else(|| crate::secrets::provider_key_at(&state.cfg.data_dir, &provider_id));
     let spec = ProviderConfig {
         id: provider_id.clone(),
         name: provider_id.clone(),
@@ -252,7 +293,7 @@ pub async fn test(State(state): State<AppState>, Json(body): Json<TestRequest>) 
     let key = body
         .api_key
         .clone()
-        .or_else(|| crate::secrets::provider_key(&provider_id));
+        .or_else(|| crate::secrets::provider_key_at(&state.cfg.data_dir, &provider_id));
     let spec = ProviderConfig { base_url, ..preset };
     let started = std::time::Instant::now();
     match crate::providers::registry::build(&spec, key, &model) {
@@ -260,7 +301,11 @@ pub async fn test(State(state): State<AppState>, Json(body): Json<TestRequest>) 
             Ok(mut report) => {
                 if body.api_key.is_some() && report.ok {
                     // Só persiste a chave depois de ela provar que funciona.
-                    let _ = crate::secrets::set_provider_key(&provider_id, body.api_key.as_deref().unwrap_or(""));
+                    let _ = crate::secrets::set_provider_key_at(
+                        &state.cfg.data_dir,
+                        &provider_id,
+                        body.api_key.as_deref().unwrap_or(""),
+                    );
                 }
                 report.latency_ms = started.elapsed().as_millis() as u64;
                 Json(json!({ "ok": report.ok, "provider": provider_id, "report": report })).into_response()

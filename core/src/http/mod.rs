@@ -7,6 +7,7 @@ pub mod probe;
 pub mod providers;
 pub mod sessions;
 pub mod settings;
+pub mod storage;
 
 use axum::routing::{delete, get, post, put};
 use axum::Router;
@@ -40,6 +41,11 @@ pub fn router(state: AppState) -> Router {
             "/settings",
             get(settings::get_settings).put(settings::put_settings),
         )
+        // Perfil de modelo: teste de conexão com latência medida.
+        .route("/profiles/:id/test", post(settings::test_profile))
+        // Armazenamento (página "Armazenamento"): inspeção e limpeza explícita.
+        .route("/storage", get(storage::get))
+        .route("/storage/erase", post(storage::erase))
         // MCP (Streamable HTTP): initialize / tools/list / tools/call / resources
         .route(
             "/mcp",

@@ -1,19 +1,19 @@
 {
   "fallback.llmError": {
-    "en": "Sorry, I had a problem talking to the model just now. Try again in a moment.",
-    "pt-br": "Desculpe, tive um problema ao me comunicar com o modelo agora. Tenta de novo em instantes."
+    "en": "I could not reach the model just now. Try again in a moment.",
+    "pt-br": "Não consegui falar com o modelo agora. Tente de novo em instantes."
   },
   "fallback.noAnswer": {
-    "en": "I could not generate an answer.",
-    "pt-br": "Não consegui gerar uma resposta."
+    "en": "I could not put an answer together.",
+    "pt-br": "Não consegui montar uma resposta."
   },
   "fallback.noApiKey": {
     "en": "Configure DEEPSEEK_API_KEY in agent/.env so the agent can reply.",
     "pt-br": "Configure DEEPSEEK_API_KEY no agent/.env para o agente responder."
   },
   "fallback.stepLimit": {
-    "en": "I reached the step limit. Here is what I have so far — refine the request if you need.",
-    "pt-br": "Atingi o limite de passos. Respondo com o que consegui até aqui — refinem o pedido se precisar."
+    "en": "I hit the step limit. Here is what I have so far — refine the request if you need.",
+    "pt-br": "Atingi o limite de passos. Aqui está o que consegui até agora — refine o pedido se precisar."
   },
   "proposal.addTracks": {
     "en": "Add {count} tracks to the playlist",
@@ -68,131 +68,159 @@
     "pt-br": "mensagem recebida"
   },
   "status.thinking": {
-    "en": "Analyzing…",
-    "pt-br": "Analisando…"
+    "en": "Picking the next record…",
+    "pt-br": "Escolhendo o próximo disco…"
   },
   "status.working": {
-    "en": "Working…",
-    "pt-br": "Trabalhando…"
+    "en": "Fiddling with the records…",
+    "pt-br": "Mexendo nos discos…"
   },
   "tool.add_tracks": {
-    "en": "adding tracks…",
-    "pt-br": "adicionando faixas…"
+    "en": "Shelving the tracks…",
+    "pt-br": "Arrumando as faixas na estante…"
   },
   "tool.artist_info": {
-    "en": "fetching artist bio…",
-    "pt-br": "buscando biografia do artista…"
+    "en": "Checking the Last.fm take…",
+    "pt-br": "Conferindo a versão da Last.fm…"
   },
   "tool.chart_lookup": {
-    "en": "checking charts…",
-    "pt-br": "consultando rankings…"
+    "en": "Checking the scoreboard…",
+    "pt-br": "Olhando o placar…"
   },
   "tool.create_playlist": {
-    "en": "creating playlist…",
-    "pt-br": "criando playlist…"
+    "en": "Building a new playlist (with a label)…",
+    "pt-br": "Montando a playlist nova (com etiqueta)…"
   },
   "tool.enrich_tracks": {
-    "en": "enriching track data…",
-    "pt-br": "enriquecendo dados das faixas…"
+    "en": "Filing the proper index cards…",
+    "pt-br": "Colocando ficha catalográfica nas faixas…"
   },
   "tool.get_artist": {
-    "en": "fetching artist info…",
-    "pt-br": "buscando informações do artista…"
+    "en": "Reading the official bio (sourced)…",
+    "pt-br": "Lendo a biografia oficial (com fonte)…"
   },
   "tool.get_audio_features_bulk": {
-    "en": "analyzing track features…",
-    "pt-br": "analisando características musicais…"
+    "en": "Weighing the audio features…",
+    "pt-br": "Pesando as características musicais…"
+  },
+  "tool.get_connect_devices": {
+    "en": "Hunting the speaker that wandered off…",
+    "pt-br": "Procurando a caixa de som que fugiu…"
+  },
+  "tool.get_currently_playing": {
+    "en": "Checking what's on air right now…",
+    "pt-br": "Checando o que está no ar agora…"
+  },
+  "tool.get_listening_recents": {
+    "en": "Rewinding the last few spins…",
+    "pt-br": "Rebobinando o que passou há pouco…"
+  },
+  "tool.get_player_queue": {
+    "en": "Reading the queue, professionally…",
+    "pt-br": "Lendo a fila com cara de quem fiscaliza…"
+  },
+  "tool.get_player_state": {
+    "en": "Peeking at the transport controls…",
+    "pt-br": "Espiando o transporte (play, pause e afins)…"
   },
   "tool.get_playlist_tracks": {
-    "en": "reading playlist tracks…",
-    "pt-br": "lendo faixas da playlist…"
+    "en": "Counting tracks without losing the hook…",
+    "pt-br": "Contando as faixas sem perder o refrão…"
   },
   "tool.get_playlists": {
-    "en": "reading your playlists…",
-    "pt-br": "lendo suas playlists…"
+    "en": "Opening the playlist drawer…",
+    "pt-br": "Abrindo a gaveta das playlists…"
   },
   "tool.get_recommendations": {
-    "en": "building recommendations…",
-    "pt-br": "montando recomendações…"
+    "en": "Testing combos at the counter…",
+    "pt-br": "Testando combinações no balcão…"
   },
   "tool.get_related_artists": {
-    "en": "looking up related artists…",
-    "pt-br": "buscando artistas relacionados…"
+    "en": "Pulling the thread to the next artist…",
+    "pt-br": "Puxando o fio até o artista vizinho…"
   },
   "tool.get_saved_tracks": {
-    "en": "reading saved tracks…",
-    "pt-br": "lendo músicas salvas…"
+    "en": "Revisiting what you saved (and forgot)…",
+    "pt-br": "Revisitando o que você salvou (e nem lembra)…"
   },
   "tool.get_several_artists": {
-    "en": "fetching artists…",
-    "pt-br": "buscando artistas…"
+    "en": "Filling out the index cards…",
+    "pt-br": "Montando a ficha de cada um…"
   },
   "tool.get_several_tracks": {
-    "en": "fetching tracks…",
-    "pt-br": "buscando faixas…"
+    "en": "Filling out the track cards…",
+    "pt-br": "Montando a ficha de cada faixa…"
   },
   "tool.get_top_artists": {
-    "en": "analyzing your artists…",
-    "pt-br": "analisando seus artistas…"
+    "en": "Weighing plays on the scale…",
+    "pt-br": "Pesando os plays no prato da balança…"
   },
   "tool.get_top_tracks": {
-    "en": "analyzing your tracks…",
-    "pt-br": "analisando suas músicas…"
+    "en": "Settling the podium…",
+    "pt-br": "Definindo o pódio…"
   },
   "tool.image_search": {
-    "en": "looking for images…",
-    "pt-br": "procurando imagens…"
+    "en": "Finding a cover that survives a zoom…",
+    "pt-br": "Procurando uma capa que aguente o close…"
   },
   "tool.lyrics_bulk": {
-    "en": "fetching lyrics…",
-    "pt-br": "buscando letras…"
+    "en": "Reading all the lyrics before judging…",
+    "pt-br": "Lendo as letras todas antes de julgar…"
   },
   "tool.lyrics_lookup": {
-    "en": "fetching lyrics…",
-    "pt-br": "buscando letra…"
+    "en": "Reading the lyrics before judging…",
+    "pt-br": "Lendo a letra antes de julgar…"
   },
   "tool.new_releases": {
-    "en": "fetching new releases…",
-    "pt-br": "buscando lançamentos…"
+    "en": "Checking what just dropped…",
+    "pt-br": "Verificando o que acabou de sair…"
+  },
+  "tool.player_control": {
+    "en": "Pressing the button (the right one)…",
+    "pt-br": "Apertando o botão (o certo, dessa vez)…"
+  },
+  "tool.player_queue_control": {
+    "en": "Rearranging the queue carefully…",
+    "pt-br": "Mexendo na fila com cuidado…"
   },
   "tool.prepare_cover": {
-    "en": "preparing cover…",
-    "pt-br": "preparando capa…"
+    "en": "Framing it properly…",
+    "pt-br": "Ajustando o enquadramento…"
   },
   "tool.remove_tracks": {
-    "en": "removing tracks…",
-    "pt-br": "removendo faixas…"
+    "en": "Taking them out carefully…",
+    "pt-br": "Tirando com cuidado…"
   },
   "tool.replace_playlist_tracks": {
-    "en": "updating tracks…",
-    "pt-br": "atualizando faixas…"
+    "en": "Swapping the whole setlist…",
+    "pt-br": "Trocando o repertório inteiro…"
   },
   "tool.search_spotify": {
-    "en": "searching on Spotify…",
-    "pt-br": "procurando no Spotify…"
+    "en": "Digging the whole catalog for one line…",
+    "pt-br": "Vasculhando o catálogo inteiro por uma linha…"
   },
   "tool.set_playlist_cover": {
-    "en": "updating cover…",
-    "pt-br": "atualizando capa…"
+    "en": "Pasting the cover on…",
+    "pt-br": "Colando a capa…"
   },
   "tool.set_playlist_details": {
-    "en": "updating playlist…",
-    "pt-br": "atualizando playlist…"
+    "en": "Rewriting the description nicely…",
+    "pt-br": "Reescrevendo a descrição bonitinha…"
   },
   "tool.similar_artists": {
-    "en": "finding similar artists…",
-    "pt-br": "buscando artistas similares…"
+    "en": "Looking for the sonic next of kin…",
+    "pt-br": "Procurando o parentesco sonoro…"
   },
   "tool.undo_last_mutation": {
-    "en": "undoing change…",
-    "pt-br": "desfazendo alteração…"
+    "en": "Undoing (the most underrated button)…",
+    "pt-br": "Voltando atrás (o botão mais subestimado)…"
   },
   "tool.web_search": {
-    "en": "searching the web…",
-    "pt-br": "pesquisando na web…"
+    "en": "Stepping out to ask someone…",
+    "pt-br": "Saindo para a rua perguntar a alguém…"
   },
   "tool.weekly_report": {
-    "en": "generating report…",
-    "pt-br": "gerando relatório…"
+    "en": "Wrapping up the week…",
+    "pt-br": "Fechando a semana em revista…"
   }
 }

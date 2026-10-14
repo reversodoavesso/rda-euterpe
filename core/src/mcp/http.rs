@@ -44,6 +44,18 @@ fn wants_sse(headers: &HeaderMap) -> bool {
 
 /// `POST /mcp`
 pub async fn post(State(state): State<AppState>, headers: HeaderMap, body: String) -> Response {
+    // `mcpEnabled=false` no painel ⇒ o endpoint some (404), em vez de aceitar e
+    // ignorar: um cliente MCP tem que saber que o servidor não está lá.
+    if !state.effective().mcp_enabled {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "mcp_disabled",
+                "hint": "o servidor MCP está desligado no painel do Euterpe",
+            })),
+        )
+            .into_response();
+    }
     let state = Arc::new(state);
     let parsed = match serde_json::from_str::<Value>(&body) {
         Ok(v) => v,

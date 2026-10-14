@@ -6,6 +6,41 @@ de `PLAN-REFACTOR.md` (MCP + providers + UI + daemon Rust).
 
 ---
 
+# v2.1 — Auditoria de Código, Correção de Bugs nos Adapters, Design System e Hardening
+
+**Data:** 2026-10-14 · **Status:** Auditoria completa e correções aplicadas; todos os testes verdes.
+
+## Resumo das correções e melhorias
+
+1. **Gemini Adapter (`core/src/llm/adapters/gemini.rs`):**
+   - **Correção de chamada consecutiva de tools:** No Gemini, múltiplos turnos de `"user"` consecutivos disparam erro HTTP 400 (`functionResponse must follow functionCall`). A conversão canônica agora agrupa/mescla blocos contínuos de `functionResponse` dentro de um único turno `"user"` contendo múltiplos `parts`.
+   - Adicionado teste unitário `consecutive_tool_results_are_merged_into_a_single_turn()`.
+   - Removida variável redundante/inutilizada `seen_calls`.
+2. **Ollama Adapter (`core/src/llm/adapters/ollama.rs`):**
+   - **Mapeamento de `max_tokens`:** O campo `req.max_tokens` era ignorado na montagem do payload Ollama. Agora é repassado como `num_predict` no objeto `options`.
+   - Adicionado teste unitário `options_include_temperature_and_num_predict()`.
+3. **Settings Controller Race Condition (`core/src/http/settings.rs`):**
+   - Na rota `PUT /settings`, caso `activeProfile` viesse junto com `activeProvider` ou `activeModel`, a leitura do ID do perfil ativo resolvia o estado prévio do banco. Corrigido para priorizar `patch.active_profile`.
+   - Adicionado guard `patch.profiles.is_none()` para evitar sobrescrever a lista inteira de perfis ao atualizar apenas o perfil ativo.
+4. **Storage Controller (`core/src/http/storage.rs`):**
+   - Limpeza de aviso do clippy em `db_stats` eliminando operador `?` redundante.
+5. **SSE Cancel Token Simplification (`core/src/llm/loop.rs`):**
+   - Simplificação idiomática de `.map_or(false, |t| t.is_cancelled())` para `.is_some_and(|t| t.is_cancelled())`.
+6. **UI & Design System (`app/euterpe-app/`):**
+   - Correção de corrupção de caracteres UTF-8 (mojibake) em `app/euterpe-app/ui/ds.js`.
+   - Remoção de dead code legado em `app/euterpe-app/ui/chat.js` (resquícios das abas superiores e seletores obsoletos: `showSettings`, `providerOptions`, `mapModelIds`, estilos de tabs antigas).
+   - Validação de `canFlavor` em `chat.js` para checar `TOOL_FLAVOR[raw]`.
+   - Sincronização explícita de `meta` pós-patch em `app/euterpe-app/ui/settings.js`.
+   - Atualização das dicas de navegação por voz em `app/euterpe-app/lib/voice.js` para referenciar a nova navegação lateral (Rail).
+7. **Validação de Testes e Compilação:**
+   - 135 testes unitários em `core/` passando (100%).
+   - 14 testes de oráculo em `agent/` passando (100%).
+   - Testes de integração `profiles_api` passando (100%).
+   - `cargo check --all-targets` limpo com 0 warnings e 0 erros.
+   - Bundle de produção compilado via `npm run build` em `app/` (177.8 KiB).
+
+---
+
 # v2 — Refatoração completa (`PLAN-REFACTOR.md`, decisões D1–D6)
 
 **Data:** 2026-10-14 · **Baseline de partida:** `12dd2ae` · **Status:** F0–F5 e F7 aplicadas;

@@ -162,3 +162,37 @@ fn curation_routing_matches_the_node_hints() {
     assert!(!prompts::is_curation_request("determine o tempo"));
     assert!(!prompts::is_curation_request("pause"));
 }
+
+#[test]
+fn brand_voice_invariants_hold() {
+    // 1. Prompts de sistema carregam a seção VOICE (house style)
+    let en = prompts::system_prompt(Some("en"), false);
+    let pt = prompts::system_prompt(Some("pt-br"), false);
+
+    assert!(en.contains("VOICE (house style"));
+    assert!(pt.contains("VOICE (house style"));
+    assert!(en.contains("You are Euterpe, the resident music curator: a muse, not a tool"));
+    assert!(pt.contains("a Euterpe avisa"));
+
+    // 2. Proibição explícita de chamar-se "an AI" ou "virtual assistant"
+    assert!(en.contains("Never describe yourself as \"an AI\""));
+    assert!(pt.contains("Never describe yourself as \"an AI\""));
+
+    // 3. Proibição de fillers
+    assert!(en.contains("no filler openings or closings"));
+    assert!(pt.contains("Como posso ajudar?"));
+
+    // 4. Template de componentes nativos obrigatório
+    assert!(en.contains("COMPONENT TEMPLATES"));
+    assert!(en.contains("{{spotify:type:uri|Label}}"));
+    assert!(pt.contains("COMPONENT TEMPLATES"));
+    assert!(pt.contains("{{spotify:type:uri|Label}}"));
+
+    // 5. Sugestões proíbem fillers e emojis
+    let sugg_en = prompts::suggestions_prompt(Some("en"));
+    let sugg_pt = prompts::suggestions_prompt(Some("pt-br"));
+    assert!(sugg_en.contains("Never use generic filler"));
+    assert!(sugg_pt.contains("Never use generic filler"));
+    assert!(sugg_en.contains("Never use the {{spotify:...}} template, markdown or emojis"));
+    assert!(sugg_pt.contains("Never use the {{spotify:...}} template, markdown or emojis"));
+}

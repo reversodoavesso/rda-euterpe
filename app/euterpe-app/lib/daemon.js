@@ -101,6 +101,26 @@ export function testProvider(body) {
   });
 }
 
+// Mede a latência de um PERFIL e o daemon persiste a medida (a UI só mostra
+// latência observada; sem teste, mostra "—").
+export function testProfile(id) {
+  return request(`/profiles/${encodeURIComponent(id)}/test`, { method: "POST" });
+}
+
+// Página "Armazenamento": o que ocupa espaço e quanto.
+export function getStorage() {
+  return request("/storage");
+}
+
+// `scope`: history · snapshots · sessions · all (nunca implícito).
+export function eraseStorage(scope, sessionId) {
+  return request("/storage/erase", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(sessionId ? { scope, sessionId } : { scope }),
+  });
+}
+
 // Dados do painel MCP: clientes conectados + data dir (para o snippet stdio).
 export async function mcpInfo() {
   const out = { ok: false, clients: 0, version: null, dataDir: null, url: `${BASE}/mcp` };

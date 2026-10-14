@@ -116,17 +116,34 @@ function installDaemon() {
   const exeSrc = exeCandidates.find((p) => existsSync(p))
   if (exeSrc) {
     const exeDest = join(dir, exeName)
+    let copied = false
     try {
       copyFileSync(exeSrc, exeDest)
+      copied = true
       console.log(`copied  ${exeSrc}  ->  ${exeDest}`)
     } catch (err) {
-      // EBUSY/EPERM: o daemon está em execução a partir desse caminho e o
-      // Windows não deixa sobrescrever. Não é motivo para abortar a instalação
-      // do mod (que já foi aplicada) — avisamos e seguimos.
-      console.log(
-        `\n(não consegui atualizar o daemon em ${exeDest}: ${err.code || err.message})\n` +
-          ` pare o daemon (mesmo caminho, argumento --ensure cuida de subir de novo) e rode de novo.`
-      )
+      if ((err.code === 'EBUSY' || err.code === 'EPERM') && process.platform === 'win32') {
+        console.log(`\nDaemon em execução (${err.code}). Finalizando processo para atualizar o binário...`)
+        try {
+          execSync('taskkill /IM euterpe.exe /F', { stdio: 'ignore', shell: true })
+        } catch {}
+        try {
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
+          copyFileSync(exeSrc, exeDest)
+          copied = true
+          console.log(`copied  ${exeSrc}  ->  ${exeDest} (após parar processo)`)
+        } catch (retryErr) {
+          console.log(
+            `\n(não consegui atualizar o daemon em ${exeDest}: ${retryErr.code || retryErr.message})\n` +
+              ` pare o daemon manualmente e rode de novo.`
+          )
+        }
+      } else {
+        console.log(
+          `\n(não consegui atualizar o daemon em ${exeDest}: ${err.code || err.message})\n` +
+            ` pare o daemon e rode de novo.`
+        )
+      }
     }
     tryRun(`"${exeDest}" install-startup`, 'euterpe install-startup (atalho de Startup)')
   } else {

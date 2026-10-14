@@ -95,7 +95,6 @@ impl Gemini {
 pub fn to_wire(messages: &[Msg]) -> (Option<String>, Vec<Value>) {
     let mut system: Option<String> = None;
     let mut contents: Vec<Value> = Vec::new();
-    let mut seen_calls: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 
     for msg in messages {
         match msg {
@@ -115,7 +114,15 @@ pub fn to_wire(messages: &[Msg]) -> (Option<String>, Vec<Value>) {
                 for call in tool_calls {
                     let args: Value =
                         serde_json::from_str(&call.arguments).unwrap_or_else(|_| json!({}));
-                    parts.push(json!({ "functionCall": { "name": call.name, "args": args } }));
+                    let mut fc_part =
+                        json!({ "functionCall": { "name": call.name, "args": args } });
+                    // Gemini 2.5 / 3+ exige thoughtSignature no wire de functionCall em multi-turn
+                    let sig = call
+                        .thought_signature
+                        .as_deref()
+                        .unwrap_or("skip_thought_signature_validator");
+                    fc_part["thoughtSignature"] = json!(sig);
+                    parts.push(fc_part);
                 }
                 if !parts.is_empty() {
                     contents.push(json!({ "role": "model", "parts": parts }));
@@ -125,12 +132,33 @@ pub fn to_wire(messages: &[Msg]) -> (Option<String>, Vec<Value>) {
                 let name = id.split('#').next().unwrap_or(id);
                 let response: Value =
                     serde_json::from_str(content).unwrap_or_else(|_| json!({ "text": content }));
-                let entry = seen_calls.entry(name.to_string()).or_insert(0);
-                let _ = entry;
-                contents.push(json!({
-                    "role": "user",
-                    "parts": [{ "functionResponse": { "name": name, "response": response } }]
-                }));
+                let part = json!({ "functionResponse": { "name": name, "response": response } });
+                let merged = if let Some(last) = contents.last_mut() {
+                    if last.get("role").and_then(|r| r.as_str()) == Some("user") {
+                        if let Some(parts) = last.get_mut("parts").and_then(|p| p.as_array_mut()) {
+                            let only_func =
+                                parts.iter().all(|p| p.get("functionResponse").is_some());
+                            if only_func {
+                                parts.push(part.clone());
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if !merged {
+                    contents.push(json!({
+                        "role": "user",
+                        "parts": [part]
+                    }));
+                }
             }
         }
     }
@@ -147,8 +175,20 @@ pub fn parse_response(body: &Value) -> Completion {
     {
         let mut index = 0usize;
         for part in parts {
+            let is_thought = part
+                .get("thought")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             if let Some(t) = part.get("text").and_then(|v| v.as_str()) {
-                text.push_str(t);
+                if is_thought {
+                    if let Some(ref mut r) = out.reasoning {
+                        r.push_str(t);
+                    } else {
+                        out.reasoning = Some(t.to_string());
+                    }
+                } else {
+                    text.push_str(t);
+                }
             }
             if let Some(call) = part.get("functionCall") {
                 if let Some(name) = call.get("name").and_then(|v| v.as_str()) {
@@ -158,24 +198,29 @@ pub fn parse_response(body: &Value) -> Completion {
                     } else {
                         format!("{name}#{index}")
                     };
+                    let sig = part
+                        .get("thoughtSignature")
+                        .or_else(|| part.get("thought_signature"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
                     index += 1;
                     out.tool_calls.push(ToolCall {
                         id,
                         name: name.to_string(),
                         arguments: args.to_string(),
+                        thought_signature: sig,
                     });
                 }
             }
-            if let Some(thought) = part.get("thought").and_then(|v| v.as_bool()) {
-                let _ = thought;
-            }
         }
     }
-    if let Some(thought) = body
-        .pointer("/candidates/0/content/parts/0/thought")
-        .and_then(|v| v.as_str())
-    {
-        out.reasoning = Some(thought.to_string());
+    if out.reasoning.is_none() {
+        if let Some(thought) = body
+            .pointer("/candidates/0/content/parts/0/thought")
+            .and_then(|v| v.as_str())
+        {
+            out.reasoning = Some(thought.to_string());
+        }
     }
     if !text.is_empty() {
         out.text = Some(text);
@@ -366,11 +411,7 @@ mod tests {
     fn assistant_tool_calls_become_function_call_parts() {
         let (_s, contents) = to_wire(&[Msg::Assistant {
             text: None,
-            tool_calls: vec![ToolCall {
-                id: "add_tracks".into(),
-                name: "add_tracks".into(),
-                arguments: r#"{"a":1}"#.into(),
-            }],
+            tool_calls: vec![ToolCall::new("add_tracks", "add_tracks", r#"{"a":1}"#)],
         }]);
         assert_eq!(contents[0]["role"], "model");
         assert_eq!(
@@ -378,6 +419,20 @@ mod tests {
             "add_tracks"
         );
         assert_eq!(contents[0]["parts"][0]["functionCall"]["args"]["a"], 1);
+        assert_eq!(
+            contents[0]["parts"][0]["thoughtSignature"],
+            "skip_thought_signature_validator"
+        );
+    }
+
+    #[test]
+    fn to_wire_preserves_explicit_thought_signature() {
+        let (_s, contents) = to_wire(&[Msg::Assistant {
+            text: None,
+            tool_calls: vec![ToolCall::new("get_track", "get_track", "{}")
+                .with_thought_signature(Some("test_sig_123".into()))],
+        }]);
+        assert_eq!(contents[0]["parts"][0]["thoughtSignature"], "test_sig_123");
     }
 
     #[test]
@@ -386,6 +441,25 @@ mod tests {
         let part = &contents[0]["parts"][0]["functionResponse"];
         assert_eq!(part["name"], "get_playlists");
         assert_eq!(part["response"]["ok"], true);
+    }
+
+    #[test]
+    fn consecutive_tool_results_are_merged_into_a_single_turn() {
+        let (_s, contents) = to_wire(&[
+            Msg::tool("get_playlists", r#"{"ok":true}"#),
+            Msg::tool("get_artist#1", r#"{"name":"miles"}"#),
+        ]);
+        assert_eq!(
+            contents.len(),
+            1,
+            "deve ser mesclado num único turno de usuário"
+        );
+        assert_eq!(contents[0]["role"], "user");
+        let parts = contents[0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0]["functionResponse"]["name"], "get_playlists");
+        assert_eq!(parts[1]["functionResponse"]["name"], "get_artist");
+        assert_eq!(parts[1]["functionResponse"]["response"]["name"], "miles");
     }
 
     #[test]
@@ -403,15 +477,23 @@ mod tests {
     fn parses_function_call_and_synthesizes_ids() {
         let body = json!({
             "candidates": [{"content": {"parts": [
-                {"functionCall": {"name": "search_spotify", "args": {"q": "miles"}}},
+                {
+                    "functionCall": {"name": "search_spotify", "args": {"q": "miles"}},
+                    "thoughtSignature": "sig_abc"
+                },
                 {"functionCall": {"name": "search_spotify", "args": {"q": "coltrane"}}}
             ]}}]
         });
         let c = parse_response(&body);
         assert_eq!(c.tool_calls.len(), 2);
         assert_eq!(c.tool_calls[0].id, "search_spotify");
+        assert_eq!(
+            c.tool_calls[0].thought_signature.as_deref(),
+            Some("sig_abc")
+        );
         assert_eq!(c.tool_calls[1].id, "search_spotify#1");
         assert_eq!(c.tool_calls[1].name, "search_spotify");
+        assert_eq!(c.tool_calls[1].thought_signature, None);
     }
 
     #[test]

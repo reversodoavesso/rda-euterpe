@@ -167,15 +167,11 @@ pub fn from_wire(system: Option<&str>, messages: &[Value]) -> Vec<Msg> {
                 }
                 "tool_use" => {
                     if let Some(name) = block.get("name").and_then(|v| v.as_str()) {
-                        tool_calls.push(ToolCall {
-                            id: block
-                                .get("id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                            name: name.to_string(),
-                            arguments: block.get("input").cloned().unwrap_or(json!({})).to_string(),
-                        });
+                        tool_calls.push(ToolCall::new(
+                            block.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                            name,
+                            block.get("input").cloned().unwrap_or(json!({})).to_string(),
+                        ));
                     }
                 }
                 "tool_result" => {
@@ -321,11 +317,7 @@ impl LlmAdapter for Anthropic {
                             } else {
                                 tool_json.clone()
                             };
-                            let call = ToolCall {
-                                id: tool_id.clone(),
-                                name: tool_name.clone(),
-                                arguments: args,
-                            };
+                            let call = ToolCall::new(tool_id.clone(), tool_name.clone(), args);
                             current_tools.push(call.clone());
                             let _ = tx.send(LlmEvent::ToolCall(call)).await;
                         }
@@ -447,11 +439,7 @@ mod tests {
     fn assistant_tool_calls_become_tool_use_blocks() {
         let (_s, messages) = to_wire(&[Msg::Assistant {
             text: Some("vou buscar".into()),
-            tool_calls: vec![ToolCall {
-                id: "tu_1".into(),
-                name: "get_playlists".into(),
-                arguments: r#"{"limit":5}"#.into(),
-            }],
+            tool_calls: vec![ToolCall::new("tu_1", "get_playlists", r#"{"limit":5}"#)],
         }]);
         let blocks = messages[0]["content"].as_array().unwrap();
         assert_eq!(blocks.len(), 2);
@@ -486,11 +474,7 @@ mod tests {
             Msg::user("oi"),
             Msg::Assistant {
                 text: Some("claro".into()),
-                tool_calls: vec![ToolCall {
-                    id: "tu".into(),
-                    name: "search_spotify".into(),
-                    arguments: r#"{"q":"miles"}"#.into(),
-                }],
+                tool_calls: vec![ToolCall::new("tu", "search_spotify", r#"{"q":"miles"}"#)],
             },
             Msg::tool("tu", r#"{"ok":true,"data":[]}"#),
         ];

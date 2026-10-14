@@ -12,9 +12,30 @@ pub struct ToolCall {
     /// Argumentos **crus** (string JSON), como vêm do wire: o loop precisa
     /// preservar exatamente o que o provider mandou para reenviar no histórico.
     pub arguments: String,
+    /// Assinatura criptográfica de pensamento (exigida por Gemini 2.5 / 3+ em multi-turn)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thought_signature: Option<String>,
 }
 
 impl ToolCall {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            arguments: arguments.into(),
+            thought_signature: None,
+        }
+    }
+
+    pub fn with_thought_signature(mut self, sig: Option<String>) -> Self {
+        self.thought_signature = sig;
+        self
+    }
+
     pub fn parsed_args(&self) -> serde_json::Value {
         serde_json::from_str(&self.arguments).unwrap_or_else(|_| serde_json::json!({}))
     }
@@ -217,27 +238,15 @@ mod tests {
 
     #[test]
     fn tool_call_arguments_are_preserved_raw() {
-        let tc = ToolCall {
-            id: "a".into(),
-            name: "add_tracks".into(),
-            arguments: r#"{"playlist_id":"p","uris":["x"]}"#.into(),
-        };
+        let tc = ToolCall::new("a", "add_tracks", r#"{"playlist_id":"p","uris":["x"]}"#);
         assert_eq!(tc.parsed_args()["playlist_id"], "p");
     }
 
     #[test]
     fn broken_arguments_degrade_to_empty_object() {
-        let tc = ToolCall {
-            id: "a".into(),
-            name: "n".into(),
-            arguments: "{oops".into(),
-        };
+        let tc = ToolCall::new("a", "n", "{oops");
         assert_eq!(tc.parsed_args(), serde_json::json!({}));
-        let tc = ToolCall {
-            id: "a".into(),
-            name: "n".into(),
-            arguments: String::new(),
-        };
+        let tc = ToolCall::new("a", "n", "");
         assert_eq!(tc.parsed_args(), serde_json::json!({}));
     }
 }

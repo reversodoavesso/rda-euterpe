@@ -105,11 +105,7 @@ async fn complete_parses_tool_calls_and_usage() {
     assert_eq!(done.usage, Some((10, 3)));
     assert_eq!(
         done.tool_calls,
-        vec![ToolCall {
-            id: "call_1".to_string(),
-            name: "add_tracks".to_string(),
-            arguments: "{\"uris\":[\"x\"]}".to_string(),
-        }]
+        vec![ToolCall::new("call_1", "add_tracks", "{\"uris\":[\"x\"]}")]
     );
     assert_eq!(done.tool_calls[0].parsed_args()["uris"][0], "x");
 }
@@ -197,11 +193,7 @@ async fn tool_call_deltas_split_across_chunks_merge_into_one_call() {
     assert_eq!(
         events,
         vec![
-            LlmEvent::ToolCall(ToolCall {
-                id: "call_1".to_string(),
-                name: "add_tracks".to_string(),
-                arguments: r#"{"uris":["x"]}"#.to_string(),
-            }),
+            LlmEvent::ToolCall(ToolCall::new("call_1", "add_tracks", r#"{"uris":["x"]}"#)),
             LlmEvent::Done,
         ]
     );

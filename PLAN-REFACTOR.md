@@ -361,6 +361,44 @@ json (stdio): {"mcpServers":{"euterpe":{"command":"C:\\Users\\<user>\\AppData\\R
 
 **DoD:** painel de setup com (a) providers/modelos/chaves + botão "testar" e (b) MCP com instruções; chat com os itens do checklist.
 
+**Camada DS (aplicada) — `app/euterpe-app/ui/ds.js`**
+
+A UI não desenha componente à mão: o que é widget sai de `ui/ds.js`, que é a cópia da tela
+de configurações **nativa** do Spotify. Divisão explícita:
+
+| Peça | Origem | Por quê |
+|---|---|---|
+| texto, toggle, botões, tooltip | `Spicetify.ReactComponent.*` | são os componentes do próprio client, expostos pelo spicetify |
+| select, input, textarea, linha de setting, painel, item de lista, badge | markup + CSS copiado | **não** existem em `Spicetify.ReactComponent`; a tela nativa também usa `<select>` cru + classe |
+| cor, espaço, raio, tipografia | tokens do Encore (`--encore-*`, `--background-*`, `--text-*`, `--essential-*`, `--decorative-*`) | zero hex inventado no JSX |
+
+Fonte da verdade (ler do client instalado, nunca de memória):
+
+```
+%APPDATA%\Spotify\Apps\xpui\xpui-routes-desktop-settings.js    # estrutura (linha de setting, toggle, select)
+%APPDATA%\Spotify\Apps\xpui\xpui-routes-desktop-settings.css   # declarações (a classe com hash de origem)
+%APPDATA%\Spotify\Apps\xpui\xpui-snapshot.css                  # tokens do Encore sob .encore-dark-theme
+%LOCALAPPDATA%\spicetify\jsHelper\spicetifyWrapper.js          # o que o spicetify realmente expõe
+```
+
+**Fallback é obrigatório** (`rc()` resolve no render): se o componente nativo não existir
+na versão instalada, o markup copiado assume. Motivo medido: o `Toggle` é detectado pelo
+wrapper por heurística (`["onSelected", 'type:"checkbox"']`) e o módulo mora no **chunk da
+rota de Settings** — se a tela nativa nunca foi aberta, pode não estar no cache. O fallback
+usa o **mesmo CSS** nativo, então a aparência não muda.
+
+Gate da camada: `node app/build.mjs` + harness de render (32 passes, com e sem os
+componentes nativos). O harness vive fora do repo: `%TEMP%\opencode\euterpe-ui-harness.mjs`.
+
+**Armadilhas pagas nesta camada** (não repita):
+
+| Armadilha | Consequência / correção |
+|---|---|
+| `nativeIcon(nome)` com nome que não existe no client | devolve `null` **em silêncio** → botão invisível (foi o caso do `ban`). A lista real é `Object.keys(Spicetify.SVGIcons)` (77 ícones em 1.3.4; **não** há `ban`/`trash`/`delete`). Sempre `nativeIcon(...) \|\| fallback` |
+| `width: 100%` (do `.ds-item`) + `margin` lateral | estoura a largura e abre **barra horizontal** no rail. O recuo vem do padding do container; texto longo quebra com `ellipsis` |
+| Componente do Encore sem `box-sizing: border-box` | `padding` soma à largura declarada e estoura o container — a camada declara border-box para `.ds-*` |
+| Backtick dentro do template literal do CSS (mesmo em comentário) | fecha a string e o resto da folha vira código JS. O check de CSS procura backtick cru na fonte |
+
 ---
 
 ## Fase 7 — Cutover e docs

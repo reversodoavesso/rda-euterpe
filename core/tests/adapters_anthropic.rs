@@ -107,11 +107,7 @@ async fn tool_use_input_json_is_assembled_from_partial_deltas() {
     assert_eq!(
         events,
         vec![
-            LlmEvent::ToolCall(ToolCall {
-                id: "toolu_1".to_string(),
-                name: "get_playlists".to_string(),
-                arguments: r#"{"limit": 5}"#.to_string(),
-            }),
+            LlmEvent::ToolCall(ToolCall::new("toolu_1", "get_playlists", r#"{"limit": 5}"#)),
             LlmEvent::Done,
         ]
     );

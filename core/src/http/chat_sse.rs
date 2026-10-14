@@ -69,6 +69,15 @@ pub fn to_sse(msg: &ServerMsg) -> Option<(&'static str, Value)> {
     }
 }
 
+struct DropCancel(Option<tokio_util::sync::CancellationToken>);
+impl Drop for DropCancel {
+    fn drop(&mut self) {
+        if let Some(t) = self.0.take() {
+            t.cancel();
+        }
+    }
+}
+
 pub async fn chat(
     State(state): State<AppState>,
     Json(req): Json<ChatRequest>,
@@ -80,6 +89,9 @@ pub async fn chat(
     let locale = crate::i18n::normalize_locale(req.locale.as_deref()).to_string();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ServerMsg>();
 
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+    let drop_guard = DropCancel(Some(cancel_token.clone()));
+
     let state = Arc::new(state);
     let task_state = AppState::clone(&state);
     let text = req.text.clone();
@@ -89,7 +101,7 @@ pub async fn chat(
             upstream.chat(&session_id, &text, Some(&locale)).await;
             return;
         }
-        let eff = task_state.effective();
+        let eff = task_state.effective_for_session(Some(&session_id));
         let adapter = crate::providers::registry::active(&task_state.cfg, &eff).ok();
         let deps = crate::llm::ChatDeps {
             cfg: &task_state.cfg,
@@ -102,18 +114,19 @@ pub async fn chat(
             adapter,
             // Caminho SSE: deltas reais (a UI nova mostra o texto enquanto sai).
             stream_deltas: true,
+            cancel_token: Some(cancel_token),
         };
         crate::llm::handle_chat(&deps, &text).await;
         drop(tx);
     });
 
-    let stream = stream::unfold(rx, |mut rx| async move {
+    let stream = stream::unfold((rx, drop_guard), |(mut rx, drop_guard)| async move {
         loop {
             match rx.recv().await {
                 Some(msg) => {
                     if let Some((name, data)) = to_sse(&msg) {
                         let event = Event::default().event(name).data(data.to_string());
-                        return Some((Ok::<Event, Infallible>(event), rx));
+                        return Some((Ok::<Event, Infallible>(event), (rx, drop_guard)));
                     }
                 }
                 None => return None,

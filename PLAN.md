@@ -62,13 +62,14 @@ Centro agentic pessoal dentro do client oficial do Spotify (desktop, Windows/Lin
 | F9 | Merge/dedupe | Junta 2+ playlists removendo duplicatas (por URI), preserva ordem |
 | F10 | Higiene | Identifica faixas não disponíveis/sem plays e propõe remoção com confirmação |
 | F11 | Radar de lançamentos | Charts + websearch de releases de artistas similares aos top → playlist de descobertas |
-| F12 | Roteamento automático | `songchange` → agente classifica vibe → sugere adicionar na playlist Y (confirmação configurável) |
+| F12 | Roteamento automático (Backlog/Desativado) | *Desativado por padrão (delicado/custoso). Redesenho inteligente futuro requer heurística pré-LLM (verificar se faixa já pertence à playlist tocada ou à biblioteca antes de chamar LLM; filtrar apenas faixas recém-descobertas/rádios; debounce/cooldown).* |
 | F13 | Relatório semanal | Resumo em texto natural (gêneros, artistas, novidades), sob demanda ou agendado |
 | F14 | Título/descrição | Gerados pelo agente ao criar playlist |
 | F15 | Capa da playlist | Conceito+termos → Openverse (fallback SearXNG images) → galeria → seleção → resize → upload |
 | F16 | Playlist por letras×mood×artistas/gêneros | Comando composto combina F2+F5+F6+F7 |
 
-### 2.4 Fora de escopo (v1)
+### 2.4 Fora de escopo (v1) e Backlog
+- Roteamento ingênuo por songchange (desativado: chamava LLM para qualquer música sem verificar contexto de reprodução ou duplicações).
 - Controle de playback/queue (premium-only; adicionável depois).
 - Geração de imagem por IA (capa vem de busca de imagens reais).
 - Extensão de browser / mobile / multi-usuário / distribuição pública.

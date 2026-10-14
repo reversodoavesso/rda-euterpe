@@ -36,7 +36,7 @@ struct Inner {
 
 /// Conexão de espelho compartilhada por todo o processo.
 pub struct Upstream {
-    url: String,
+    url: parking_lot::RwLock<String>,
     secret: String,
     inner: Mutex<Inner>,
 }
@@ -44,14 +44,18 @@ pub struct Upstream {
 impl Upstream {
     pub fn new(cfg: &Config) -> Self {
         Self {
-            url: cfg.chat_upstream.clone(),
+            url: parking_lot::RwLock::new(cfg.chat_upstream.clone()),
             secret: cfg.ws_secret.clone(),
             inner: Mutex::new(Inner::default()),
         }
     }
 
+    pub fn set_url(&self, url: &str) {
+        *self.url.write() = url.to_string();
+    }
+
     pub fn enabled(&self) -> bool {
-        !self.url.trim().is_empty()
+        !self.url.read().trim().is_empty()
     }
 
     /// Registra o sink de uma conexão local (recebe tudo que desce do Node).
@@ -113,14 +117,14 @@ impl Upstream {
         state: AppState,
         mut out_rx: mpsc::UnboundedReceiver<ClientMsg>,
     ) -> anyhow::Result<()> {
-        let connect =
-            tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(&self.url));
+        let url = self.url.read().clone();
+        let connect = tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(&url));
         let (stream, _) = match connect.await {
             Ok(Ok(pair)) => pair,
             Ok(Err(err)) => anyhow::bail!("upstream_connect:{err}"),
             Err(_) => anyhow::bail!("upstream_connect:timeout"),
         };
-        tracing::info!(url = %self.url, "upstream: conectado ao agente Node (Fase 2 / D6)");
+        tracing::info!(url = %url, "upstream: conectado ao agente Node (Fase 2 / D6)");
         let (mut ws_tx, mut ws_rx) = stream.split();
 
         let hello = ClientMsg::Hello {

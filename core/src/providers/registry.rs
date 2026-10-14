@@ -55,14 +55,34 @@ pub fn build(
     Ok(adapter)
 }
 
-/// Resolve o adapter ativo (provider + modelo efetivos).
-pub fn active(cfg: &Config, eff: &EffectiveConfig) -> anyhow::Result<Arc<dyn LlmAdapter>> {
-    resolve(cfg, &eff.active_provider, &eff.active_model)
+/// Resolve o adapter de curadoria (papel `curation`; default: o modelo forte do
+/// mesmo provider — ver `EffectiveConfig::curation_profile`).
+pub fn curation(cfg: &Config, eff: &EffectiveConfig) -> anyhow::Result<Arc<dyn LlmAdapter>> {
+    resolve(cfg, &eff.curation_provider, &eff.curation_model)
 }
 
-/// Resolve o adapter de curadoria (modelo forte do mesmo provider).
-pub fn curation(cfg: &Config, eff: &EffectiveConfig) -> anyhow::Result<Arc<dyn LlmAdapter>> {
-    resolve(cfg, &eff.active_provider, &eff.curation_model)
+/// Resolve o adapter de um perfil explícito (teste de conexão da UI), honrando
+/// o `base_url` do próprio perfil.
+pub fn for_profile(
+    cfg: &Config,
+    profile: &crate::config::ModelProfile,
+) -> anyhow::Result<Arc<dyn LlmAdapter>> {
+    resolve_with(
+        cfg,
+        &profile.provider,
+        &profile.model,
+        profile.base_url.as_deref(),
+    )
+}
+
+/// Resolve o adapter ativo, honrando o `base_url` do perfil ativo.
+pub fn active(cfg: &Config, eff: &EffectiveConfig) -> anyhow::Result<Arc<dyn LlmAdapter>> {
+    resolve_with(
+        cfg,
+        &eff.active_provider,
+        &eff.active_model,
+        eff.active_base_url.as_deref(),
+    )
 }
 
 /// Resolve `provider_id` + `model` explícitos.
@@ -71,34 +91,57 @@ pub fn resolve(
     provider_id: &str,
     model: &str,
 ) -> anyhow::Result<Arc<dyn LlmAdapter>> {
+    resolve_with(cfg, provider_id, model, None)
+}
+
+/// Igual a [`resolve`], mas permite trocar o `base_url` (perfil local/custom).
+pub fn resolve_with(
+    cfg: &Config,
+    provider_id: &str,
+    model: &str,
+    base_url: Option<&str>,
+) -> anyhow::Result<Arc<dyn LlmAdapter>> {
     let provider = cfg
         .provider(provider_id)
         .ok_or_else(|| anyhow::anyhow!("unknown_provider:{provider_id}"))?;
-    let key = secrets::provider_key(provider_id);
-    build(provider, key, model)
+    let key = secrets::provider_key_at(&cfg.data_dir, provider_id);
+    match base_url.map(str::trim).filter(|u| !u.is_empty()) {
+        Some(url) => {
+            let spec = crate::config::ProviderConfig {
+                base_url: url.to_string(),
+                ..provider.clone()
+            };
+            build(&spec, key, model)
+        }
+        None => build(provider, key, model),
+    }
 }
 
 /// Catálogo de providers visível para a UI (`GET /providers`).
 ///
 /// **Nunca** devolve a chave — só `has_key` (regra do PLAN-REFACTOR §F4).
 pub fn public_listing(cfg: &Config) -> Vec<serde_json::Value> {
-    let mut known: Vec<&ProviderConfig> = cfg.providers.iter().collect();
+    // `true` = está salvo em config.json (o usuário adicionou esse provider).
+    // Os presets entram com `false` só para alimentar o seletor "adicionar".
+    let mut known: Vec<(&ProviderConfig, bool)> = cfg.providers.iter().map(|p| (p, true)).collect();
     for id in ProviderConfig::preset_ids() {
-        if !known.iter().any(|p| &p.id == id) {
+        let already = known.iter().any(|(p, _)| p.id == *id);
+        if !already {
             if let Some(p) = ProviderConfig::preset(id) {
-                known.push(Box::leak(Box::new(p)));
+                known.push((Box::leak(Box::new(p)), false));
             }
         }
     }
     known
         .into_iter()
-        .map(|p| {
+        .map(|(p, configured)| {
             serde_json::json!({
                 "id": p.id,
                 "name": if p.name.is_empty() { p.id.clone() } else { p.name.clone() },
                 "kind": p.kind,
                 "baseUrl": p.base_url,
-                "hasKey": secrets::has_provider_key(&p.id),
+                "configured": configured,
+                "hasKey": secrets::has_provider_key_at(&cfg.data_dir, &p.id),
                 "needsKey": !secrets::key_optional(p.kind),
                 "models": p.models,
                 "defaultModel": p.default_model,

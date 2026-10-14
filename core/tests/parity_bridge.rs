@@ -193,7 +193,11 @@ async fn multiple_clients_keep_only_the_most_recent_active() {
 
 #[tokio::test]
 async fn chat_send_without_provider_answers_with_fallback_and_done() {
-    let daemon = spawn().await;
+    let daemon = spawn_with(|cfg| {
+        cfg.providers.clear();
+        cfg.active_provider.clear();
+    })
+    .await;
     let mut ws = connect_extension(&daemon).await;
     let (_, _) = recv_until(&mut ws, "hello.ok").await;
     send(

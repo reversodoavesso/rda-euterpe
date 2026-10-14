@@ -26,7 +26,7 @@ pub async fn handle_chat_send(
         upstream.chat(&session_id, &text, Some(&locale)).await;
         return;
     }
-    let eff = state.effective();
+    let eff = state.effective_for_session(Some(&session_id));
     let adapter = crate::providers::registry::active(&state.cfg, &eff).ok();
     let deps = crate::llm::ChatDeps {
         cfg: &state.cfg,
@@ -39,6 +39,7 @@ pub async fn handle_chat_send(
         adapter,
         // Caminho WS: paridade total com o Node (chunks de 40 chars no fim).
         stream_deltas: false,
+        cancel_token: None,
     };
     crate::llm::handle_chat(&deps, &text).await;
 }
@@ -56,7 +57,9 @@ pub async fn handle_song_change(
         "songchange.event",
         Some(serde_json::json!({ "uri": uri })),
     );
-    let eff = state.effective();
+    // A sessão de roteamento é fixa ("routing"), mas passar por
+    // `effective_for_session` mantém uma porta só para override de perfil.
+    let eff = state.effective_for_session(Some("routing"));
     let adapter = crate::providers::registry::active(&state.cfg, &eff).ok();
     let deps = crate::llm::ChatDeps {
         cfg: &state.cfg,
@@ -68,6 +71,7 @@ pub async fn handle_song_change(
         locale,
         adapter,
         stream_deltas: false,
+        cancel_token: None,
     };
     crate::llm::handle_song_change(&deps, &uri).await;
 }

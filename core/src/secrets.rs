@@ -118,13 +118,17 @@ fn hex(bytes: &[u8]) -> String {
 
 /// Segredo do handshake WS. Espelha `loadSecret()` de `agent/src/config.ts`.
 pub fn ws_secret() -> anyhow::Result<String> {
+    ws_secret_at(&paths::data_dir())
+}
+
+pub fn ws_secret_at(data_dir: &Path) -> anyhow::Result<String> {
     if let Ok(v) = std::env::var("WS_SECRET") {
         if !v.trim().is_empty() {
             return Ok(v.trim().to_string());
         }
     }
     let _guard = SECRETS_LOCK.lock();
-    let file = paths::ws_secret_file();
+    let file = data_dir.join("ws-secret");
     if let Ok(raw) = std::fs::read_to_string(&file) {
         let trimmed = raw.trim().to_string();
         if !trimmed.is_empty() {
@@ -151,9 +155,13 @@ pub fn ws_secret() -> anyhow::Result<String> {
 
 /// Chave de API do provider (`None` quando não configurada).
 pub fn provider_key(provider: &str) -> Option<String> {
+    provider_key_at(&paths::data_dir(), provider)
+}
+
+pub fn provider_key_at(data_dir: &Path, provider: &str) -> Option<String> {
     {
         let _guard = SECRETS_LOCK.lock();
-        let map = load_file(&paths::secrets_file());
+        let map = load_file(&data_dir.join("secrets.json"));
         if let Some(v) = map.get(provider) {
             if !v.trim().is_empty() {
                 return Some(v.clone());
@@ -176,12 +184,20 @@ pub fn provider_key(provider: &str) -> Option<String> {
 }
 
 pub fn has_provider_key(provider: &str) -> bool {
-    provider_key(provider).is_some()
+    has_provider_key_at(&paths::data_dir(), provider)
+}
+
+pub fn has_provider_key_at(data_dir: &Path, provider: &str) -> bool {
+    provider_key_at(data_dir, provider).is_some()
 }
 
 pub fn set_provider_key(provider: &str, key: &str) -> anyhow::Result<()> {
+    set_provider_key_at(&paths::data_dir(), provider, key)
+}
+
+pub fn set_provider_key_at(data_dir: &Path, provider: &str, key: &str) -> anyhow::Result<()> {
     let _guard = SECRETS_LOCK.lock();
-    let path = paths::secrets_file();
+    let path = data_dir.join("secrets.json");
     let mut map = load_file(&path);
     let trimmed = key.trim();
     if trimmed.is_empty() {
@@ -193,8 +209,12 @@ pub fn set_provider_key(provider: &str, key: &str) -> anyhow::Result<()> {
 }
 
 pub fn delete_provider_key(provider: &str) -> anyhow::Result<()> {
+    delete_provider_key_at(&paths::data_dir(), provider)
+}
+
+pub fn delete_provider_key_at(data_dir: &Path, provider: &str) -> anyhow::Result<()> {
     let _guard = SECRETS_LOCK.lock();
-    let path = paths::secrets_file();
+    let path = data_dir.join("secrets.json");
     let mut map = load_file(&path);
     map.remove(provider);
     save_file(&path, &map)
