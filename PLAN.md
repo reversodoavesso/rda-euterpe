@@ -12,7 +12,7 @@ Centro agentic pessoal dentro do client oficial do Spotify (desktop, Windows/Lin
 | Plataforma | Spicetify desktop (Windows + Linux), extensão única |
 | UI | Custom App (chat em painel React nativo) + Extension (eventos `songchange`) |
 | Base de código | Fork estrutural de `harbassan/spicetify-apps` + scaffold `create-spicetify-app` |
-| Agente | Servidor local Node/TS, **Fastify + ws** (100% open-source) |
+| Agente | Servidor local Node/TS, **Fastify + ws** (100% open-source) → *superseded por D1/D6 (`PLAN-REFACTOR.md`): daemon Rust autocontido + extensão fina* |
 | LLM | DeepSeek via SDK `openai` (`baseURL https://api.deepseek.com`); `deepseek-v4-flash` (chat) / `deepseek-v4-pro` (curadoria) |
 | Dados Spotify | API interna via `Spicetify.CosmosAsync` (sem OAuth) |
 | Mutações | Sempre com confirmação + snapshot/undo |
@@ -24,9 +24,13 @@ Centro agentic pessoal dentro do client oficial do Spotify (desktop, Windows/Lin
 | Persistência | SQLite (`better-sqlite3`) no agente |
 | WS local | `127.0.0.1:8337` + segredo de handshake |
 | Visão p/ capas | Pós-MVP (`deepseek-v4-flash-vision-exp`) |
-| Embeddings/MCP | Fora do MVP (documentado como roadmap futuro) |
+| Embeddings/MCP | Embeddings fora do MVP; **MCP passa a ser escopo** — ver D5/D6 em `PLAN-REFACTOR.md` |
 | Distribuição | Uso pessoal, repositório privado/local |
 | Idioma | PT-BR |
+
+> **Refatoração v2 (especificação aprovada):** `PLAN-REFACTOR.md` — MCP nativo, providers de LLM
+> configuráveis, UI de setup e daemon autocontido em Rust. Decisões D1-D6, contrato congelado
+> C1-C12, fases F0-F7 e pendências com gatilho. Este documento segue canônico para a v1.
 
 ---
 

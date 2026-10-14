@@ -20,6 +20,9 @@ agent/data/ws-secret
 # Evidencia de probe: regeneravel via GET /probe e acoplada a versao do Spotify
 # (evita sujar o working tree a cada execucao durante a migracao)
 agent/data/probes/
+# Corpus de replay (PLAN-REFACTOR.md, gate da Fase 2): contem termos de busca e
+# nomes de playlists do usuario -> dado pessoal, gerado localmente, fora do repo
+core/tests/fixtures/sessions/
 agent/data/*.db
 agent/data/*.db-journal
 agent/data/*.db-wal
