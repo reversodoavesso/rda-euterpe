@@ -32,12 +32,17 @@ de `PLAN-REFACTOR.md` (MCP + providers + UI + daemon Rust).
    - Validação de `canFlavor` em `chat.js` para checar `TOOL_FLAVOR[raw]`.
    - Sincronização explícita de `meta` pós-patch em `app/euterpe-app/ui/settings.js`.
    - Atualização das dicas de navegação por voz em `app/euterpe-app/lib/voice.js` para referenciar a nova navegação lateral (Rail).
-7. **Validação de Testes e Compilação:**
+7. **Formulário de Provedores Customizados e Suporte a Modelos Locais (`llama-server` e Custom API):**
+   - **Formulário Completo para APIs Customizadas:** Em `app/euterpe-app/ui/settings.js`, os cards de provedores customizados agora exibem campos para editar Nome de exibição, Protocolo (`openai-compat`, `ollama`, `anthropic`, `gemini`), Endpoint URL (`base_url`), digitação livre do nome do modelo (`TextInput` para evitar bloqueio por lista vazia de modelos) sincronizado com o dropdown de modelos descobertos, e campo de chave com indicação clara de que é opcional para servidores locais.
+   - **Múltiplos Provedores Customizados:** Adicionado botão `+ Adicionar API customizada / modelo local` permitindo criar múltiplos endpoints locais ou remotos.
+   - **Carregamento Dinâmico de Provedores em Disco:** Em `core/src/http/providers.rs` e `core/src/providers/registry.rs`, os provedores criados ou editados no `config.json` são agora carregados dinamicamente sem necessidade de reiniciar o daemon.
+   - **Preset `llama-server` e Chave Opcional para Endpoints Locais:** Adicionado preset `llama-server` (`http://127.0.0.1:8080/v1`) e dispensa de verificação de chave de API obrigatória para conexões de loopback (`127.0.0.1`, `localhost`).
+8. **Validação de Testes e Compilação:**
    - 135 testes unitários em `core/` passando (100%).
    - 14 testes de oráculo em `agent/` passando (100%).
-   - Testes de integração `profiles_api` passando (100%).
+   - Testes de integração `profiles_api` e `parity_http` passando (100%).
    - `cargo check --all-targets` limpo com 0 warnings e 0 erros.
-   - Bundle de produção compilado via `npm run build` em `app/` (177.8 KiB).
+   - Bundle de produção compilado via `npm run build` em `app/` (184.6 KiB).
 
 ---
 

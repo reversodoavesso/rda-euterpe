@@ -12,6 +12,31 @@ use crate::llm::adapters::{
 use crate::llm::canonical::LlmAdapter;
 use crate::secrets;
 
+/// Verifica se uma URL aponta para um endereço de loopback ou rede local típica.
+pub fn is_local_address(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    lower.starts_with("http://127.0.0.1")
+        || lower.starts_with("http://localhost")
+        || lower.starts_with("http://0.0.0.0")
+        || lower.starts_with("http://[::1]")
+}
+
+/// Helper para determinar se o provider exige chave de API.
+/// Provedores locais (Ollama, LM Studio, llama-server ou URLs locais)
+/// não exigem chave obrigatoriamente.
+pub fn provider_needs_key(provider: &ProviderConfig) -> bool {
+    if secrets::key_optional(provider.kind) {
+        return false;
+    }
+    if provider.id == "lmstudio"
+        || provider.id == "llama-server"
+        || is_local_address(&provider.base_url)
+    {
+        return false;
+    }
+    true
+}
+
 /// Monta o adapter para um provider concreto.
 pub fn build(
     provider: &ProviderConfig,
@@ -26,7 +51,7 @@ pub fn build(
     } else {
         model.to_string()
     };
-    if !secrets::key_optional(provider.kind) {
+    if provider_needs_key(provider) {
         match key.as_deref() {
             Some(k) if !k.trim().is_empty() => {}
             _ => anyhow::bail!("missing_api_key:{}", provider.id),
@@ -94,6 +119,19 @@ pub fn resolve(
     resolve_with(cfg, provider_id, model, None)
 }
 
+pub fn load_provider_from_disk(data_dir: &std::path::Path, id: &str) -> Option<ProviderConfig> {
+    let path = data_dir.join("config.json");
+    let raw = std::fs::read_to_string(path).ok()?;
+    let root = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+    let arr = root.get("providers")?.as_array()?;
+    for item in arr {
+        if item.get("id").and_then(|v| v.as_str()) == Some(id) {
+            return serde_json::from_value::<ProviderConfig>(item.clone()).ok();
+        }
+    }
+    None
+}
+
 /// Igual a [`resolve`], mas permite trocar o `base_url` (perfil local/custom).
 pub fn resolve_with(
     cfg: &Config,
@@ -101,8 +139,12 @@ pub fn resolve_with(
     model: &str,
     base_url: Option<&str>,
 ) -> anyhow::Result<Arc<dyn LlmAdapter>> {
-    let provider = cfg
-        .provider(provider_id)
+    let disk_provider = load_provider_from_disk(&cfg.data_dir, provider_id);
+    let preset_fallback = ProviderConfig::preset(provider_id);
+    let provider = disk_provider
+        .as_ref()
+        .or_else(|| cfg.provider(provider_id))
+        .or(preset_fallback.as_ref())
         .ok_or_else(|| anyhow::anyhow!("unknown_provider:{provider_id}"))?;
     let key = secrets::provider_key_at(&cfg.data_dir, provider_id);
     match base_url.map(str::trim).filter(|u| !u.is_empty()) {
@@ -142,7 +184,7 @@ pub fn public_listing(cfg: &Config) -> Vec<serde_json::Value> {
                 "baseUrl": p.base_url,
                 "configured": configured,
                 "hasKey": secrets::has_provider_key_at(&cfg.data_dir, &p.id),
-                "needsKey": !secrets::key_optional(p.kind),
+                "needsKey": provider_needs_key(p),
                 "models": p.models,
                 "defaultModel": p.default_model,
                 "curationModel": p.curation_model,
@@ -169,6 +211,20 @@ mod tests {
         let p = provider("ollama", false);
         let adapter = build(&p, None, "llama3.2").unwrap();
         assert_eq!(adapter.wire(), Wire::Ollama);
+
+        let ls = ProviderConfig::preset("llama-server").unwrap();
+        assert!(!provider_needs_key(&ls));
+        assert!(build(&ls, None, "default").is_ok());
+
+        let lms = ProviderConfig::preset("lmstudio").unwrap();
+        assert!(!provider_needs_key(&lms));
+        assert!(build(&lms, None, "local-model").is_ok());
+
+        // Custom com IP local também é aceito sem chave
+        let mut custom = ProviderConfig::preset("custom").unwrap();
+        custom.base_url = "http://127.0.0.1:8000/v1".into();
+        assert!(!provider_needs_key(&custom));
+        assert!(build(&custom, None, "local").is_ok());
     }
 
     #[test]
@@ -229,6 +285,8 @@ mod tests {
             .map(|e| (e["id"].as_str().unwrap().to_string(), e))
             .collect();
         assert_eq!(map["ollama"]["needsKey"], false);
+        assert_eq!(map["llama-server"]["needsKey"], false);
+        assert_eq!(map["lmstudio"]["needsKey"], false);
         assert_eq!(map["openai"]["needsKey"], true);
     }
 }

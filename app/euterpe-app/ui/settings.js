@@ -104,6 +104,8 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
   const [meta, setMeta] = useState(null);
   const [storage, setStorage] = useState(null);
   const [latencies, setLatencies] = useState({});
+  const [urls, setUrls] = useState({});
+  const [names, setNames] = useState({});
   const [addId, setAddId] = useState("");
   const [addedIds, setAddedIds] = useState(() => new Set());
 
@@ -156,8 +158,9 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
   };
 
   const loadModels = (p) => {
+    const baseUrl = urls[p.id] !== undefined ? urls[p.id] : p.baseUrl;
     setBusy((b) => ({ ...b, [p.id]: "models" }));
-    listModels({ provider: p.id, baseUrl: p.baseUrl })
+    listModels({ provider: p.id, baseUrl })
       .then((res) => {
         const ids = ((res && res.models) || []).map((m) => (typeof m === "string" ? m : m.id || m.name)).filter(Boolean);
         setModels((m) => ({ ...m, [p.id]: ids }));
@@ -205,9 +208,13 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
   const runTest = (p) => {
     const model = chosen[p.id] || (settings && settings.activeProvider === p.id ? settings.activeModel : p.defaultModel) || "";
     const apiKey = (keys[p.id] || "").trim();
+    const baseUrl = urls[p.id] !== undefined ? urls[p.id] : p.baseUrl;
     setBusy((b) => ({ ...b, [p.id]: "test" }));
     setReports((r) => ({ ...r, [p.id]: null }));
-    testProvider(apiKey ? { provider: p.id, model, apiKey } : { provider: p.id, model })
+    const payload = { provider: p.id, model };
+    if (apiKey) payload.apiKey = apiKey;
+    if (baseUrl) payload.baseUrl = baseUrl;
+    testProvider(payload)
       .then((res) => {
         const report = (res && res.report) || {};
         const parts = [];
@@ -215,7 +222,7 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
         if (report.model) parts.push(report.model);
         const text = report.ok ? parts.join(" · ") || "ok" : report.code || report.detail || "failed";
         setReports((r) => ({ ...r, [p.id]: { ok: !!report.ok, text } }));
-        if (report.ok && apiKey) reload();
+        if (report.ok && (apiKey || baseUrl)) reload();
       })
       .catch((err) => setReports((r) => ({ ...r, [p.id]: { ok: false, text: err.message } })))
       .finally(() => setBusy((b) => ({ ...b, [p.id]: null })));
@@ -230,17 +237,19 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
     const report = reports[p.id];
     const opts = modelOptions(p);
     const value = chosen[p.id] || (isActive ? settings.activeModel : p.defaultModel) || opts[0] || "";
+    const isCustom = p.id === "custom" || p.id.startsWith("custom-") || !["deepseek", "openai", "anthropic", "gemini", "groq", "openrouter", "together", "xai", "mistral", "ollama", "lmstudio", "llama-server"].includes(p.id);
+
     return React.createElement(
       Panel,
       { key: p.id },
       // Cabeçalho do cartão: identidade + estado + ações.
       React.createElement(
         "div",
-        { style: { ...inline("tighter-2"), justifyContent: "space-between" } },
+        { style: { ...inline("tighter-2"), justifyContent: "space-between", marginBottom: "var(--encore-spacing-tighter-2, 8px)" } },
         React.createElement(
           "div",
           { style: inline("tighter-4") },
-          React.createElement(Text, { variant: TEXT.bodyBold }, p.name || p.id),
+          React.createElement(Text, { variant: TEXT.bodyBold }, names[p.id] !== undefined ? names[p.id] : (p.name || p.id)),
           React.createElement(Text, { variant: TEXT.caption, color: COLOR.subdued }, `${p.id} · ${p.kind}`),
           isActive ? React.createElement(Badge, { tone: "accent", text: tr("settings.active") }) : null,
           p.hasKey ? React.createElement(Badge, { text: tr("settings.keySet") }) : p.needsKey ? React.createElement(Badge, { tone: "danger", text: tr("settings.keyMissing") }) : null,
@@ -249,8 +258,6 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
           "div",
           { style: inline("tighter-4") },
           isActive ? null : React.createElement(Button, { kind: "secondary", onClick: () => useProvider(p) }, tr("settings.use")),
-          // Remover o provider do config.json: sem isso, presets que nunca foram
-          // usados ficariam "configurados" para sempre e voltariam para a lista.
           React.createElement(
             Button,
             {
@@ -274,18 +281,124 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
           ),
         ),
       ),
+      // Nome de exibição (editável para providers customizados)
+      isCustom
+        ? React.createElement(Row, {
+            label: tr("prefs.customName"),
+            control: React.createElement(
+              "div",
+              { style: { ...inline("tighter-2"), justifyContent: "flex-end", width: "100%" } },
+              React.createElement(TextInput, {
+                value: names[p.id] !== undefined ? names[p.id] : (p.name || p.id),
+                placeholder: "ex: llama-server, vLLM, Localhost",
+                ariaLabel: tr("prefs.customName"),
+                style: { minWidth: 260 },
+                onCommit: (v) => {
+                  setNames((n) => ({ ...n, [p.id]: v }));
+                  saveProvider({ id: p.id, name: v })
+                    .then(() => {
+                      notify(tr("settings.saved"));
+                      return reload();
+                    })
+                    .catch((err) => notify(err.message, "error"));
+                },
+              }),
+            ),
+          })
+        : null,
+      // Protocolo da API (editável para providers customizados)
+      isCustom
+        ? React.createElement(Row, {
+            label: tr("prefs.customKind"),
+            control: React.createElement(
+              "div",
+              { style: { ...inline("tighter-2"), justifyContent: "flex-end", width: "100%" } },
+              React.createElement(Select, {
+                value: p.kind || "openai-compat",
+                options: ["openai-compat", "ollama", "anthropic", "gemini"],
+                labels: {
+                  "openai-compat": "OpenAI-compatible (llama-server, vLLM, etc.)",
+                  "ollama": "Ollama",
+                  "anthropic": "Anthropic",
+                  "gemini": "Google Gemini",
+                },
+                ariaLabel: tr("prefs.customKind"),
+                style: { minWidth: 260 },
+                onSelect: (k) => {
+                  saveProvider({ id: p.id, kind: k })
+                    .then(() => {
+                      notify(tr("settings.saved"));
+                      return reload();
+                    })
+                    .catch((err) => notify(err.message, "error"));
+                },
+              }),
+            ),
+          })
+        : null,
+      // Endpoint URL (baseUrl)
+      React.createElement(Row, {
+        label: tr("prefs.baseUrl"),
+        control: React.createElement(
+          "div",
+          { style: { ...inline("tighter-2"), justifyContent: "flex-end", width: "100%" } },
+          React.createElement(TextInput, {
+            value: urls[p.id] !== undefined ? urls[p.id] : p.baseUrl || "",
+            placeholder: p.id === "llama-server" || isCustom ? "http://127.0.0.1:8080/v1" : p.id === "lmstudio" ? "http://127.0.0.1:1234/v1" : p.id === "ollama" ? "http://127.0.0.1:11434" : "https://api...",
+            ariaLabel: tr("prefs.baseUrl"),
+            style: { minWidth: 260 },
+            onCommit: (v) => {
+              setUrls((u) => ({ ...u, [p.id]: v }));
+              saveProvider({ id: p.id, baseUrl: v })
+                .then(() => {
+                  notify(tr("settings.saved"));
+                  return reload();
+                })
+                .catch((err) => notify(err.message, "error"));
+            },
+          }),
+        ),
+      }),
+      // Modelo: TextInput para digitação direta + Select se houver opções descobertas + Botão Refresh
       React.createElement(Row, {
         label: tr("settings.model"),
         control: React.createElement(
           "div",
           { style: { ...inline("tighter-2"), justifyContent: "flex-end", width: "100%" } },
-          React.createElement(Select, { value, options: opts, ariaLabel: tr("settings.model"), onSelect: (m) => selectModel(p, m), style: { maxWidth: 260 } }),
+          React.createElement(TextInput, {
+            value: value,
+            placeholder: "ex: default, llama-3.2, mistral",
+            ariaLabel: tr("settings.model"),
+            style: { minWidth: 160, maxWidth: 220 },
+            onCommit: (m) => {
+              selectModel(p, m);
+              saveProvider({ id: p.id, defaultModel: m })
+                .then(() => reload())
+                .catch(() => {});
+            },
+          }),
+          opts.filter((o) => o && o !== "").length > 0
+            ? React.createElement(Select, {
+                value: value,
+                options: opts.filter((o) => o && o !== ""),
+                ariaLabel: tr("settings.model"),
+                onSelect: (m) => {
+                  selectModel(p, m);
+                  saveProvider({ id: p.id, defaultModel: m })
+                    .then(() => reload())
+                    .catch(() => {});
+                },
+                style: { maxWidth: 160 },
+              })
+            : null,
           React.createElement(Button, { kind: "secondary", disabled: pending === "models", onClick: () => loadModels(p) }, pending === "models" ? tr("settings.loading") : tr("settings.refreshModels")),
         ),
       }),
-      p.needsKey
+      // Chave de API: sempre disponível para custom ou quando needsKey/hasKey/keys
+      (isCustom || p.needsKey || p.hasKey || keys[p.id] !== undefined)
         ? React.createElement(Row, {
-            label: tr("settings.key"),
+            label: p.needsKey ? tr("settings.key") : `${tr("settings.key")} (${tr("settings.keyOptional")})`,
+            description: !p.needsKey ? tr("settings.keyOptionalHint") : undefined,
             control: React.createElement(
               "div",
               { style: { ...inline("tighter-2"), justifyContent: "flex-end", width: "100%" } },
@@ -508,6 +621,24 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
               }),
             ),
           }),
+          React.createElement(Row, {
+            label: tr("prefs.baseUrl"),
+            control: React.createElement(
+              "div",
+              { style: { ...inline("tighter-2"), justifyContent: "flex-end", width: "100%" } },
+              React.createElement(TextInput, {
+                value: p.baseUrl || "",
+                placeholder: pObj.baseUrl || "http://127.0.0.1:8080/v1",
+                ariaLabel: tr("prefs.baseUrl"),
+                style: { maxWidth: 320 },
+                onCommit: (newUrl) => {
+                  const val = (newUrl || "").trim() || null;
+                  const updated = profiles.map((x) => (x.id === p.id ? { ...x, baseUrl: val } : x));
+                  saveProfiles(updated);
+                },
+              }),
+            ),
+          }),
         );
       }),
       React.createElement("div", null, React.createElement(Button, { kind: "primary", onClick: addProfile }, tr("prefs.addProfile"))),
@@ -667,15 +798,32 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
     );
   };
 
-  // Credenciais: mostramos só o que está EM USO (tem chave, ou é o ativo) ou
+  const addCustomProvider = () => {
+    const id = "custom-" + Date.now().toString(36);
+    saveProvider({
+      id,
+      name: "Custom API",
+      kind: "openai-compat",
+      baseUrl: "http://127.0.0.1:8080/v1",
+      defaultModel: "default",
+    })
+      .then(() => {
+        setAddedIds((prev) => new Set(prev).add(id));
+        return reload();
+      })
+      .then(() => notify(tr("settings.saved")))
+      .catch((err) => notify(err.message, "error"));
+  };
+
+  // Credenciais: mostramos só o que está EM USO (tem chave, é o ativo, configurado em disco) ou
   // que acabou de ser adicionado para configuração.
   const activeProviderId = (settings && settings.activeProvider) || "";
   const providerList = providers || [];
   const configuredProviders = providerList.filter(
-    (p) => p.hasKey === true || p.id === activeProviderId || addedIds.has(p.id)
+    (p) => p.configured === true || p.hasKey === true || p.id === activeProviderId || addedIds.has(p.id)
   );
   const availableProviders = providerList.filter(
-    (p) => p.hasKey !== true && p.id !== activeProviderId && !addedIds.has(p.id)
+    (p) => !configuredProviders.some((c) => c.id === p.id)
   );
 
   const credentialsSection = () =>
@@ -685,44 +833,56 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
       configuredProviders.length
         ? configuredProviders.map(providerCard)
         : React.createElement(Hint, null, tr("prefs.noProviders")),
-      availableProviders.length
-        ? React.createElement(
-            "div",
-            { style: { ...inline("tighter-2"), justifyContent: "flex-end" } },
-            React.createElement(
-              Select,
-              {
-                value: addId,
-                ariaLabel: tr("prefs.pickProvider"),
-                style: { maxWidth: 240 },
-                options: [""].concat(availableProviders.map((p) => p.id)),
-                labels: Object.assign({ "": tr("prefs.pickProvider") }, ...availableProviders.map((p) => ({ [p.id]: p.name || p.id }))),
-                onSelect: setAddId,
-              },
-            ),
-            React.createElement(
-              Button,
-              {
-                kind: "primary",
-                disabled: !addId,
-                onClick: () => {
-                  const selectedId = addId;
-                  saveProvider({ id: selectedId })
-                    .then(() => {
-                      setAddedIds((prev) => new Set(prev).add(selectedId));
-                      return reload();
-                    })
-                    .then(() => {
-                      setAddId("");
-                      notify(tr("settings.saved"));
-                    })
-                    .catch((err) => notify(err.message, "error"));
+      React.createElement(
+        "div",
+        { style: { ...inline("tighter-2"), justifyContent: "flex-end", flexWrap: "wrap", gap: "8px" } },
+        React.createElement(
+          Button,
+          {
+            kind: "secondary",
+            onClick: addCustomProvider,
+          },
+          tr("prefs.addCustomProvider"),
+        ),
+        availableProviders.length
+          ? React.createElement(
+              React.Fragment,
+              null,
+              React.createElement(
+                Select,
+                {
+                  value: addId,
+                  ariaLabel: tr("prefs.pickProvider"),
+                  style: { maxWidth: 220 },
+                  options: [""].concat(availableProviders.map((p) => p.id)),
+                  labels: Object.assign({ "": tr("prefs.pickProvider") }, ...availableProviders.map((p) => ({ [p.id]: p.name || p.id }))),
+                  onSelect: setAddId,
                 },
-              },
-              tr("prefs.addProvider"),
-            ),
-          )
-        : null,
+              ),
+              React.createElement(
+                Button,
+                {
+                  kind: "primary",
+                  disabled: !addId,
+                  onClick: () => {
+                    const selectedId = addId;
+                    saveProvider({ id: selectedId })
+                      .then(() => {
+                        setAddedIds((prev) => new Set(prev).add(selectedId));
+                        return reload();
+                      })
+                      .then(() => {
+                        setAddId("");
+                        notify(tr("settings.saved"));
+                      })
+                      .catch((err) => notify(err.message, "error"));
+                  },
+                },
+                tr("prefs.addProvider"),
+              ),
+            )
+          : null,
+      ),
     );
 
   let body;

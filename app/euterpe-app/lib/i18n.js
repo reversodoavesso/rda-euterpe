@@ -265,6 +265,14 @@ export const UI_STRINGS = {
   },
   "prefs.pickProvider": { en: "pick a provider…", "pt-br": "escolha um provedor…" },
   "prefs.addProvider": { en: "Add provider", "pt-br": "Adicionar provedor" },
+  "prefs.addCustomProvider": { en: "+ Add custom API / local model", "pt-br": "+ Adicionar API customizada / modelo local" },
+  "prefs.customName": { en: "Display name", "pt-br": "Nome de exibição" },
+  "prefs.customKind": { en: "API Protocol", "pt-br": "Protocolo da API" },
+  "settings.keyOptional": { en: "optional", "pt-br": "opcional" },
+  "settings.keyOptionalHint": {
+    en: "Optional for local models (e.g. llama-server). Fill only if your endpoint requires authentication.",
+    "pt-br": "Opcional para modelos locais (ex.: llama-server). Preencha só se seu endpoint exigir autenticação.",
+  },
   "prefs.removeProvider": { en: "Remove provider", "pt-br": "Remover provedor" },
   "prefs.removeProviderActive": { en: "switch the active provider first", "pt-br": "troque o provedor ativo antes" },
   "prefs.credentialsHint": {

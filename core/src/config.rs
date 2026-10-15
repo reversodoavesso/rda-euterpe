@@ -176,6 +176,13 @@ impl ProviderConfig {
                     "local-model",
                     "local-model",
                 ),
+                "llama-server" => (
+                    "llama-server",
+                    Wire::OpenaiCompat,
+                    "http://127.0.0.1:8080/v1",
+                    "default",
+                    "default",
+                ),
                 "custom" => ("Custom (OpenAI-compat)", Wire::OpenaiCompat, "", "", ""),
                 _ => return None,
             };
@@ -206,6 +213,7 @@ impl ProviderConfig {
             "mistral",
             "ollama",
             "lmstudio",
+            "llama-server",
             "custom",
         ]
     }

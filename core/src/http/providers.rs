@@ -13,7 +13,24 @@ use serde_json::{json, Value};
 use crate::config::{ProviderConfig, Wire};
 use crate::AppState;
 
+pub fn load_providers_from_disk(state: &AppState) -> Vec<ProviderConfig> {
+    let path = state.cfg.data_dir.join("config.json");
+    if let Ok(raw) = std::fs::read_to_string(&path) {
+        if let Ok(root) = serde_json::from_str::<Value>(&raw) {
+            if let Some(arr) = root.get("providers") {
+                if let Ok(list) = serde_json::from_value::<Vec<ProviderConfig>>(arr.clone()) {
+                    return list;
+                }
+            }
+        }
+    }
+    state.cfg.providers.clone()
+}
+
 pub async fn list(State(state): State<AppState>) -> Json<Value> {
+    let current_providers = load_providers_from_disk(&state);
+    let mut dynamic_cfg = (*state.cfg).clone();
+    dynamic_cfg.providers = current_providers;
     Json(json!({
         "app": "euterpe",
         "active": {
@@ -21,7 +38,7 @@ pub async fn list(State(state): State<AppState>) -> Json<Value> {
             "model": state.effective().active_model,
             "curationModel": state.effective().curation_model,
         },
-        "providers": crate::providers::registry::public_listing(&state.cfg),
+        "providers": crate::providers::registry::public_listing(&dynamic_cfg),
     }))
 }
 
@@ -48,10 +65,12 @@ pub struct ProviderUpsert {
 }
 
 pub async fn upsert(State(state): State<AppState>, Json(body): Json<ProviderUpsert>) -> Response {
-    let mut provider = match state
-        .cfg
-        .provider(&body.id)
+    let providers_on_disk = load_providers_from_disk(&state);
+    let mut provider = match providers_on_disk
+        .iter()
+        .find(|p| p.id == body.id)
         .cloned()
+        .or_else(|| state.cfg.provider(&body.id).cloned())
         .or_else(|| ProviderConfig::preset(&body.id))
     {
         Some(p) => p,
@@ -59,7 +78,7 @@ pub async fn upsert(State(state): State<AppState>, Json(body): Json<ProviderUpse
             // Provider desconhecido: cria como `custom` (contrato tradicional).
             let mut custom = ProviderConfig::preset("custom").expect("preset custom");
             custom.id = body.id.clone();
-            custom.name = body.id.clone();
+            custom.name = body.name.clone().unwrap_or_else(|| body.id.clone());
             custom
         }
     };
@@ -174,7 +193,7 @@ fn remove_provider_from_config(state: &AppState, id: &str) -> anyhow::Result<()>
 /// (não no global `paths::config_file()`: isso mantinha os testes de integração
 /// escrevendo na casa do usuário).
 fn persist_provider(state: &AppState, provider: &ProviderConfig) -> anyhow::Result<()> {
-    let mut providers = state.cfg.providers.clone();
+    let mut providers = load_providers_from_disk(state);
     match providers.iter_mut().find(|p| p.id == provider.id) {
         Some(existing) => *existing = provider.clone(),
         None => providers.push(provider.clone()),
@@ -208,7 +227,12 @@ pub async fn models(State(state): State<AppState>, Query(q): Query<ModelsQuery>)
     let provider_id = q
         .provider
         .unwrap_or_else(|| state.effective().active_provider);
-    let (base_url, kind, model) = match state.cfg.provider(&provider_id) {
+    let providers_on_disk = load_providers_from_disk(&state);
+    let (base_url, kind, model) = match providers_on_disk
+        .iter()
+        .find(|p| p.id == provider_id)
+        .or_else(|| state.cfg.provider(&provider_id))
+    {
         Some(p) => (
             p.base_url.clone(),
             p.kind,
@@ -276,10 +300,11 @@ pub async fn test(State(state): State<AppState>, Json(body): Json<TestRequest>) 
     let provider_id = body
         .provider
         .unwrap_or_else(|| state.effective().active_provider);
-    let preset = state
-        .cfg
-        .provider(&provider_id)
-        .cloned()
+    let providers_on_disk = load_providers_from_disk(&state);
+    let preset = providers_on_disk
+        .into_iter()
+        .find(|p| p.id == provider_id)
+        .or_else(|| state.cfg.provider(&provider_id).cloned())
         .or_else(|| ProviderConfig::preset(&provider_id));
     let Some(preset) = preset else {
         return (
