@@ -37,6 +37,22 @@ pub const SCHEMA_SQL: &str = r#"
 const INDEX_SQL: &str =
     "CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations(session_id, id)";
 
+const DIFFS_SQL: &str = r#"
+    CREATE TABLE IF NOT EXISTS playlist_diffs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      playlist_id TEXT NOT NULL,
+      parent_diff_id INTEGER,
+      created_at INTEGER NOT NULL,
+      hash TEXT NOT NULL,
+      added_count INTEGER NOT NULL,
+      removed_count INTEGER NOT NULL,
+      reordered INTEGER NOT NULL,
+      delta TEXT NOT NULL,
+      FOREIGN KEY (parent_diff_id) REFERENCES playlist_diffs(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_playlist_diffs_pid ON playlist_diffs(playlist_id, id);
+"#;
+
 /// Aplica schema + migrações aditivas (idempotente).
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(SCHEMA_SQL)?;
@@ -53,6 +69,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch("ALTER TABLE conversations ADD COLUMN session_id TEXT")?;
     }
     conn.execute_batch(INDEX_SQL)?;
+    conn.execute_batch(DIFFS_SQL)?;
     Ok(())
 }
 

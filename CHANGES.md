@@ -6,6 +6,57 @@ de `PLAN-REFACTOR.md` (MCP + providers + UI + daemon Rust).
 
 ---
 
+# v2.3 — Event-Driven Playlist Diff & Versionamento Incremental
+
+**Data:** 2026-10-14 · **Status:** Fases 5.1 a 5.4 de `PLAN-DIFF-ENGINE.md` concluídas; 136 testes em `core/` e 14 no agente Node passando (100% verde).
+
+## Resumo das entregas
+
+1. **Diff Engine Estruturado (`core/src/tools/server/diff.rs`):**
+   - Hashing determinístico FNV-1a de 64 bits para assinaturas instantâneas de sequências de faixas.
+   - Algoritmo de cálculo de delta que separa adições, remoções e movimentações de posição (`moved: [{ uri, from_index, to_index }]`).
+2. **Esquema Incremental no SQLite (`core/src/store/db.rs` e `snapshots.rs`):**
+   - Criação da tabela `playlist_diffs` com ponteiro para o delta pai (`parent_diff_id`), contadores (`added_count`, `removed_count`, `reordered`), hash e payload JSON do delta.
+   - Funções `record_diff()`, `get_latest_hash()` e `get_diff_history()`.
+3. **Observador Reativo em Tempo Real (`app/euterpe-extension/euterpe.js`):**
+   - Integração com o barramento de eventos interno `Platform.PlaylistAPI.getEvents().addListener("operation")`.
+   - Debounce de 1500ms e cálculo do hash FNV-1a no client: descarta silenciosamente se o hash for idêntico ao estado prévio (**Zero Polling, Zero I/O desnecessário**).
+   - Extração do array pós-evento via Tier 1 em memória (**Zero consumo de chamadas HTTP da Web API**).
+4. **Protocolo WebSocket & Despacho (`core/src/protocol/mod.rs` e `core/src/ws/mod.rs`):**
+   - Nova mensagem `event.playlist_modified` com `playlist_id`, `hash` e `uris`.
+   - Daemon compara o hash contra o último do banco: se idêntico, encerra imediatamente sem I/O; se diferente, calcula o diff e grava o novo snapshot e delta.
+5. **Tool MCP `spotify_get_playlist_history`:**
+   - Permite aos agentes inspecionarem a linha do tempo e o changelog de versões de qualquer playlist.
+   - Catálogo canônico expandido para **27 client tools + 16 server tools = 43 tools**.
+
+---
+
+# v2.2 — Resiliência de Rate Limiting, Tier 1, Operações em Lote e Governança
+
+**Data:** 2026-10-14 · **Status:** Fases 1 a 4 de `PLAN-IMPROVEMENTS.md` concluídas; 135 testes em `core/` e 14 no agente Node passando (100% verde).
+
+## Resumo das entregas
+
+1. **Fase 1 — Resiliência & Tier 1 Spicetify:**
+   - **429 Cooldown Informativo:** Captura do header `Retry-After` propagando `{ ok: false, code: "rate_limited", retry_after_seconds, hint }` para o bridge e empacotamento no protocolo MCP com `isError: true`.
+   - **Blindagem do Tier 1 na Criação de Playlists:** Cascata de criação em `Access.platform.createPlaylist` (`RootlistAPI({after:"end"})` → `RootlistAPI({})` → `RootlistAPI(name)` → `CosmosAsync.post("sp://core-playlist/v1/rootlist")`).
+
+2. **Fase 2 — Capas Locais & Dump da Biblioteca:**
+   - **Capas Polimórficas em `prepare_cover`:** Suporte automático a `file_path` local (`tokio::fs::read`), `data:image/...;base64` inline e URLs remotas HTTP/HTTPS com compressão progressiva JPEG $\le 256$ KB e max 600x600.
+   - **Extração Instantânea (`dump_library`):** Extrai a biblioteca completa em <2s via `Platform.LibraryAPI` e `PlaylistAPI` sem gastar requisições da Web API.
+
+3. **Fase 3 — Operações em Lote & Auto-Chunking:**
+   - **Auto-Chunking:** Fatiamento transparente em lotes de 100 músicas tanto no Tier 1 quanto no fallback Web API para arrays de qualquer tamanho.
+   - **Nova Tool de Cliente `batch_create_playlists`:** Criação em lote de múltiplas playlists com controle de `delay_between_ms` e confirmação de mutação.
+
+4. **Fase 4 — Governança, Analytics & Backups:**
+   - **Auditoria de Órfãos (`find_orphans`):** Identifica músicas originais esquecidas durante reorganização ou curadoria.
+   - **Matriz de Sobreposição (`analyze_overlap`):** Calcula coeficiente de similaridade Jaccard e faixas compartilhadas entre playlists.
+   - **Backups da Biblioteca (`backup_library` e `restore_library`):** Snapshots completos gravados em disco (`data/backups/`) com data/hora e capacidade de restauração automática.
+   - **Catálogo Sincronizado:** Catálogo expandido para **27 client tools + 15 server tools = 42 tools**, mantendo paridade estrita nos fixtures determinísticos.
+
+---
+
 # v2.1 — Auditoria de Código, Correção de Bugs nos Adapters, Design System e Hardening
 
 **Data:** 2026-10-14 · **Status:** Auditoria completa e correções aplicadas; todos os testes verdes.

@@ -80,22 +80,24 @@
     "side": "server"
   },
   {
-    "description": "Downloads the image at a URL, resizes and compresses to JPEG ≤ 256KB and returns it in base64, ready for set_playlist_cover.",
+    "description": "Prepara uma capa de playlist a partir de uma URL remota, caminho de arquivo local ou Data URI base64. Redimensiona e comprime para JPEG ≤ 256KB pronta para set_playlist_cover.",
     "name": "prepare_cover",
     "parameters": {
       "properties": {
+        "file_path": {
+          "description": "caminho de arquivo de imagem local opcional",
+          "type": "string"
+        },
         "max_kb": {
           "description": "default 256",
           "type": "integer"
         },
         "url": {
-          "description": "image URL",
+          "description": "URL da imagem, caminho de arquivo local ou data:image/... base64",
           "type": "string"
         }
       },
-      "required": [
-        "url"
-      ],
+      "required": [],
       "type": "object"
     },
     "side": "server"
@@ -239,6 +241,102 @@
       },
       "required": [
         "artist"
+      ],
+      "type": "object"
+    },
+    "side": "server"
+  },
+  {
+    "description": "Identifica faixas que estavam nas playlists de origem mas foram esquecidas nas playlists de destino durante reorganização/curadoria.",
+    "name": "find_orphans",
+    "parameters": {
+      "properties": {
+        "source_playlist_ids": {
+          "description": "IDs ou URIs das playlists originais",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target_playlist_ids": {
+          "description": "IDs ou URIs das playlists novas geradas",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_playlist_ids",
+        "target_playlist_ids"
+      ],
+      "type": "object"
+    },
+    "side": "server"
+  },
+  {
+    "description": "Calcula matriz de intersecção e similaridade Jaccard entre playlists para detectar duplicidades e sobreposição.",
+    "name": "analyze_overlap",
+    "parameters": {
+      "properties": {
+        "playlist_ids": {
+          "description": "lista com pelo menos 2 IDs de playlists",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "playlist_ids"
+      ],
+      "type": "object"
+    },
+    "side": "server"
+  },
+  {
+    "description": "Salva um snapshot completo com data/hora da biblioteca local para restauração segura e controle de versões.",
+    "name": "backup_library",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "side": "server"
+  },
+  {
+    "description": "Restaura a estrutura da biblioteca a partir de um backup prévio salvo em disco.",
+    "name": "restore_library",
+    "parameters": {
+      "properties": {
+        "backup_id": {
+          "description": "ID do backup (ex: snapshot-20261014-230000)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "backup_id"
+      ],
+      "type": "object"
+    },
+    "side": "server"
+  },
+  {
+    "description": "Consulta o histórico e a linha do tempo de alterações de uma playlist (deltas incrementais com adições, remoções e reordenações).",
+    "name": "get_playlist_history",
+    "parameters": {
+      "properties": {
+        "limit": {
+          "description": "Limite de versões a consultar (default: 10)",
+          "type": "integer"
+        },
+        "playlist_id": {
+          "description": "ID ou URI da playlist",
+          "type": "string"
+        }
+      },
+      "required": [
+        "playlist_id"
       ],
       "type": "object"
     },

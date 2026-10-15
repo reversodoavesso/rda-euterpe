@@ -13,6 +13,8 @@ do chat (o espelho da Fase 2 / D6).
 - Decisões e roadmap: [`PLAN.md`](./PLAN.md)
 - O que mudou (e o que ficou pendente): [`CHANGES.md`](./CHANGES.md)
 - Contratos das APIs internas do Spotify: [`PLAN-INTERNAL-API.md`](./PLAN-INTERNAL-API.md)
+- Plano de resiliência e governança MCP: [`PLAN-IMPROVEMENTS.md`](./PLAN-IMPROVEMENTS.md)
+- Plano de Diff Engine e Versionamento Incremental: [`PLAN-DIFF-ENGINE.md`](./PLAN-DIFF-ENGINE.md)
 - Tom de voz da marca (copy, status, erros): [`BRAND-VOICE.md`](./BRAND-VOICE.md)
 
 ## Estrutura

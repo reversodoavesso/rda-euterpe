@@ -202,6 +202,11 @@ fn is_read_only(name: &str) -> bool {
         "get_player_state",
         "get_player_queue",
         "get_connect_devices",
+        "dump_library",
+        "prepare_cover",
+        "find_orphans",
+        "analyze_overlap",
+        "backup_library",
     ];
     name.starts_with("get_") || READS.contains(&name)
 }
@@ -221,9 +226,9 @@ mod tests {
 
     #[test]
     fn counts_match_the_frozen_contract_c6() {
-        assert_eq!(client_tools().count(), 25);
-        assert_eq!(server_tools().count(), 11);
-        assert_eq!(all().len(), 36);
+        assert_eq!(client_tools().count(), 27);
+        assert_eq!(server_tools().count(), 16);
+        assert_eq!(all().len(), 43);
     }
 
     #[test]
@@ -257,7 +262,7 @@ mod tests {
 
     #[test]
     fn mutating_set_is_destructive_and_inside_client_side() {
-        assert_eq!(mutating().len(), 6);
+        assert_eq!(mutating().len(), 7);
         for name in mutating() {
             let def = find(name).unwrap_or_else(|| panic!("{name} não está no catálogo"));
             assert_eq!(def.side, Side::Client, "{name} deveria ser client-side");

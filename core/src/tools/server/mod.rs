@@ -5,7 +5,9 @@
 
 pub mod charts;
 pub mod cover;
+pub mod diff;
 pub mod enrich;
+pub mod governance;
 pub mod image_search;
 pub mod lyrics;
 pub mod web_search;
@@ -218,7 +220,15 @@ pub async fn run_server_tool(
         }
         "weekly_report" => weekly_report::weekly_report(ctx).await,
         "prepare_cover" => {
-            cover::prepare_cover(&str_arg("url"), num_arg("max_kb", 256) as usize).await
+            let src = {
+                let u = str_arg("url");
+                if !u.is_empty() {
+                    u
+                } else {
+                    str_arg("file_path")
+                }
+            };
+            cover::prepare_cover(&src, num_arg("max_kb", 256) as usize).await
         }
         "lyrics_lookup" => {
             lyrics::lyrics_lookup(
@@ -234,6 +244,25 @@ pub async fn run_server_tool(
         }
         "artist_info" => {
             enrich::artist_info(&str_arg("artist"), num_arg("limit", 10) as usize, ctx).await
+        }
+        "find_orphans" => {
+            governance::find_orphans(
+                arr_arg("source_playlist_ids"),
+                arr_arg("target_playlist_ids"),
+                ctx,
+            )
+            .await
+        }
+        "analyze_overlap" => governance::analyze_overlap(arr_arg("playlist_ids"), ctx).await,
+        "backup_library" => governance::backup_library(ctx).await,
+        "restore_library" => governance::restore_library(&str_arg("backup_id"), ctx).await,
+        "get_playlist_history" => {
+            governance::get_playlist_history(
+                &str_arg("playlist_id"),
+                num_arg("limit", 10) as usize,
+                ctx,
+            )
+            .await
         }
         other => ToolResult::err(format!("unknown_server_tool:{other}")),
     }

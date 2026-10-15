@@ -53,7 +53,7 @@ pub async fn call_tool(state: &AppState, params: &Value) -> Result<Value, Error>
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
     let Some(def) = crate::tools::catalog::find_mcp(name) else {
         // Tool desconhecida **não** é erro de protocolo: devolve isError (§Fase 3).
-        return Ok(error_content(format!("unknown_tool:{name}")));
+        return Ok(error_content(format!("unknown_tool:{name}"), None));
     };
 
     let eff = state.effective();
@@ -71,7 +71,7 @@ pub async fn call_tool(state: &AppState, params: &Value) -> Result<Value, Error>
     };
 
     if !state.bridge.has_client() {
-        return Ok(error_content("client_offline".to_string()));
+        return Ok(error_content("client_offline".to_string(), None));
     }
 
     let opts = CallOptions::mcp(policy, &call_id, &locale, &state.store);
@@ -107,15 +107,33 @@ pub fn to_content(result: ToolResult) -> Value {
             "isError": false,
         })
     } else {
-        error_content(result.code.unwrap_or_else(|| "tool_failed".to_string()))
+        error_content(
+            result.code.unwrap_or_else(|| "tool_failed".to_string()),
+            result.data,
+        )
     }
 }
 
-fn error_content(code: String) -> Value {
+fn error_content(code: String, data: Option<Value>) -> Value {
+    let text = match data {
+        Some(d) if !d.is_null() => {
+            let mut obj = json!({ "ok": false, "code": code });
+            if let Some(map) = d.as_object() {
+                for (k, v) in map {
+                    obj[k] = v.clone();
+                }
+            } else {
+                obj["data"] = d;
+            }
+            obj.to_string()
+        }
+        _ => json!({ "ok": false, "code": code }).to_string(),
+    };
+
     json!({
         "content": [{
             "type": "text",
-            "text": json!({ "ok": false, "code": code }).to_string(),
+            "text": text,
         }],
         "isError": true,
     })

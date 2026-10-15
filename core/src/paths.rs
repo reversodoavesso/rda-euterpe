@@ -53,6 +53,10 @@ pub fn probes_dir() -> PathBuf {
     data_dir().join("probes")
 }
 
+pub fn backups_dir() -> PathBuf {
+    data_dir().join("backups")
+}
+
 pub fn db_path() -> PathBuf {
     data_dir().join("euterpe.db")
 }

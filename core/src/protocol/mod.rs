@@ -47,6 +47,14 @@ pub enum ClientMsg {
     },
     #[serde(rename = "event.songchange")]
     SongChange { uri: String },
+    #[serde(rename = "event.playlist_modified")]
+    PlaylistModified {
+        #[serde(rename = "playlistId")]
+        playlist_id: String,
+        hash: String,
+        #[serde(default)]
+        uris: Vec<String>,
+    },
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "pong")]
@@ -188,6 +196,7 @@ impl ClientMsg {
             Self::ChatClear { .. } => "chat.clear",
             Self::ProposalDecision { .. } => "proposal.decision",
             Self::SongChange { .. } => "event.songchange",
+            Self::PlaylistModified { .. } => "event.playlist_modified",
             Self::Ping => "ping",
             Self::Pong => "pong",
             Self::ClientDebug { .. } => "client.debug",

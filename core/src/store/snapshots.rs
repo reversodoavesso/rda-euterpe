@@ -43,6 +43,83 @@ pub fn latest_snapshot_id(conn: &Connection, playlist_id: &str) -> Option<i64> {
     .ok()
 }
 
+/// Registra um delta incremental na tabela `playlist_diffs`.
+pub fn record_diff(
+    conn: &Connection,
+    playlist_id: &str,
+    hash: &str,
+    delta: &crate::tools::server::diff::PlaylistDelta,
+) -> rusqlite::Result<i64> {
+    let parent_id: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM playlist_diffs WHERE playlist_id = ? ORDER BY id DESC LIMIT 1",
+            [playlist_id],
+            |r| r.get(0),
+        )
+        .ok();
+
+    let delta_json = serde_json::to_string(delta).unwrap_or_else(|_| "{}".to_string());
+    conn.execute(
+        "INSERT INTO playlist_diffs (playlist_id, parent_diff_id, created_at, hash, added_count, removed_count, reordered, delta) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            playlist_id,
+            parent_id,
+            chrono::Utc::now().timestamp_millis(),
+            hash,
+            delta.added.len(),
+            delta.removed.len(),
+            if delta.reordered { 1 } else { 0 },
+            delta_json,
+        ],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// Obtém o hash mais recente gravado para a playlist.
+pub fn get_latest_hash(conn: &Connection, playlist_id: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT hash FROM playlist_diffs WHERE playlist_id = ? ORDER BY id DESC LIMIT 1",
+        [playlist_id],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
+/// Consulta o histórico de diffs de uma playlist.
+pub fn get_diff_history(
+    conn: &Connection,
+    playlist_id: &str,
+    limit: usize,
+) -> Vec<serde_json::Value> {
+    let mut stmt = match conn.prepare(
+        "SELECT id, parent_diff_id, created_at, hash, added_count, removed_count, reordered, delta FROM playlist_diffs WHERE playlist_id = ? ORDER BY id DESC LIMIT ?"
+    ) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+
+    let rows = stmt.query_map(rusqlite::params![playlist_id, limit as i64], |row| {
+        let delta_str: String = row.get(7)?;
+        let delta_val: serde_json::Value =
+            serde_json::from_str(&delta_str).unwrap_or(serde_json::Value::Null);
+        Ok(serde_json::json!({
+            "id": row.get::<_, i64>(0)?,
+            "parent_id": row.get::<_, Option<i64>>(1)?,
+            "created_at": row.get::<_, i64>(2)?,
+            "hash": row.get::<_, String>(3)?,
+            "added_count": row.get::<_, i64>(4)?,
+            "removed_count": row.get::<_, i64>(5)?,
+            "reordered": row.get::<_, i64>(6)? == 1,
+            "delta": delta_val,
+        }))
+    });
+
+    match rows {
+        Ok(iter) => iter.filter_map(Result::ok).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

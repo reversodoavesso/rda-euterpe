@@ -530,5 +530,69 @@
       "type": "object"
     },
     "side": "client"
+  },
+  {
+    "description": "Extrai instantaneamente todas as playlists, faixas e metadados da biblioteca local via Spicetify em <2s sem consumir rate limit da Web API.",
+    "name": "dump_library",
+    "parameters": {
+      "properties": {
+        "include_saved_tracks": {
+          "description": "Inclui músicas curtidas (default: false)",
+          "type": "boolean"
+        },
+        "include_tracks": {
+          "description": "Inclui faixas completas de cada playlist (default: true)",
+          "type": "boolean"
+        },
+        "max_playlists": {
+          "description": "Limite de playlists a extrair (default: 100)",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "side": "client"
+  },
+  {
+    "description": "Cria múltiplas playlists em lote com fatiamento e delay controlado em uma única execução. Toda criação é confirmada pelo usuário.",
+    "name": "batch_create_playlists",
+    "parameters": {
+      "properties": {
+        "delay_between_ms": {
+          "description": "Pausa entre criações em ms (default: 1500)",
+          "type": "integer"
+        },
+        "playlists": {
+          "items": {
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "tracks": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "name",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "playlists"
+      ],
+      "type": "object"
+    },
+    "side": "client"
   }
 ]

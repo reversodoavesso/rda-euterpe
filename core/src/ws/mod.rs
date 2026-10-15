@@ -220,6 +220,59 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     chat::handle_song_change(state, tx, uri, locale).await;
                 });
             }
+            ClientMsg::PlaylistModified {
+                playlist_id,
+                hash,
+                uris,
+            } => {
+                let state = state.clone();
+                tokio::spawn(async move {
+                    // 1. Verifica se o hash já é idêntico ao último no banco
+                    let latest_hash = state
+                        .store
+                        .with(|c| Ok(crate::store::snapshots::get_latest_hash(c, &playlist_id)))
+                        .ok()
+                        .flatten();
+
+                    if let Some(h) = latest_hash {
+                        if h == hash {
+                            return; // Zero I/O se o hash for idêntico
+                        }
+                    }
+
+                    // 2. Obtém snapshot anterior para cálculo do diff
+                    let prev_tracks = state
+                        .store
+                        .with(|c| {
+                            Ok(crate::store::snapshots::get_latest_snapshot(
+                                c,
+                                &playlist_id,
+                            ))
+                        })
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default();
+
+                    // 3. Calcula delta e salva
+                    let delta = crate::tools::server::diff::calculate_diff(&prev_tracks, &uris);
+                    state
+                        .store
+                        .with(|c| {
+                            crate::store::snapshots::save_snapshot(c, &playlist_id, &uris);
+                            crate::store::snapshots::record_diff(c, &playlist_id, &hash, &delta)?;
+                            Ok(())
+                        })
+                        .ok();
+
+                    tracing::info!(
+                        playlist_id = %playlist_id,
+                        added = delta.added.len(),
+                        removed = delta.removed.len(),
+                        reordered = delta.reordered,
+                        "playlist diff gravado com sucesso"
+                    );
+                });
+            }
             ClientMsg::Ping | ClientMsg::Pong => {}
         }
     }

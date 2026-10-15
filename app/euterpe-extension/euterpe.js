@@ -241,7 +241,10 @@
           }
           if (WEB_RETRYABLE.has(res.status) && attempt < WEB_MAX_ATTEMPTS - 1) {
             const hinted = Number(res.headers.get("retry-after")) || 0;
-            if (hinted * 1000 > WEB_RETRY_AFTER_MAX_MS) break; // quota window exhausted: fail fast
+            if (hinted * 1000 > WEB_RETRY_AFTER_MAX_MS) {
+              // quota window exhausted: break immediately to surface informative 429
+              break;
+            }
             await sleep(Math.min(retryDelayMs(res, attempt), Math.max(0, deadline - Date.now())));
             continue;
           }
@@ -259,6 +262,11 @@
         if (!res.ok) {
           const err = new Error(`${method} ${url} -> HTTP ${res.status}`);
           err.code = res.status;
+          if (res.status === 429) {
+            const retryHeader = res.headers.get("retry-after");
+            const hinted = Number(retryHeader);
+            err.retryAfterSeconds = !isNaN(hinted) && hinted > 0 ? hinted : 30;
+          }
           throw err;
         }
         const ct = res.headers.get("content-type") || "";
@@ -420,26 +428,139 @@
           }
         },
 
+        async dumpLibrary(opts = {}) {
+          const maxPlaylists = opts.max_playlists || 100;
+          const includeTracks = opts.include_tracks !== false;
+          const includeSaved = !!opts.include_saved_tracks;
+
+          let playlists = await this.playlists(maxPlaylists);
+          if (!playlists) {
+            try {
+              playlists = await Access.web.myPlaylists(50);
+            } catch (err) {
+              playlists = [];
+            }
+          }
+
+          const out = [];
+          for (const pl of (playlists || []).slice(0, maxPlaylists)) {
+            const entry = {
+              id: pl.id,
+              uri: pl.uri,
+              name: pl.name,
+              total_tracks: pl.tracks,
+              image: pl.image,
+            };
+            if (includeTracks) {
+              try {
+                const tracks = await this.playlistTracks(pl.uri, MAX_PLAYLIST_TRACKS);
+                entry.tracks = tracks || [];
+              } catch (e) {
+                entry.tracks = [];
+              }
+            }
+            out.push(entry);
+          }
+
+          let saved = [];
+          if (includeSaved) {
+            try {
+              saved = (await this.savedTracks(MAX_SAVED_TRACKS)) || [];
+            } catch (e) {
+              saved = [];
+            }
+          }
+
+          return {
+            source: ACCESS_SOURCE.PLATFORM,
+            playlists_count: out.length,
+            playlists: out,
+            saved_tracks_count: saved.length,
+            saved_tracks: saved,
+          };
+        },
+
         // --- mutations ---------------------------------------------------
         async createPlaylist(name, description, uris) {
+          let pl = null;
           const RootlistAPI = platformApi("RootlistAPI", "createPlaylist");
-          if (!RootlistAPI) return null;
+          if (RootlistAPI) {
+            try {
+              pl = await RootlistAPI.createPlaylist(name, { after: "end" });
+            } catch (err) {
+              dbg("[tier] platform RootlistAPI.createPlaylist({after:'end'}) failed: " + (err?.message || err));
+            }
+            if (!pl || !pl.uri) {
+              try {
+                pl = await RootlistAPI.createPlaylist(name, {});
+              } catch (err) {
+                dbg("[tier] platform RootlistAPI.createPlaylist({}) failed: " + (err?.message || err));
+              }
+            }
+            if (!pl || !pl.uri) {
+              try {
+                pl = await RootlistAPI.createPlaylist(name);
+              } catch (err) {
+                dbg("[tier] platform RootlistAPI.createPlaylist(name) failed: " + (err?.message || err));
+              }
+            }
+          }
+
+          // Fallback Cosmos IPC interno direto no processo C++ do Spotify
+          if ((!pl || !pl.uri) && Spicetify && Spicetify.CosmosAsync && typeof Spicetify.CosmosAsync.post === "function") {
+            try {
+              const res = await Spicetify.CosmosAsync.post("sp://core-playlist/v1/rootlist", { name });
+              if (res && (res.uri || res.playlist?.uri)) {
+                pl = { uri: res.uri || res.playlist?.uri, name: res.name || res.playlist?.name || name };
+              }
+            } catch (err) {
+              dbg("[tier] cosmos createPlaylist sp://core-playlist/v1/rootlist failed: " + (err?.message || err));
+            }
+          }
+
+          if (!pl || !pl.uri) return null;
+
           try {
-            const pl = await RootlistAPI.createPlaylist(name, { after: "end" });
-            if (!pl || !pl.uri) return null;
             const updateDetails = platformApi("PlaylistAPI", "updateDetails");
             const add = platformApi("PlaylistAPI", "add");
-            if (description && updateDetails) await updateDetails.updateDetails(pl.uri, { description });
-            if (uris.length && add) await add.add(pl.uri, uris, { after: "end" });
+            if (description && updateDetails) {
+              try {
+                await updateDetails.updateDetails(pl.uri, { description });
+              } catch (e) {
+                dbg("[tier] PlaylistAPI.updateDetails error: " + (e?.message || e));
+              }
+            }
+            let addedCount = 0;
+            let batchCount = 0;
+            if (uris.length && add) {
+              const batches = chunk(uris, 100);
+              batchCount = batches.length;
+              for (const part of batches) {
+                try {
+                  await add.add(pl.uri, part, { after: "end" });
+                  addedCount += part.length;
+                } catch (e) {
+                  dbg("[tier] PlaylistAPI.add batch error: " + (e?.message || e));
+                }
+              }
+            }
             return {
               playlist_id: pl.uri.split(":").pop(),
               name: pl.name || name,
               url: null,
               uri: pl.uri,
-              added: uris.length,
+              added: addedCount,
+              batches: batchCount,
             };
           } catch (err) {
-            return null;
+            dbg("[tier] createPlaylist post-creation step failed: " + (err?.message || err));
+            return {
+              playlist_id: pl.uri.split(":").pop(),
+              name: pl.name || name,
+              url: null,
+              uri: pl.uri,
+              added: 0,
+            };
           }
         },
 
@@ -447,8 +568,12 @@
           const PlaylistAPI = platformApi("PlaylistAPI", "add");
           if (!PlaylistAPI) return null;
           try {
-            await PlaylistAPI.add(playlistUri(ref), uris, { after: "end" });
-            return { added: uris.length };
+            let addedCount = 0;
+            for (const part of chunk(uris, 100)) {
+              await PlaylistAPI.add(playlistUri(ref), part, { after: "end" });
+              addedCount += part.length;
+            }
+            return { added: addedCount };
           } catch (err) {
             return null;
           }
@@ -1419,10 +1544,19 @@
               const body = { name: args.name, public: false };
               if (args.description) body.description = args.description;
               const pl = await api(`${API}/users/${me.id}/playlists`, { method: "POST", body });
-              if (uris.length) {
-                await api(`${API}/playlists/${pl.id}/tracks`, { method: "POST", body: { uris } });
+              let addedCount = 0;
+              const batches = chunk(uris, 100);
+              for (const part of batches) {
+                await api(`${API}/playlists/${pl.id}/tracks`, { method: "POST", body: { uris: part } });
+                addedCount += part.length;
               }
-              created = { playlist_id: pl.id, name: pl.name, url: pl.external_urls?.spotify ?? null, added: uris.length };
+              created = {
+                playlist_id: pl.id,
+                name: pl.name,
+                url: pl.external_urls?.spotify ?? null,
+                added: addedCount,
+                batches: batches.length,
+              };
             }
             data = created;
             break;
@@ -1433,8 +1567,12 @@
             // Tier 1 (PlaylistAPI) -> Tier 3 (Web API).
             let res = await Access.platform.addTracks(args.playlist_id, uris);
             if (!res) {
-              await api(`${API}/playlists/${idOf(args.playlist_id)}/tracks`, { method: "POST", body: { uris } });
-              res = { added: uris.length };
+              let addedCount = 0;
+              for (const part of chunk(uris, 100)) {
+                await api(`${API}/playlists/${idOf(args.playlist_id)}/tracks`, { method: "POST", body: { uris: part } });
+                addedCount += part.length;
+              }
+              res = { added: addedCount };
             }
             data = res;
             break;
@@ -1505,12 +1643,73 @@
             break;
           }
 
+          case "dump_library": {
+            data = await Access.platform.dumpLibrary(args);
+            break;
+          }
+
+          case "batch_create_playlists": {
+            const list = Array.isArray(args.playlists) ? args.playlists : [];
+            const delay = typeof args.delay_between_ms === "number" ? Math.max(0, args.delay_between_ms) : 1500;
+            const results = [];
+            for (let i = 0; i < list.length; i++) {
+              const p = list[i];
+              if (!p || !p.name) continue;
+              const uris = dedupe(p.tracks || []);
+              let created = await Access.platform.createPlaylist(p.name, p.description, uris);
+              if (!created) {
+                try {
+                  const me = await api(`${API}/me`);
+                  const body = { name: p.name, public: false };
+                  if (p.description) body.description = p.description;
+                  const pl = await api(`${API}/users/${me.id}/playlists`, { method: "POST", body });
+                  let addedCount = 0;
+                  const batches = chunk(uris, 100);
+                  for (const part of batches) {
+                    await api(`${API}/playlists/${pl.id}/tracks`, { method: "POST", body: { uris: part } });
+                    addedCount += part.length;
+                  }
+                  created = {
+                    playlist_id: pl.id,
+                    name: pl.name,
+                    url: pl.external_urls?.spotify ?? null,
+                    added: addedCount,
+                    batches: batches.length,
+                  };
+                } catch (e) {
+                  created = { ok: false, error: e?.message || String(e) };
+                }
+              }
+              results.push(created);
+              if (delay > 0 && i < list.length - 1) {
+                await sleep(delay);
+              }
+            }
+            data = {
+              total_requested: list.length,
+              created_count: results.filter((r) => r && r.playlist_id).length,
+              results,
+            };
+            break;
+          }
+
           default:
             return { ok: false, code: "tool_not_implemented:" + name };
         }
         return { ok: true, data };
       } catch (err) {
-        const code = err && err.code === 429 ? "rate_limited" : String(err?.message || err);
+        if (err && err.code === 429) {
+          const retryAfter = err.retryAfterSeconds || 30;
+          return {
+            ok: false,
+            code: "rate_limited",
+            data: {
+              retry_after_seconds: retryAfter,
+              hint: "Limite de requisições do Spotify atingido. Recarregue o Spotify Desktop (Ctrl+R) para um novo token ou aguarde o cooldown."
+            }
+          };
+        }
+        const code = String(err?.message || err);
         return { ok: false, code };
       }
     }
@@ -1652,6 +1851,78 @@
       const item = Spicetify.Player.data && Spicetify.Player.data.item;
       if (item) send({ type: "event.songchange", uri: item.uri });
     });
+
+    // --- Playlist change event watcher with FNV-1a hash & debounce (Phase 5) ---
+    function fnv1a64(str) {
+      let hash = BigInt("0xcbf29ce484222325");
+      const prime = BigInt("0x100000001b3");
+      for (let i = 0; i < str.length; i++) {
+        hash = hash ^ BigInt(str.charCodeAt(i));
+        hash = (hash * prime) & BigInt("0xffffffffffffffff");
+      }
+      return hash.toString(16).padStart(16, "0");
+    }
+
+    const playlistTimers = new Map();
+    const lastKnownHashes = new Map();
+
+    async function handlePlaylistModified(playlistUriStr) {
+      const pid = idOf(playlistUriStr);
+      if (!pid) return;
+
+      if (playlistTimers.has(pid)) {
+        clearTimeout(playlistTimers.get(pid));
+      }
+
+      playlistTimers.set(
+        pid,
+        setTimeout(async () => {
+          playlistTimers.delete(pid);
+          try {
+            // Leitura interna Tier 1 em memória (0 requisições HTTP)
+            const tracks = await Access.platform.playlistTracks(pid, MAX_PLAYLIST_TRACKS);
+            if (!tracks) return;
+            const uris = tracks.map((t) => t.uri).filter(Boolean);
+            const currentHash = fnv1a64(uris.join(","));
+
+            if (lastKnownHashes.get(pid) === currentHash) {
+              return; // Hash idêntico: descarta sem custo
+            }
+            lastKnownHashes.set(pid, currentHash);
+
+            send({
+              type: "event.playlist_modified",
+              playlistId: pid,
+              hash: currentHash,
+              uris,
+            });
+            dbg(`[watcher] playlist ${pid} modified -> diff sent (hash=${currentHash}, tracks=${uris.length})`);
+          } catch (e) {
+            dbg("[watcher] error inspecting modified playlist: " + (e?.message || e));
+          }
+        }, 1500)
+      );
+    }
+
+    try {
+      const plApi = platformApi("PlaylistAPI", "getEvents") || platformApi("PlaylistAPI", "addListener");
+      let bus = null;
+      if (plApi) {
+        if (typeof plApi.getEvents === "function") {
+          bus = plApi.getEvents();
+        } else if (typeof plApi.addListener === "function") {
+          bus = plApi;
+        }
+      }
+      if (bus && typeof bus.addListener === "function") {
+        bus.addListener("operation", (ev) => {
+          const uri = ev && (ev.uri || ev.playlistUri);
+          if (uri) handlePlaylistModified(uri);
+        });
+      }
+    } catch (err) {
+      dbg("[watcher] PlaylistAPI event bus unavailable: " + (err?.message || err));
+    }
 
     connect();
     console.info("[euterpe] " + tr("extensionLoaded"));

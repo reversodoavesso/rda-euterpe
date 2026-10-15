@@ -250,6 +250,38 @@ export const clientTools: ToolDef[] = [
     [],
     "client"
   ),
+  def(
+    "dump_library",
+    "Extrai instantaneamente todas as playlists, faixas e metadados da biblioteca local via Spicetify em <2s sem consumir rate limit da Web API.",
+    {
+      include_tracks: { type: "boolean", description: "Inclui faixas completas de cada playlist (default: true)" },
+      include_saved_tracks: { type: "boolean", description: "Inclui músicas curtidas (default: false)" },
+      max_playlists: { type: "integer", description: "Limite de playlists a extrair (default: 100)" },
+    },
+    [],
+    "client"
+  ),
+  def(
+    "batch_create_playlists",
+    "Cria múltiplas playlists em lote com fatiamento e delay controlado em uma única execução. Toda criação é confirmada pelo usuário.",
+    {
+      playlists: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            description: { type: "string" },
+            tracks: { type: "array", items: { type: "string" } },
+          },
+          required: ["name", "tracks"],
+        },
+      },
+      delay_between_ms: { type: "integer", description: "Pausa entre criações em ms (default: 1500)" },
+    },
+    ["playlists"],
+    "client"
+  ),
 ];
 
 export const serverTools: ToolDef[] = [
@@ -293,9 +325,13 @@ export const serverTools: ToolDef[] = [
   ),
   def(
     "prepare_cover",
-    "Downloads the image at a URL, resizes and compresses to JPEG ≤ 256KB and returns it in base64, ready for set_playlist_cover.",
-    { url: { type: "string", description: "image URL" }, max_kb: { type: "integer", description: "default 256" } },
-    ["url"],
+    "Prepara uma capa de playlist a partir de uma URL remota, caminho de arquivo local ou Data URI base64. Redimensiona e comprime para JPEG ≤ 256KB pronta para set_playlist_cover.",
+    {
+      url: { type: "string", description: "URL da imagem, caminho de arquivo local ou data:image/... base64" },
+      file_path: { type: "string", description: "caminho de arquivo de imagem local opcional" },
+      max_kb: { type: "integer", description: "default 256" },
+    },
+    [],
     "server"
   ),
   def(
@@ -362,6 +398,51 @@ export const serverTools: ToolDef[] = [
     ["artist"],
     "server"
   ),
+  def(
+    "find_orphans",
+    "Identifica faixas que estavam nas playlists de origem mas foram esquecidas nas playlists de destino durante reorganização/curadoria.",
+    {
+      source_playlist_ids: { type: "array", items: { type: "string" }, description: "IDs ou URIs das playlists originais" },
+      target_playlist_ids: { type: "array", items: { type: "string" }, description: "IDs ou URIs das playlists novas geradas" },
+    },
+    ["source_playlist_ids", "target_playlist_ids"],
+    "server"
+  ),
+  def(
+    "analyze_overlap",
+    "Calcula matriz de intersecção e similaridade Jaccard entre playlists para detectar duplicidades e sobreposição.",
+    {
+      playlist_ids: { type: "array", items: { type: "string" }, description: "lista com pelo menos 2 IDs de playlists" },
+    },
+    ["playlist_ids"],
+    "server"
+  ),
+  def(
+    "backup_library",
+    "Salva um snapshot completo com data/hora da biblioteca local para restauração segura e controle de versões.",
+    {},
+    [],
+    "server"
+  ),
+  def(
+    "restore_library",
+    "Restaura a estrutura da biblioteca a partir de um backup prévio salvo em disco.",
+    {
+      backup_id: { type: "string", description: "ID do backup (ex: snapshot-20261014-230000)" },
+    },
+    ["backup_id"],
+    "server"
+  ),
+  def(
+    "get_playlist_history",
+    "Consulta o histórico e a linha do tempo de alterações de uma playlist (deltas incrementais com adições, remoções e reordenações).",
+    {
+      playlist_id: { type: "string", description: "ID ou URI da playlist" },
+      limit: { type: "integer", description: "Limite de versões a consultar (default: 10)" },
+    },
+    ["playlist_id"],
+    "server"
+  ),
 ];
 
 export const allToolSchemas: ChatCompletionTool[] = [...clientTools, ...serverTools].map((t) => ({
@@ -376,4 +457,5 @@ export const MUTATING_TOOLS = new Set([
   "set_playlist_details",
   "replace_playlist_tracks",
   "set_playlist_cover",
+  "batch_create_playlists",
 ]);

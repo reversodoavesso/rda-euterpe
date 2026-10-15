@@ -16,24 +16,50 @@ use std::time::Duration;
 pub const MAX_SIDE: u32 = 600;
 pub const DEFAULT_MAX_KB: usize = 256;
 
-pub async fn prepare_cover(url: &str, max_kb: usize) -> ToolResult {
-    let res = http()
-        .get(url)
-        .timeout(Duration::from_secs(20))
-        .send()
-        .await;
-    let res = match res {
-        Ok(r) => r,
-        Err(e) => return ToolResult::err(format!("cover_download:{e}")),
-    };
-    if !res.status().is_success() {
-        return ToolResult::err(format!("cover_download_{}", res.status().as_u16()));
+pub async fn prepare_cover(source: &str, max_kb: usize) -> ToolResult {
+    let source = source.trim();
+    if source.is_empty() {
+        return ToolResult::err("cover_empty_source");
     }
-    let bytes = match res.bytes().await {
-        Ok(b) => b,
-        Err(e) => return ToolResult::err(format!("cover_body:{e}")),
-    };
-    encode_cover(&bytes, max_kb)
+
+    // 1. Data URI (Base64 inline)
+    if let Some(rest) = source.strip_prefix("data:") {
+        if let Some((_, b64)) = rest.split_once(";base64,") {
+            let bytes = match base64::engine::general_purpose::STANDARD.decode(b64.trim()) {
+                Ok(b) => b,
+                Err(e) => return ToolResult::err(format!("cover_base64_decode:{e}")),
+            };
+            return encode_cover(&bytes, max_kb);
+        }
+    }
+
+    // 2. HTTP / HTTPS URL
+    if source.starts_with("http://") || source.starts_with("https://") {
+        let res = http()
+            .get(source)
+            .timeout(Duration::from_secs(20))
+            .send()
+            .await;
+        let res = match res {
+            Ok(r) => r,
+            Err(e) => return ToolResult::err(format!("cover_download:{e}")),
+        };
+        if !res.status().is_success() {
+            return ToolResult::err(format!("cover_download_{}", res.status().as_u16()));
+        }
+        let bytes = match res.bytes().await {
+            Ok(b) => b,
+            Err(e) => return ToolResult::err(format!("cover_body:{e}")),
+        };
+        return encode_cover(&bytes, max_kb);
+    }
+
+    // 3. Local filesystem path
+    let path = std::path::Path::new(source);
+    match tokio::fs::read(path).await {
+        Ok(bytes) => encode_cover(&bytes, max_kb),
+        Err(e) => ToolResult::err(format!("cover_file_read:{e}")),
+    }
 }
 
 /// Núcleo puro (testável sem rede).
