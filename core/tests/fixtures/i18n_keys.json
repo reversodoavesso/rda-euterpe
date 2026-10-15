@@ -195,6 +195,10 @@
     "en": "Swapping the whole setlist…",
     "pt-br": "Trocando o repertório inteiro…"
   },
+  "tool.resolve_tracks": {
+    "en": "Matching tracks in the crate…",
+    "pt-br": "Cruzando faixas no baú…"
+  },
   "tool.search_spotify": {
     "en": "Digging the whole catalog for one line…",
     "pt-br": "Vasculhando o catálogo inteiro por uma linha…"

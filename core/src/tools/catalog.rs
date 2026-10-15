@@ -188,6 +188,7 @@ pub fn mcp_list() -> Vec<Value> {
 fn is_read_only(name: &str) -> bool {
     const READS: &[&str] = &[
         "search_spotify",
+        "resolve_tracks",
         "new_releases",
         "lyrics_lookup",
         "lyrics_bulk",
@@ -226,9 +227,9 @@ mod tests {
 
     #[test]
     fn counts_match_the_frozen_contract_c6() {
-        assert_eq!(client_tools().count(), 27);
+        assert_eq!(client_tools().count(), 28);
         assert_eq!(server_tools().count(), 16);
-        assert_eq!(all().len(), 43);
+        assert_eq!(all().len(), 44);
     }
 
     #[test]

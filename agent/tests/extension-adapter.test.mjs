@@ -442,3 +442,100 @@ test("player_control: dispatches to the client player, validates args, never hit
   assert.equal(calls[2].join(","), "setVolume,1"); // clamped into 0..1
   assert.ok(!fetchCalls.some((u) => u.includes("/me/player")), "must not hit the Web API");
 });
+
+test("resolve_tracks: matches [{ artist, title }] via GraphQL/Cosmos and returns URIs", async () => {
+  const { euterpe, fetchCalls } = loadExtension({
+    graphql: {
+      Definitions: { searchModalResults: { name: "searchModalResults", sha256Hash: "0".repeat(64) } },
+      Request: async (def, vars) => {
+        const term = String(vars.searchTerm || "").toLowerCase();
+        const id = term.includes("radiohead") ? "radiohead_creep" : "queen_bohemian";
+        const name = term.includes("radiohead") ? "Creep" : "Bohemian Rhapsody";
+        return {
+          data: {
+            searchV2: {
+              topResultsV2: {
+                itemsV2: [
+                  { item: { data: { uri: `spotify:track:${id}`, name, id } } },
+                ],
+              },
+            },
+          },
+        };
+      },
+    },
+  });
+
+  const res = await euterpe.execSpotifyTool("resolve_tracks", {
+    tracks: [
+      { artist: "Radiohead", title: "Creep" },
+      { artist: "Queen", title: "Bohemian Rhapsody" },
+      "spotify:track:already_resolved",
+    ],
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.data.total, 3);
+  assert.equal(res.data.resolved_count, 3);
+  assert.equal(
+    res.data.uris.join(","),
+    "spotify:track:radiohead_creep,spotify:track:queen_bohemian,spotify:track:already_resolved"
+  );
+  assert.equal(res.data.results[0].matched, true);
+  assert.equal(res.data.results[0].matched_title, "Creep");
+  assert.ok(!fetchCalls.some((u) => u.includes("/search")), "must use internal GraphQL without hitting Web API");
+});
+
+test("batch_create_playlists: auto-resolves non-URI track strings in background before creation", async () => {
+  let createdPayload = null;
+  const { euterpe, fetchCalls } = loadExtension({
+    platform: {
+      RootlistAPI: {
+        createPlaylist: async (name) => ({ uri: "spotify:playlist:new_pl_id", name }),
+      },
+      PlaylistAPI: {
+        add: async (uri, uris) => {
+          createdPayload = { uri, uris };
+          return true;
+        },
+      },
+    },
+    graphql: {
+      Definitions: { searchModalResults: { name: "searchModalResults", sha256Hash: "0".repeat(64) } },
+      Request: async () => ({
+        data: {
+          searchV2: {
+            topResultsV2: {
+              itemsV2: [
+                { item: { data: { uri: "spotify:track:auto_resolved_1", name: "Resolved Track" } } },
+              ],
+            },
+          },
+        },
+      }),
+    },
+  });
+
+  const res = await euterpe.execSpotifyTool("batch_create_playlists", {
+    playlists: [
+      {
+        name: "Auto Resolved Playlist",
+        tracks: [
+          "spotify:track:existing_uri",
+          "Artist Name - Track Title",
+        ],
+      },
+    ],
+    delay_between_ms: 0,
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.data.created_count, 1);
+  assert.equal(createdPayload.uris.length, 2);
+  assert.equal(createdPayload.uris[0], "spotify:track:existing_uri");
+  assert.equal(createdPayload.uris[1], "spotify:track:auto_resolved_1");
+  assert.equal(res.data.results[0].requested_tracks, 2);
+  assert.equal(res.data.results[0].resolved_tracks, 2);
+  assert.ok(!fetchCalls.some((u) => u.includes("/search")), "internal search used");
+});
+

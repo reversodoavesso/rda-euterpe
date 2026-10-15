@@ -38,6 +38,7 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("tool.player_control", "Pressing the button (the right one)…", "Apertando o botão (o certo, dessa vez)…"),
     ("tool.player_queue_control", "Rearranging the queue carefully…", "Mexendo na fila com cuidado…"),
     ("tool.search_spotify", "Digging the whole catalog for one line…", "Vasculhando o catálogo inteiro por uma linha…"),
+    ("tool.resolve_tracks", "Matching tracks in the crate…", "Cruzando faixas no baú…"),
     ("tool.get_related_artists", "Pulling the thread to the next artist…", "Puxando o fio até o artista vizinho…"),
     ("tool.get_artist", "Reading the official bio (sourced)…", "Lendo a biografia oficial (com fonte)…"),
     ("tool.get_recommendations", "Testing combos at the counter…", "Testando combinações no balcão…"),

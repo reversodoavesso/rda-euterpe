@@ -307,6 +307,20 @@
       return [...new Set(list || [])];
     }
 
+    async function poolMap(items, concurrency, fn) {
+      if (!Array.isArray(items) || !items.length) return [];
+      const results = new Array(items.length);
+      let idx = 0;
+      const workers = Array.from({ length: Math.min(concurrency || 6, items.length) }, async () => {
+        while (idx < items.length) {
+          const cur = idx++;
+          results[cur] = await fn(items[cur], cur);
+        }
+      });
+      await Promise.all(workers);
+      return results;
+    }
+
     // Normalizes the several track payload shapes (LibraryAPI/PlaylistAPI/web
     // API) into a single {uri, name, artists, artist_ids, album, duration_ms}.
     function mapTrack(it) {
@@ -400,6 +414,7 @@
             }
             return items.map(mapTrack);
           } catch (err) {
+            dbg("[tier] PlaylistAPI.playlistTracks failed: " + (err?.message || err));
             return null;
           }
         },
@@ -408,9 +423,19 @@
           const PlaylistAPI = platformApi("PlaylistAPI", "getContents");
           if (!PlaylistAPI) return null;
           try {
-            const res = await PlaylistAPI.getContents(playlistUri(ref));
-            return res && Array.isArray(res.items) ? res.items : null;
+            const uri = playlistUri(ref);
+            const items = [];
+            let offset = 0;
+            while (offset < 1000) {
+              const res = await PlaylistAPI.getContents(uri, { offset, limit: MAX_PAGE_SIZE });
+              const page = res && Array.isArray(res.items) ? res.items : [];
+              items.push(...page);
+              if (page.length < MAX_PAGE_SIZE) break;
+              offset += MAX_PAGE_SIZE;
+            }
+            return items;
           } catch (err) {
+            dbg("[tier] PlaylistAPI.playlistContents failed: " + (err?.message || err));
             return null;
           }
         },
@@ -783,8 +808,11 @@
             includeAuthors: false,
             includePreReleases: false,
           });
-          const groups = data && data.searchV2 && data.searchV2.topResultsV2 && data.searchV2.topResultsV2.itemsV2;
-          if (!Array.isArray(groups) || !groups.length) return null;
+          const topItems = (data && data.searchV2 && data.searchV2.topResultsV2 && data.searchV2.topResultsV2.itemsV2) || [];
+          const trackItems = (data && data.searchV2 && data.searchV2.tracksV2 && data.searchV2.tracksV2.items) || [];
+          const genericTrackItems = (data && data.searchV2 && data.searchV2.tracks && data.searchV2.tracks.items) || [];
+          const groups = [...topItems, ...trackItems, ...genericTrackItems];
+          if (!groups.length) return null;
           const found = [];
           const seen = new Set();
           const walk = (node, depth) => {
@@ -830,6 +858,97 @@
         },
       },
     };
+
+    async function resolveSingleTrack(item) {
+      if (!item) return { artist: null, title: null, uri: null, matched: false, error: "empty_item" };
+
+      // 1. If it's already a spotify:track: URI
+      if (typeof item === "string" && item.trim().startsWith("spotify:track:")) {
+        const u = item.trim();
+        return { artist: null, title: null, uri: u, matched: true, source: "uri" };
+      }
+      if (typeof item === "object" && typeof item.uri === "string" && item.uri.trim().startsWith("spotify:track:")) {
+        return {
+          artist: item.artist || null,
+          title: item.title || item.name || null,
+          uri: item.uri.trim(),
+          matched: true,
+          source: "uri",
+        };
+      }
+
+      let artist = "";
+      let title = "";
+      let searchTerm = "";
+
+      if (typeof item === "string") {
+        const raw = item.trim();
+        if (raw.includes(" - ")) {
+          const parts = raw.split(" - ");
+          artist = parts[0].trim();
+          title = parts.slice(1).join(" - ").trim();
+          searchTerm = `${artist} ${title}`;
+        } else {
+          title = raw;
+          searchTerm = raw;
+        }
+      } else if (typeof item === "object") {
+        artist = String(item.artist || item.artist_name || "").trim();
+        title = String(item.title || item.track || item.track_name || item.name || "").trim();
+        searchTerm = artist && title ? `${artist} ${title}` : (title || artist || "");
+      }
+
+      if (!searchTerm) {
+        return { artist: artist || null, title: title || null, uri: null, matched: false, error: "no_search_term" };
+      }
+
+      // 2. Try GraphQL / Cosmos (internal desktop client, zero rate limit)
+      try {
+        const gql = await Access.graphql.search(searchTerm, 5);
+        if (gql && Array.isArray(gql.tracks) && gql.tracks.length > 0) {
+          const topTrack = gql.tracks[0];
+          return {
+            artist: artist || null,
+            title: title || null,
+            uri: topTrack.uri,
+            matched: true,
+            matched_title: topTrack.name || null,
+            source: ACCESS_SOURCE.GRAPHQL,
+          };
+        }
+      } catch (err) {
+        // Fall through to Web API
+      }
+
+      // 3. Fallback: Web API
+      try {
+        const q = encodeURIComponent(searchTerm);
+        const body = await api(`${API}/search?q=${q}&type=track&limit=3`, { ttlMs: CACHE_10MIN });
+        const items = body && body.tracks && body.tracks.items;
+        if (Array.isArray(items) && items.length > 0) {
+          const topTrack = items[0];
+          const matchedArtist = Array.isArray(topTrack.artists) ? topTrack.artists.map((a) => a.name).join(", ") : null;
+          return {
+            artist: artist || null,
+            title: title || null,
+            uri: topTrack.uri,
+            matched: true,
+            matched_title: topTrack.name || null,
+            matched_artist: matchedArtist,
+            source: ACCESS_SOURCE.WEB,
+          };
+        }
+      } catch (err) {
+        // Fall through to failure
+      }
+
+      return {
+        artist: artist || null,
+        title: title || null,
+        uri: null,
+        matched: false,
+      };
+    }
 
     async function listeningRecents(limit) {
       const P = Spicetify && Spicetify.Platform;
@@ -1368,11 +1487,15 @@
           case "get_playlist_tracks": {
             // Tier 1 (PlaylistAPI, client store) -> Tier 3 (Web API).
             let tracks = await Access.platform.playlistTracks(args.playlist_id, MAX_PLAYLIST_TRACKS);
-            if (!tracks) {
-              const items = await paginate(`/playlists/${idOf(args.playlist_id)}/tracks`, PAGE_SIZE, MAX_PLAYLIST_TRACKS);
-              tracks = items.map(mapTrack);
+            if (tracks === null) {
+              try {
+                const items = await paginate(`/playlists/${idOf(args.playlist_id)}/tracks`, PAGE_SIZE, MAX_PLAYLIST_TRACKS);
+                tracks = items.map(mapTrack);
+              } catch (err) {
+                tracks = [];
+              }
             }
-            data = tracks;
+            data = tracks || [];
             break;
           }
 
@@ -1560,7 +1683,15 @@
           }
 
           case "create_playlist": {
-            const uris = dedupe(args.tracks);
+            const rawTracks = Array.isArray(args.tracks) ? args.tracks : [];
+            const resolvedTracks = await poolMap(rawTracks, 6, async (item) => {
+              if (typeof item === "string" && item.trim().startsWith("spotify:track:")) {
+                return item.trim();
+              }
+              const res = await resolveSingleTrack(item);
+              return res && res.uri ? res.uri : null;
+            });
+            const uris = dedupe(resolvedTracks.filter(Boolean));
             // Tier 1 (RootlistAPI + PlaylistAPI) -> Tier 3 (Web API).
             let created = await Access.platform.createPlaylist(args.name, args.description, uris);
             if (!created) {
@@ -1641,8 +1772,12 @@
               const targets = contents
                 .map((it) => ({ uri: it.uri || (it.track && it.track.uri), uid: it.uid }))
                 .filter((t) => t.uri && t.uid);
-              if (targets.length) await rm.remove(playlistUri(args.playlist_id), targets);
-              if (uris.length) await addApi.add(playlistUri(args.playlist_id), uris, { after: "end" });
+              for (const part of chunk(targets, 100)) {
+                await rm.remove(playlistUri(args.playlist_id), part);
+              }
+              for (const part of chunk(uris, 100)) {
+                await addApi.add(playlistUri(args.playlist_id), part, { after: "end" });
+              }
               data = { replaced: uris.length };
               break;
             }
@@ -1679,7 +1814,15 @@
             for (let i = 0; i < list.length; i++) {
               const p = list[i];
               if (!p || !p.name) continue;
-              const uris = dedupe(p.tracks || []);
+              const rawTracks = Array.isArray(p.tracks) ? p.tracks : [];
+              const resolvedTracks = await poolMap(rawTracks, 6, async (item) => {
+                if (typeof item === "string" && item.trim().startsWith("spotify:track:")) {
+                  return item.trim();
+                }
+                const res = await resolveSingleTrack(item);
+                return res && res.uri ? res.uri : null;
+              });
+              const uris = dedupe(resolvedTracks.filter(Boolean));
               let created = await Access.platform.createPlaylist(p.name, p.description, uris);
               if (!created) {
                 try {
@@ -1704,6 +1847,10 @@
                   created = { ok: false, error: e?.message || String(e) };
                 }
               }
+              if (created && typeof created === "object") {
+                created.requested_tracks = rawTracks.length;
+                created.resolved_tracks = uris.length;
+              }
               results.push(created);
               if (delay > 0 && i < list.length - 1) {
                 await sleep(delay);
@@ -1712,6 +1859,19 @@
             data = {
               total_requested: list.length,
               created_count: results.filter((r) => r && r.playlist_id).length,
+              results,
+            };
+            break;
+          }
+
+          case "resolve_tracks": {
+            const list = Array.isArray(args.tracks) ? args.tracks : [];
+            const results = await poolMap(list, 6, (t) => resolveSingleTrack(t));
+            const uris = dedupe(results.filter((r) => r && r.uri).map((r) => r.uri));
+            data = {
+              total: list.length,
+              resolved_count: uris.length,
+              uris,
               results,
             };
             break;

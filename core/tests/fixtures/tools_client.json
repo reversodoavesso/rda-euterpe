@@ -555,7 +555,7 @@
     "side": "client"
   },
   {
-    "description": "Cria múltiplas playlists em lote com fatiamento e delay controlado em uma única execução. Toda criação é confirmada pelo usuário.",
+    "description": "Cria múltiplas playlists em lote com fatiamento e delay controlado em uma única execução. Toda criação é confirmada pelo usuário. Suporta auto-resolução: itens em tracks que não comecem com spotify:track: são buscados automaticamente em background.",
     "name": "batch_create_playlists",
     "parameters": {
       "properties": {
@@ -590,6 +590,40 @@
       },
       "required": [
         "playlists"
+      ],
+      "type": "object"
+    },
+    "side": "client"
+  },
+  {
+    "description": "Resolves a list of tracks by artist and title into Spotify URIs directly inside the desktop client via GraphQL/Cosmos search without rate limits. Accepts batches of 50-100 tracks.",
+    "name": "resolve_tracks",
+    "parameters": {
+      "properties": {
+        "tracks": {
+          "description": "List of tracks to resolve, each with artist and title",
+          "items": {
+            "properties": {
+              "artist": {
+                "description": "Artist name",
+                "type": "string"
+              },
+              "title": {
+                "description": "Track title",
+                "type": "string"
+              }
+            },
+            "required": [
+              "artist",
+              "title"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tracks"
       ],
       "type": "object"
     },

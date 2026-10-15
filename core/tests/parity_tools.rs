@@ -96,7 +96,7 @@ fn counts_match_the_fixture() {
     assert_eq!(expected["client"], catalog::client_tools().count());
     assert_eq!(expected["server"], catalog::server_tools().count());
     assert_eq!(expected["total"], catalog::all().len());
-    assert_eq!(catalog::all().len(), 43);
+    assert_eq!(catalog::all().len(), 44);
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn openai_schemas_match_the_fixture_shape() {
 #[test]
 fn mcp_listing_uses_namespaced_names_and_annotations() {
     let listed = catalog::mcp_list();
-    assert_eq!(listed.len(), 43);
+    assert_eq!(listed.len(), 44);
     for entry in &listed {
         let name = entry["name"].as_str().unwrap();
         assert!(name.starts_with("spotify_"), "{name} sem prefixo");

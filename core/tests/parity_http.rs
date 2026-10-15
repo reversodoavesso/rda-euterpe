@@ -282,7 +282,7 @@ async fn mcp_protocol_over_http() {
         .await
         .unwrap();
     let body: serde_json::Value = listed.json().await.unwrap();
-    assert_eq!(body["result"]["tools"].as_array().unwrap().len(), 43);
+    assert_eq!(body["result"]["tools"].as_array().unwrap().len(), 44);
 
     // Método desconhecido ⇒ -32601.
     let unknown = client

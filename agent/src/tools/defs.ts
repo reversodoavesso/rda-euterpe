@@ -263,7 +263,7 @@ export const clientTools: ToolDef[] = [
   ),
   def(
     "batch_create_playlists",
-    "Cria múltiplas playlists em lote com fatiamento e delay controlado em uma única execução. Toda criação é confirmada pelo usuário.",
+    "Cria múltiplas playlists em lote com fatiamento e delay controlado em uma única execução. Toda criação é confirmada pelo usuário. Suporta auto-resolução: itens em tracks que não comecem com spotify:track: são buscados automaticamente em background.",
     {
       playlists: {
         type: "array",
@@ -280,6 +280,26 @@ export const clientTools: ToolDef[] = [
       delay_between_ms: { type: "integer", description: "Pausa entre criações em ms (default: 1500)" },
     },
     ["playlists"],
+    "client"
+  ),
+  def(
+    "resolve_tracks",
+    "Resolves a list of tracks by artist and title into Spotify URIs directly inside the desktop client via GraphQL/Cosmos search without rate limits. Accepts batches of 50-100 tracks.",
+    {
+      tracks: {
+        type: "array",
+        description: "List of tracks to resolve, each with artist and title",
+        items: {
+          type: "object",
+          properties: {
+            artist: { type: "string", description: "Artist name" },
+            title: { type: "string", description: "Track title" },
+          },
+          required: ["artist", "title"],
+        },
+      },
+    },
+    ["tracks"],
     "client"
   ),
 ];

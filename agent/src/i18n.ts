@@ -54,6 +54,7 @@ export const AGENT_STRINGS: Dict = {
   "tool.player_control": { en: "Pressing the button (the right one)…", "pt-br": "Apertando o botão (o certo, dessa vez)…" },
   "tool.player_queue_control": { en: "Rearranging the queue carefully…", "pt-br": "Mexendo na fila com cuidado…" },
   "tool.search_spotify": { en: "Digging the whole catalog for one line…", "pt-br": "Vasculhando o catálogo inteiro por uma linha…" },
+  "tool.resolve_tracks": { en: "Matching tracks in the crate…", "pt-br": "Cruzando faixas no baú…" },
   "tool.get_related_artists": { en: "Pulling the thread to the next artist…", "pt-br": "Puxando o fio até o artista vizinho…" },
   "tool.get_artist": { en: "Reading the official bio (sourced)…", "pt-br": "Lendo a biografia oficial (com fonte)…" },
   "tool.get_recommendations": { en: "Testing combos at the counter…", "pt-br": "Testando combinações no balcão…" },
