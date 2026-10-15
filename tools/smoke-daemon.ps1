@@ -122,7 +122,7 @@ try {
     Check 'MCP initialize negocia a versão' ($init.result.protocolVersion -eq '2025-06-18')
 
     $list = Json "$base/mcp" 'POST' @{ jsonrpc = '2.0'; id = 2; method = 'tools/list'; params = @{} }
-    Check 'MCP tools/list devolve 36 tools' (@($list.result.tools).Count -eq 36) ("count=" + @($list.result.tools).Count)
+    Check 'MCP tools/list devolve 43 tools' (@($list.result.tools).Count -eq 43) ("count=" + @($list.result.tools).Count)
     Check 'MCP tools/list usa nomes spotify_*' (@($list.result.tools | Where-Object { $_.name -notlike 'spotify_*' }).Count -eq 0)
 
     $undo = Json "$base/mcp" 'POST' @{ jsonrpc = '2.0'; id = 3; method = 'tools/call'; params = @{ name = 'spotify_undo_last_mutation'; arguments = @{ playlist_id = 'x' } } }
