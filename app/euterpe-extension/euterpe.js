@@ -398,7 +398,7 @@
               if (page.length < MAX_PAGE_SIZE) break;
               offset += MAX_PAGE_SIZE;
             }
-            return items.length ? items.map(mapTrack) : null;
+            return items.map(mapTrack);
           } catch (err) {
             return null;
           }
@@ -486,22 +486,19 @@
           const RootlistAPI = platformApi("RootlistAPI", "createPlaylist");
           if (RootlistAPI) {
             try {
-              pl = await RootlistAPI.createPlaylist(name, { after: "end" });
+              const res = await RootlistAPI.createPlaylist(name, { after: "end" });
+              const uri = typeof res === "string" ? res : (res?.uri || res?.playlist?.uri);
+              if (uri) pl = { uri, name: (typeof res === "object" && res?.name) || name };
             } catch (err) {
               dbg("[tier] platform RootlistAPI.createPlaylist({after:'end'}) failed: " + (err?.message || err));
             }
             if (!pl || !pl.uri) {
               try {
-                pl = await RootlistAPI.createPlaylist(name, {});
+                const res = await RootlistAPI.createPlaylist(name, {});
+                const uri = typeof res === "string" ? res : (res?.uri || res?.playlist?.uri);
+                if (uri) pl = { uri, name: (typeof res === "object" && res?.name) || name };
               } catch (err) {
                 dbg("[tier] platform RootlistAPI.createPlaylist({}) failed: " + (err?.message || err));
-              }
-            }
-            if (!pl || !pl.uri) {
-              try {
-                pl = await RootlistAPI.createPlaylist(name);
-              } catch (err) {
-                dbg("[tier] platform RootlistAPI.createPlaylist(name) failed: " + (err?.message || err));
               }
             }
           }
@@ -510,8 +507,9 @@
           if ((!pl || !pl.uri) && Spicetify && Spicetify.CosmosAsync && typeof Spicetify.CosmosAsync.post === "function") {
             try {
               const res = await Spicetify.CosmosAsync.post("sp://core-playlist/v1/rootlist", { name });
-              if (res && (res.uri || res.playlist?.uri)) {
-                pl = { uri: res.uri || res.playlist?.uri, name: res.name || res.playlist?.name || name };
+              const uri = typeof res === "string" ? res : (res?.uri || res?.playlist?.uri);
+              if (uri) {
+                pl = { uri, name: (typeof res === "object" && res?.name) || name };
               }
             } catch (err) {
               dbg("[tier] cosmos createPlaylist sp://core-playlist/v1/rootlist failed: " + (err?.message || err));
@@ -522,12 +520,25 @@
 
           try {
             const updateDetails = platformApi("PlaylistAPI", "updateDetails");
+            const setAttributes = platformApi("PlaylistAPI", "setAttributes");
             const add = platformApi("PlaylistAPI", "add");
-            if (description && updateDetails) {
-              try {
-                await updateDetails.updateDetails(pl.uri, { description });
-              } catch (e) {
-                dbg("[tier] PlaylistAPI.updateDetails error: " + (e?.message || e));
+            if (description) {
+              let updated = false;
+              if (updateDetails) {
+                try {
+                  await updateDetails.updateDetails(pl.uri, { description });
+                  updated = true;
+                } catch (e) {
+                  dbg("[tier] PlaylistAPI.updateDetails error: " + (e?.message || e));
+                }
+              }
+              if (!updated && setAttributes) {
+                try {
+                  await setAttributes.setAttributes(pl.uri, { description });
+                  updated = true;
+                } catch (e) {
+                  dbg("[tier] PlaylistAPI.setAttributes error: " + (e?.message || e));
+                }
               }
             }
             let addedCount = 0;
@@ -600,14 +611,27 @@
         },
 
         async updateDetails(ref, patch) {
-          const PlaylistAPI = platformApi("PlaylistAPI", "updateDetails");
-          if (!PlaylistAPI) return null;
+          const updateDetails = platformApi("PlaylistAPI", "updateDetails");
+          const setAttributes = platformApi("PlaylistAPI", "setAttributes");
+          if (!updateDetails && !setAttributes) return null;
+          const uri = playlistUri(ref);
           try {
-            await PlaylistAPI.updateDetails(playlistUri(ref), patch);
-            return { ok: true };
+            if (updateDetails) {
+              await updateDetails.updateDetails(uri, patch);
+              return { ok: true };
+            }
           } catch (err) {
-            return null;
+            dbg("[tier] PlaylistAPI.updateDetails error: " + (err?.message || err));
           }
+          try {
+            if (setAttributes) {
+              await setAttributes.setAttributes(uri, patch);
+              return { ok: true };
+            }
+          } catch (err) {
+            dbg("[tier] PlaylistAPI.setAttributes error: " + (err?.message || err));
+          }
+          return null;
         },
 
         async uploadImage(ref, imageB64) {
