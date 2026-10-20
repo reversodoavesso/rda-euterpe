@@ -1,5 +1,32 @@
 # Euterpe — Changes
 
+# v2.4 — Multiplataforma, Autostart Nativo e Gestão de Playlists (45 Tools)
+
+**Data:** 2026-10-20 · **Status:** 140 testes unitários + 12 suites de integração em `core/` passando; testes de plataforma em `app/tests/` passando; smoke tests de ciclo de vida e daemon passando (100% verde).
+
+## Resumo das entregas
+
+1. **Multiplataforma e Autostart Nativo por Usuário:**
+   - Suporte a Windows (atalho oculto), Linux (systemd user unit com fallback XDG Autostart) e macOS (LaunchAgent).
+   - Build Rust usando o host nativo por padrão; seleção de binário por plataforma/arquitetura (x64 e ARM64).
+   - Manipulação de SIGTERM no Unix para encerramento gracioso; `/health` expõe `pid` e `executable`.
+   - Gerenciamento e migração de dados respeitando caminhos canônicos (`XDG_DATA_HOME` / `Library/Application Support`).
+   - Guia de operação e compatibilidade em `docs/platforms.md` e pipeline de CI multiplataforma (`.github/workflows/platforms.yml`).
+
+2. **Nova Tool MCP e Client: `delete_playlist` (Catálogo expandido para 45 tools):**
+   - Tool mutante com confirmação do usuário para deleção ou desinscrição de playlists por ID ou em lote (`playlist_ids`).
+   - Resolução em cascata via Tier 1 (`RootlistAPI` -> `LibraryAPI` -> CosmosAsync -> Web API).
+   - Catálogo total expandido para 29 client tools + 16 server tools = 45 tools.
+
+3. **Resiliência e Inicialização da Extensão:**
+   - Consulta segura a `window.Spicetify` protegendo contra `ReferenceError` em carregamentos assíncronos antecipados.
+   - Suporte a paginação e `offset` configurável em `get_saved_tracks` (`MAX_SAVED_TRACKS` / `max_saved_tracks`).
+   - Snippets MCP dinâmicos no painel de UI baseados no caminho real do binário e plataforma (`mcp-config.js`).
+
+4. **Testes e Validação:**
+   - Suíte de ciclo de vida isolado (`tools/smoke-lifecycle.py`) e smoke test E2E (`tools/smoke-daemon.ps1`) cobrindo 45 tools.
+   - Testes unitários de geração e parsing multiplataforma em `app/tests/install-platform.test.mjs`.
+
 Registro das mudanças, do que foi provado por teste e das pendências com gatilho.
 Histórico: v1 = auditoria i18n/prompts/clean-code (seção "v1" abaixo); v2 = refatoração
 de `PLAN-REFACTOR.md` (MCP + providers + UI + daemon Rust).

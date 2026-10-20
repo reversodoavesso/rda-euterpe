@@ -41,9 +41,9 @@ pub fn annotate(result: ToolResult, store: &Store, args: &Value, tool: &str) -> 
     };
     data["snapshot_id"] = json!(snapshot_id);
     data["undo_hint"] = json!("spotify_undo_last_mutation");
-    if tool == "create_playlist" {
+    if tool == "create_playlist" || tool == "delete_playlist" {
         data["undo_hint"] = json!(null);
-        data["undo_note"] = json!("create_playlist não é reversível por snapshot");
+        data["undo_note"] = json!(format!("{tool} não é reversível por snapshot"));
     }
     ToolResult {
         ok: true,

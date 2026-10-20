@@ -129,6 +129,7 @@ export async function mcpInfo() {
     out.ok = health && health.ok === true;
     out.clients = Number(health && health.clients) || 0;
     out.version = (health && health.version) || null;
+    out.executable = (health && health.executable) || null;
     const settings = await getSettings();
     const runtime = (settings && settings.runtime) || {};
     out.dataDir = runtime.dataDir || null;

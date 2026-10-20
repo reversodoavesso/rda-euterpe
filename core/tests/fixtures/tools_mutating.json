@@ -2,6 +2,7 @@
   "add_tracks",
   "batch_create_playlists",
   "create_playlist",
+  "delete_playlist",
   "remove_tracks",
   "replace_playlist_tracks",
   "set_playlist_cover",

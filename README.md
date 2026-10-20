@@ -5,7 +5,7 @@ playlists/músicas, cruza com websearch, letras e metadados, cria playlists cura
 E, desde a refatoração, **também expõe tudo isso como servidor MCP** para uso por qualquer
 agente externo (opencode, Claude Code, …).
 
-Desde `v0.2.0` o backend é **um único `euterpe.exe`** (Rust), sem Docker e sem Node no caminho
+Desde `v0.2.0` o backend é **um único `euterpe` (`euterpe.exe` no Windows)** (Rust), sem Docker e sem Node no caminho
 crítico. O agente Node continua no repositório como **oráculo de teste** e como backend opcional
 do chat (o espelho da Fase 2 / D6).
 
@@ -23,7 +23,7 @@ do chat (o espelho da Fase 2 / D6).
 core/      daemon Rust: bridge WS (8337) + servidor MCP + loop LLM + tools de servidor
 app/       Custom App + Extension do spicetify (interface dentro do Spotify)
 agent/     agente Node/TS — oráculo de teste e upstream opcional do chat (CHAT_UPSTREAM)
-tools/     install-startup.ps1 (autostart — plano B do D2)
+tools/     instaladores auxiliares e verificações de integração
 searxng/   docker-compose opcional do metabuscador (o web_search funciona sem ele)
 ```
 
@@ -32,15 +32,21 @@ searxng/   docker-compose opcional do metabuscador (o web_search funciona sem el
 ```powershell
 # 1) daemon (uma vez: instale o toolchain — ver core/README.md §1)
 cd core && cargo build --release
-.\target\x86_64-pc-windows-gnu\release\euterpe.exe install-startup   # sobe no logon
-.\target\x86_64-pc-windows-gnu\release\euterpe.exe serve            # ou suba agora
+cd ..
 
 # 2) mod no Spotify
-node app/install.mjs      # build da UI (esbuild) + copia a extensão + aplica no spicetify
+node app/install.mjs      # instala, registra autostart e inicia o daemon agora
 ```
 
 Abra **Euterpe** na sidebar do Spotify. O painel de setup cadastra o provider/modelo e mostra as
 instruções para plugar o MCP no seu agente externo.
+
+Windows, Linux e macOS usam o mesmo instalador e um binário Rust nativo do host.
+O daemon inicia no logon do usuário; a extensão conecta ao abrir o Spotify, sem
+depender de Node no renderer. No Windows é criado um atalho oculto; no Linux,
+um serviço systemd de usuário (ou XDG Autostart); no macOS, um LaunchAgent.
+Use `node app/install.mjs --no-startup` para instalar e iniciar apenas agora.
+Veja [instalação e operação multiplataforma](docs/platforms.md), incluindo requisitos de build e desinstalação.
 
 ### Pré-requisitos
 

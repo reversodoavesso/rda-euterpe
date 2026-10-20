@@ -9,6 +9,4 @@
 linker = "x86_64-w64-mingw32-gcc"
 ar = "gcc-ar"
 
-[build]
-# Mantém o alvo explícito para que `cargo test`/`cargo build` não dependam do host.
-target = "x86_64-pc-windows-gnu"
+# O alvo padrão é o host. Use --target apenas para compilação cruzada.

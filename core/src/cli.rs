@@ -4,7 +4,7 @@
 //! euterpe serve              # sobe o daemon (bridge WS + HTTP + MCP)
 //! euterpe --ensure           # garante um daemon vivo (idempotente, exit 0)
 //! euterpe mcp --stdio        # shim MCP por stdio (stdout = só protocolo)
-//! euterpe install-startup    # atalho na pasta Startup (D2, plano B)
+//! euterpe install-startup    # inicialização nativa no logon do usuário
 //! euterpe install-startup --remove
 //! euterpe version
 //! ```
@@ -53,7 +53,7 @@ USO:
   euterpe serve                 Sobe o daemon (porta 8337)
   euterpe --ensure              Garante um daemon vivo (exit 0 se já houver)
   euterpe mcp --stdio           Servidor MCP por stdio (proxy para o daemon)
-  euterpe install-startup       Instala o atalho de inicialização
+  euterpe install-startup       Registra o início automático por usuário
   euterpe install-startup --remove
   euterpe version
 
@@ -87,7 +87,7 @@ pub async fn run() -> anyhow::Result<()> {
                 }
             } else {
                 let path = crate::startup::install_startup()?;
-                println!("atalho criado: {}", path.display());
+                println!("início automático registrado: {}", path.display());
             }
             Ok(())
         }
@@ -147,8 +147,19 @@ async fn serve() -> anyhow::Result<()> {
     }
 
     let shutdown = async {
+        #[cfg(unix)]
+        {
+            let mut term =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("SIGTERM handler");
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {},
+                _ = term.recv() => {},
+            }
+        }
+        #[cfg(not(unix))]
         let _ = tokio::signal::ctrl_c().await;
-        tracing::info!("encerrando (ctrl-c)");
+        tracing::info!("encerrando daemon");
     };
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
@@ -165,20 +176,47 @@ pub async fn ensure_running() -> anyhow::Result<()> {
         return Ok(());
     }
     let exe = crate::startup::exe_path()?;
-    let mut cmd = std::process::Command::new(exe);
-    cmd.arg("serve");
     #[cfg(windows)]
     {
+        // ShellExecute via Start-Process não herda pipes do chamador. Um spawn
+        // direto pode manter esses handles abertos mesmo com Stdio::null().
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
+        let ps = std::path::PathBuf::from(
+            std::env::var_os("SystemRoot")
+                .ok_or_else(|| anyhow::anyhow!("SystemRoot unavailable"))?,
+        )
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let output = std::process::Command::new(ps)
+            .args(["-NoProfile", "-NonInteractive", "-Command",
+                "$ErrorActionPreference='Stop'; (Start-Process -FilePath $env:EUTERPE_DAEMON_EXE -ArgumentList 'serve' -WindowStyle Hidden -PassThru).Id"])
+            .env("EUTERPE_DAEMON_EXE", exe)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "falha ao iniciar daemon: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        println!(
+            "euterpe iniciado (pid {})",
+            String::from_utf8_lossy(&output.stdout).trim()
+        );
     }
-    cmd.stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    let child = cmd.spawn()?;
-    println!("euterpe iniciado (pid {})", child.id());
+    #[cfg(unix)]
+    let mut child = {
+        // A instância permanece viva após o terminal/launcher encerrar.
+        use std::os::unix::process::CommandExt;
+        let child = std::process::Command::new(exe)
+            .arg("serve")
+            .process_group(0)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+        println!("euterpe iniciado (pid {})", child.id());
+        child
+    };
 
     // A primeira chamada após idle sobe o motor: damos até 15 s.
     for _ in 0..30 {
@@ -186,6 +224,10 @@ pub async fn ensure_running() -> anyhow::Result<()> {
         if crate::startup::probe_health(&cfg.host, cfg.port).await {
             println!("euterpe pronto em {}:{}", cfg.host, cfg.port);
             return Ok(());
+        }
+        #[cfg(unix)]
+        if let Some(status) = child.try_wait()? {
+            anyhow::bail!("daemon encerrou antes de ficar pronto ({status}); consulte euterpe.log");
         }
     }
     anyhow::bail!("euterpe não respondeu em {}:{}", cfg.host, cfg.port)

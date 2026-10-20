@@ -227,9 +227,9 @@ mod tests {
 
     #[test]
     fn counts_match_the_frozen_contract_c6() {
-        assert_eq!(client_tools().count(), 28);
+        assert_eq!(client_tools().count(), 29);
         assert_eq!(server_tools().count(), 16);
-        assert_eq!(all().len(), 44);
+        assert_eq!(all().len(), 45);
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn mutating_set_is_destructive_and_inside_client_side() {
-        assert_eq!(mutating().len(), 7);
+        assert_eq!(mutating().len(), 8);
         for name in mutating() {
             let def = find(name).unwrap_or_else(|| panic!("{name} não está no catálogo"));
             assert_eq!(def.side, Side::Client, "{name} deveria ser client-side");

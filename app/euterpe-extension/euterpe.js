@@ -324,9 +324,12 @@
     // Normalizes the several track payload shapes (LibraryAPI/PlaylistAPI/web
     // API) into a single {uri, name, artists, artist_ids, album, duration_ms}.
     function mapTrack(it) {
+      const uri = it.uri || it.track?.uri;
+      const id = uri ? idOf(uri) : null;
       const artists = it.artists || it.track?.artists || [];
       return {
-        uri: it.uri || it.track?.uri,
+        id,
+        uri,
         name: it.name || it.track?.name,
         artists: artists.map((a) => a.name),
         artist_ids: artists.map((a) => a.id ?? String(a.uri).split(":").pop()),
@@ -440,11 +443,11 @@
           }
         },
 
-        async savedTracks(limit) {
+        async savedTracks(limit = 25000, offset = 0) {
           const LibraryAPI = platformApi("LibraryAPI", "getTracks");
           if (!LibraryAPI) return null;
           try {
-            const res = await LibraryAPI.getTracks({ offset: 0, limit });
+            const res = await LibraryAPI.getTracks({ offset, limit });
             const items = res && Array.isArray(res.items) ? res.items : [];
             if (!items.length) return null;
             return items.map((it) => ({ ...mapTrack(it), added_at: it.addedAt ?? it.added_at }));
@@ -490,7 +493,8 @@
           let saved = [];
           if (includeSaved) {
             try {
-              saved = (await this.savedTracks(MAX_SAVED_TRACKS)) || [];
+              const maxSaved = Number(opts.max_saved_tracks) > 0 ? Number(opts.max_saved_tracks) : 25000;
+              saved = (await this.savedTracks(maxSaved)) || [];
             } catch (e) {
               saved = [];
             }
@@ -598,6 +602,38 @@
               added: 0,
             };
           }
+        },
+
+        async deletePlaylist(ref) {
+          const uri = playlistUri(ref);
+          let deleted = false;
+          const RootlistAPI = platformApi("RootlistAPI", "remove");
+          if (RootlistAPI) {
+            try {
+              await RootlistAPI.remove([{ uri }]);
+              deleted = true;
+            } catch (err) {
+              dbg("[tier] RootlistAPI.remove([{uri}]) error: " + (err?.message || err));
+            }
+          }
+          const LibraryAPI = platformApi("LibraryAPI", "remove");
+          if (LibraryAPI) {
+            try {
+              await LibraryAPI.remove({ uris: [uri] });
+              deleted = true;
+            } catch (err) {
+              dbg("[tier] LibraryAPI.remove error: " + (err?.message || err));
+            }
+          }
+          if (!deleted && Spicetify && Spicetify.CosmosAsync && typeof Spicetify.CosmosAsync.del === "function") {
+            try {
+              await Spicetify.CosmosAsync.del("sp://core-playlist/v1/rootlist?uris=" + encodeURIComponent(uri));
+              deleted = true;
+            } catch (err) {
+              dbg("[tier] CosmosAsync.del rootlist error: " + (err?.message || err));
+            }
+          }
+          return deleted ? { ok: true, uri } : null;
         },
 
         async addTracks(ref, uris) {
@@ -1258,10 +1294,8 @@
       out.guard.hasGraphQL = !!(Spicetify && Spicetify.GraphQL);
       out.guard.userAgent = navigator.userAgent;
 
-      // Fase 0 (PLAN-REFACTOR.md, D2): decide how the daemon autostarts.
-      // node == true  -> the extension can spawn euterpe.exe itself
-      //                  (with a port guard against double-binding 8337);
-      // node == false -> fall back to a Startup shortcut + `euterpe --ensure`.
+      // Diagnóstico do renderer apenas. O autostart pertence ao sistema operacional
+      // e nunca depende da presença de Node/child_process dentro do Spotify.
       out.runtime = {
         node: typeof require === "function" || typeof process !== "undefined",
         electron: (typeof process !== "undefined" && process.versions && process.versions.electron) || null,
@@ -1501,9 +1535,11 @@
 
           case "get_saved_tracks": {
             // Tier 1 (LibraryAPI) -> Tier 3 (Web API).
-            let rows = await Access.platform.savedTracks(MAX_SAVED_TRACKS);
+            const lim = Number(args.limit) > 0 ? Number(args.limit) : 25000;
+            const off = Number(args.offset) >= 0 ? Number(args.offset) : 0;
+            let rows = await Access.platform.savedTracks(lim, off);
             if (!rows) {
-              const items = await paginate("/me/tracks", PAGE_SIZE, MAX_SAVED_TRACKS);
+              const items = await paginate("/me/tracks", PAGE_SIZE, lim);
               rows = items.map((it) => ({ ...mapTrack(it), added_at: it.addedAt ?? it.added_at }));
             }
             data = rows;
@@ -1714,6 +1750,47 @@
               };
             }
             data = created;
+            break;
+          }
+
+          case "delete_playlist": {
+            const ids = Array.isArray(args.playlist_ids) && args.playlist_ids.length
+              ? args.playlist_ids
+              : (args.playlist_id ? [args.playlist_id] : []);
+            if (!ids.length) {
+              data = { ok: false, error: "playlist_id_or_playlist_ids_required" };
+              break;
+            }
+            const deleted = [];
+            const failed = [];
+            for (const pid of ids) {
+              const uri = playlistUri(pid);
+              const cleanId = idOf(pid);
+              let ok = false;
+              let res = await Access.platform.deletePlaylist(uri);
+              if (res && res.ok) {
+                ok = true;
+              } else {
+                try {
+                  await api(`${API}/playlists/${cleanId}/followers`, { method: "DELETE" });
+                  ok = true;
+                } catch (e) {
+                  dbg("[tier] Web API unfollow playlist error: " + (e?.message || e));
+                }
+              }
+              if (ok) {
+                deleted.push({ id: cleanId, uri });
+              } else {
+                failed.push({ id: cleanId, uri });
+              }
+            }
+            data = {
+              ok: failed.length === 0,
+              deleted_count: deleted.length,
+              deleted,
+              failed_count: failed.length,
+              failed,
+            };
             break;
           }
 

@@ -3,7 +3,7 @@
 //! Regras:
 //!  - `EUTERPE_DATA_DIR` manda em tudo (usado pelos testes de integração e pelo dev).
 //!  - `EUTERPE_PORTABLE=1` → dados ao lado do executável (instalação portátil).
-//!  - default → `%APPDATA%\euterpe` (Windows) / `$XDG_DATA_HOME/euterpe`.
+//!  - default → AppData (Windows), XDG (Linux), Application Support (macOS).
 //!
 //! O layout interno é o mesmo do agente Node (`data/sessions`, `data/probes`,
 //! `euterpe.db`, `ws-secret`) para que a migração one-time do `install.mjs` seja
@@ -26,6 +26,19 @@ pub fn data_dir() -> PathBuf {
     if cfg!(target_os = "windows") {
         if let Some(appdata) = non_empty_env("APPDATA") {
             return PathBuf::from(appdata).join("euterpe");
+        }
+    }
+    // Preserva instalações antigas no macOS; instalações novas usam Application Support.
+    if cfg!(target_os = "macos") {
+        if let Some(home) = non_empty_env("HOME") {
+            let legacy = non_empty_env("XDG_DATA_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(&home).join(".local/share"))
+                .join("euterpe");
+            if legacy.exists() {
+                return legacy;
+            }
+            return PathBuf::from(home).join("Library/Application Support/Euterpe");
         }
     }
     if let Some(xdg) = non_empty_env("XDG_DATA_HOME") {

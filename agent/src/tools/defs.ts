@@ -37,6 +37,16 @@ export const clientTools: ToolDef[] = [
     "client"
   ),
   def(
+    "delete_playlist",
+    "Deletes or unfollows a playlist (or multiple playlists) by ID or URI, removing it from the user's library. Mutation confirmed by the user.",
+    {
+      playlist_id: { type: "string", description: "Single playlist ID or URI (e.g. spotify:playlist:...)" },
+      playlist_ids: { type: "array", items: { type: "string" }, description: "Optional list of playlist IDs or URIs to delete in batch" },
+    },
+    [],
+    "client"
+  ),
+  def(
     "add_tracks",
     "Adds tracks to an existing playlist. Mutation confirmed by the user.",
     {
@@ -472,6 +482,7 @@ export const allToolSchemas: ChatCompletionTool[] = [...clientTools, ...serverTo
 
 export const MUTATING_TOOLS = new Set([
   "create_playlist",
+  "delete_playlist",
   "add_tracks",
   "remove_tracks",
   "set_playlist_details",

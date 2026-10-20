@@ -31,6 +31,28 @@
       "side": "client"
     },
     {
+      "description": "Deletes or unfollows a playlist (or multiple playlists) by ID or URI, removing it from the user's library. Mutation confirmed by the user.",
+      "name": "delete_playlist",
+      "parameters": {
+        "properties": {
+          "playlist_id": {
+            "description": "Single playlist ID or URI (e.g. spotify:playlist:...)",
+            "type": "string"
+          },
+          "playlist_ids": {
+            "description": "Optional list of playlist IDs or URIs to delete in batch",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "side": "client"
+    },
+    {
       "description": "Adds tracks to an existing playlist. Mutation confirmed by the user.",
       "name": "add_tracks",
       "parameters": {
@@ -636,6 +658,7 @@
     "add_tracks",
     "batch_create_playlists",
     "create_playlist",
+    "delete_playlist",
     "remove_tracks",
     "replace_playlist_tracks",
     "set_playlist_cover",

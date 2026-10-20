@@ -13,6 +13,8 @@ pub async fn health(State(state): State<AppState>) -> Json<Value> {
         "ok": true,
         "app": "euterpe",
         "version": crate::VERSION,
+        "pid": std::process::id(),
+        "executable": std::env::current_exe().ok().map(|p| p.display().to_string()),
         "clients": state.bridge.client_count(),
         "upstream": state.upstream.enabled(),
     }))

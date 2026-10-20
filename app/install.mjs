@@ -1,211 +1,141 @@
 #!/usr/bin/env node
-// Instala o Euterpe no Spotify (spicetify) + o daemon (euterpe.exe).
-//
-// Ordem: build do custom app (esbuild) → copiar bundle+manifest + extensão →
-// configurar o spicetify → instalar o daemon (exe, autostart, migração do DB) →
-// imprimir os snippets de MCP.
-//
-// O custom app instalado é o BUNDLE (`euterpe-app/dist/index.js`, D4): o
-// `index.js` da fonte usa `import` e não resolve dentro do módulo webpack que o
-// spicetify gera.
-import { execSync } from 'node:child_process'
-import { existsSync, copyFileSync, mkdirSync, rmSync, statSync } from 'node:fs'
+// Instala o daemon nativo e a extensão. Comandos recebem argumentos sem shell.
+import { execFileSync } from 'node:child_process'
+import { existsSync, copyFileSync, mkdirSync, statSync, chmodSync, renameSync, unlinkSync, readFileSync, readlinkSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { setTimeout as delay } from 'node:timers/promises'
+import { layout, binaryCandidates, parseOptions } from './install-platform.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const repoRoot = join(__dirname, '..')
-const APP_URL = 'http://127.0.0.1:8337/mcp'
+const appDir = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolve(appDir, '..')
 
-function spicetifyDir() {
-  if (process.platform === 'win32') {
-    return process.env.APPDATA ? join(process.env.APPDATA, 'spicetify') : null
+function run(command, args, options = {}) {
+  console.log('\n$ ' + command + ' ' + args.join(' '))
+  return execFileSync(command, args, { stdio: 'inherit', windowsHide: true, ...options })
+}
+
+// Não confia apenas no PID declarado via HTTP: verifica o executável no SO.
+function processExecutable(pid) {
+  if (process.platform === 'linux') return readlinkSync('/proc/' + pid + '/exe')
+  if (process.platform === 'darwin') return execFileSync('/bin/ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' }).trim()
+  return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); (Get-Process -Id $env:EUTERPE_CHECK_PID -ErrorAction Stop).Path'], {
+    encoding: 'utf8', windowsHide: true, env: { ...process.env, EUTERPE_CHECK_PID: String(pid) },
+  }).trim()
+}
+
+function sameExecutable(a, b) {
+  const canonical = p => {
+    const value = realpathSync.native(p)
+    return process.platform === 'win32' ? value.toLowerCase() : value
   }
-  return join(homedir(), '.config', 'spicetify')
+  return canonical(a) === canonical(b)
 }
 
-// Mesma regra do daemon (core/src/paths.rs): EUTERPE_DATA_DIR manda; Windows usa
-// %APPDATA%\euterpe; o resto cai no XDG.
-function dataDir() {
-  const override = process.env.EUTERPE_DATA_DIR
-  if (override && override.trim()) return override
-  if (process.platform === 'win32' && process.env.APPDATA) return join(process.env.APPDATA, 'euterpe')
-  if (process.env.XDG_DATA_HOME) return join(process.env.XDG_DATA_HOME, 'euterpe')
-  return join(homedir(), '.local', 'share', 'euterpe')
-}
-
-function run(cmd) {
-  console.log(`\n$ ${cmd}`)
-  execSync(cmd, { stdio: 'inherit', shell: true })
-}
-
-function tryRun(cmd, label) {
-  try {
-    execSync(cmd, { stdio: 'inherit', shell: true })
-    return true
-  } catch {
-    console.log(`warning: ${label} falhou (siga manualmente: ${cmd})`)
-    return false
+async function install(options) {
+  if (/^(1|true|yes)$/.test(process.env.EUTERPE_PORTABLE || '')) {
+    throw new Error('Para instalar, desative EUTERPE_PORTABLE. Para uso portátil, execute o binário diretamente com --ensure.')
   }
-}
+  const platform = layout(process.platform, process.env, homedir(), existsSync)
+  const data = resolve(platform.data)
+  const exe = join(data, platform.exeName)
+  const env = { ...process.env, EUTERPE_DATA_DIR: data }
+  const candidates = binaryCandidates(repoRoot, process.platform, process.arch, process.env, options.daemon)
+  const source = candidates.find(p => existsSync(p) && statSync(p).isFile())
+  if (!source) throw new Error('Daemon não encontrado. Rode cargo build --release em core/ ou use --daemon. Procurado em:\n' + candidates.join('\n'))
+  // Falha antes de alterar a instalação se o binário não for executável neste host.
+  const version = execFileSync(source, ['version'], { encoding: 'utf8', windowsHide: true }).trim()
+  if (!version.startsWith('euterpe ')) throw new Error('Binário inválido: ' + source)
+  const spicetify = process.env.SPICETIFY_BIN || 'spicetify'
+  const dest = resolve(options.spicetifyDir || execFileSync(spicetify, ['path', 'userdata'], {
+    encoding: 'utf8', windowsHide: true,
+  }).trim())
+  if (!existsSync(dest) || !statSync(dest).isDirectory()) throw new Error('Diretório do Spicetify inválido: ' + dest)
+  run(process.execPath, [join(appDir, 'build.mjs')], { cwd: appDir })
 
-function tryApply() {
-  console.log(`\n$ spicetify apply`)
-  try {
-    execSync('spicetify apply', { stdio: 'inherit', shell: true })
-    return true
-  } catch {
-    return false
+  mkdirSync(data, { recursive: true })
+  // A migração acontece antes do primeiro start, que criaria um banco vazio.
+  const dbSource = join(repoRoot, 'agent', 'data', 'euterpe.db')
+  const dbDest = join(data, 'euterpe.db')
+  if (existsSync(dbSource) && !existsSync(dbDest)) {
+    if (existsSync(dbSource + '-wal')) throw new Error('Encerre o agente Node antes de migrar o SQLite (WAL presente).')
+    copyFileSync(dbSource, dbDest)
   }
-}
-
-function kb(bytes) {
-  return `${(bytes / 1024).toFixed(1)} KiB`
-}
-
-function buildApp() {
-  const buildScript = join(__dirname, 'build.mjs')
-  if (!existsSync(buildScript)) return
-  if (!existsSync(join(__dirname, 'node_modules', 'esbuild'))) {
-    throw new Error(`esbuild não instalado. Rode: cd "${__dirname}" && npm install`)
-  }
-  console.log('\nBuilding the custom app bundle (esbuild)')
-  try {
-    execSync('node build.mjs', { cwd: __dirname, stdio: 'inherit', shell: true })
-  } catch (err) {
-    throw new Error(`build falhou (${err.message}). Rode "cd app && npm install && node build.mjs" para ver o erro.`)
-  }
-}
-
-function installCustomApp(customAppsDir) {
-  const appDest = join(customAppsDir, 'euterpe-app')
-  rmSync(appDest, { recursive: true, force: true })
-  mkdirSync(appDest, { recursive: true })
-  const files = [
-    [join(__dirname, 'euterpe-app', 'dist', 'index.js'), join(appDest, 'index.js')],
-    [join(__dirname, 'euterpe-app', 'manifest.json'), join(appDest, 'manifest.json')],
-  ]
-  for (const [src, dest] of files) {
-    if (!existsSync(src)) throw new Error(`arquivo ausente: ${src} (rode "node app/build.mjs")`)
-    copyFileSync(src, dest)
-    console.log(`copied  ${src}  (${kb(statSync(src).size)})  ->  ${dest}`)
-  }
-}
-
-function installExtension(extDir) {
-  const extSrc = join(__dirname, 'euterpe-extension', 'euterpe.js')
-  const extDest = join(extDir, 'euterpe.js')
-  copyFileSync(extSrc, extDest)
-  console.log(`copied  ${extSrc}  ->  ${extDest}`)
-}
-
-// Passo 4/5 do install: exe único + autostart + migração one-time do SQLite.
-function installDaemon() {
-  const dir = dataDir()
-  mkdirSync(dir, { recursive: true })
-
-  // O alvo desta máquina é `x86_64-pc-windows-gnu` (ver core/.cargo/config.toml),
-  // então o binário aparece em `target/<triple>/release/`; mantemos também o
-  // caminho "clássico" `target/release/` para quando o host for o default.
-  const exeName = process.platform === 'win32' ? 'euterpe.exe' : 'euterpe'
-  const exeCandidates = [
-    join(repoRoot, 'core', 'target', 'x86_64-pc-windows-gnu', 'release', exeName),
-    join(repoRoot, 'core', 'target', 'release', exeName),
-  ]
-  const exeSrc = exeCandidates.find((p) => existsSync(p))
-  if (exeSrc) {
-    const exeDest = join(dir, exeName)
-    let copied = false
+  let config = {}
+  const configPath = join(data, 'config.json')
+  if (existsSync(configPath)) config = JSON.parse(readFileSync(configPath, 'utf8'))
+  const host = env.HOST || config.HOST || '127.0.0.1'
+  const port = Number(env.PORT || config.PORT || 8337)
+  if (host !== '127.0.0.1' || port !== 8337) throw new Error('A extensão requer HOST=127.0.0.1 e PORT=8337. Ajuste o ambiente/config.json antes de instalar.')
+  const base = 'http://' + host + ':' + port
+  const health = async () => {
     try {
-      copyFileSync(exeSrc, exeDest)
-      copied = true
-      console.log(`copied  ${exeSrc}  ->  ${exeDest}`)
-    } catch (err) {
-      if ((err.code === 'EBUSY' || err.code === 'EPERM') && process.platform === 'win32') {
-        console.log(`\nDaemon em execução (${err.code}). Finalizando processo para atualizar o binário...`)
-        try {
-          execSync('taskkill /IM euterpe.exe /F', { stdio: 'ignore', shell: true })
-        } catch {}
-        try {
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
-          copyFileSync(exeSrc, exeDest)
-          copied = true
-          console.log(`copied  ${exeSrc}  ->  ${exeDest} (após parar processo)`)
-        } catch (retryErr) {
-          console.log(
-            `\n(não consegui atualizar o daemon em ${exeDest}: ${retryErr.code || retryErr.message})\n` +
-              ` pare o daemon manualmente e rode de novo.`
-          )
-        }
-      } else {
-        console.log(
-          `\n(não consegui atualizar o daemon em ${exeDest}: ${err.code || err.message})\n` +
-            ` pare o daemon e rode de novo.`
-        )
-      }
+      const response = await fetch(base + '/health', { signal: AbortSignal.timeout(1500) })
+      if (!response.ok) throw new Error('health inválido')
+      return await response.json()
+    } catch { return null }
+  }
+
+  const running = await health()
+  if (running) {
+    const samePath = typeof running.executable === 'string' &&
+      (process.platform === 'win32' ? resolve(running.executable).toLowerCase() === exe.toLowerCase() : resolve(running.executable) === exe)
+    if (running.app !== 'euterpe' || !samePath || !Number.isSafeInteger(running.pid) || running.pid <= 0) {
+      throw new Error('Existe um processo na porta 8337 que não pode ser atualizado com segurança (possivelmente Euterpe antigo). Encerre essa instância e execute o instalador novamente.')
     }
-    tryRun(`"${exeDest}" install-startup`, 'euterpe install-startup (atalho de Startup)')
-  } else {
-    console.log(
-      `\n(daemon não encontrado em:\n  ${exeCandidates.join('\n  ')}\n rode: cd core && cargo build --release)`
-    )
+    if (!sameExecutable(processExecutable(running.pid), exe)) throw new Error('O PID informado não pertence ao executável instalado. Encerre a instância manualmente.')
+    process.kill(running.pid, 'SIGTERM')
+    let alive = true
+    for (let attempt = 0; attempt < 60; attempt++) {
+      try { process.kill(running.pid, 0) }
+      catch (error) {
+        if (error.code !== 'ESRCH') throw error
+        alive = false
+        break
+      }
+      await delay(250)
+    }
+    if (alive) throw new Error('O processo ainda não encerrou. Nenhum executável foi substituído.')
+    if (await health()) throw new Error('Daemon ainda ativo após solicitar encerramento; instalação interrompida.')
   }
 
-  const dbSrc = join(repoRoot, 'agent', 'data', 'euterpe.db')
-  const dbDest = join(dir, 'euterpe.db')
-  if (existsSync(dbSrc) && !existsSync(dbDest)) {
-    copyFileSync(dbSrc, dbDest)
-    console.log(`migrated  ${dbSrc}  ->  ${dbDest}`)
-  } else if (existsSync(dbDest)) {
-    console.log(`(histórico já existe em ${dbDest} — migração não é refeita)`)
+  if (resolve(source) !== exe) {
+    // Rename no Unix evita ETXTBSY e garante que nunca se execute uma cópia parcial.
+    const staged = exe + '.install-' + process.pid
+    try {
+      copyFileSync(source, staged)
+      if (process.platform !== 'win32') chmodSync(staged, 0o755)
+      renameSync(staged, exe)
+    } finally {
+      if (existsSync(staged)) unlinkSync(staged)
+    }
   }
-}
+  if (options.startup) run(exe, ['install-startup'], { env })
+  else run(exe, ['install-startup', '--remove'], { env })
+  run(exe, ['--ensure'], { env })
 
-function printMcpSnippets() {
-  const exe = join(dataDir(), process.platform === 'win32' ? 'euterpe.exe' : 'euterpe')
-  const stdio = JSON.stringify({ mcpServers: { euterpe: { command: exe, args: ['mcp', '--stdio'] } } })
-  console.log(`
-MCP — registre o servidor no seu cliente (o daemon precisa estar rodando):
-
-  opencode:     opencode mcp add euterpe --url ${APP_URL}
-  claude-code:  claude mcp add --transport http euterpe ${APP_URL}
-  json (stdio): ${stdio}
-`)
-}
-
-function install() {
-  const dest = spicetifyDir()
-  if (!dest) throw new Error('Could not find the spicetify directory')
-  if (!existsSync(dest)) throw new Error(`The spicetify directory does not exist: ${dest}`)
-
-  const customAppsDir = join(dest, 'CustomApps')
-  const extDir = join(dest, 'Extensions')
-  mkdirSync(customAppsDir, { recursive: true })
-  mkdirSync(extDir, { recursive: true })
-
-  buildApp()
-  installCustomApp(customAppsDir)
-  installExtension(extDir)
-
-  run('spicetify config custom_apps euterpe-app')
-  run('spicetify config extensions euterpe.js')
-
-  if (!tryApply()) {
-    console.log('\nApply failed (likely a backup version mismatch). Recreating the backup and trying again...')
-    run('spicetify backup apply')
-    if (!tryApply()) throw new Error('spicetify apply failed after backup apply. Run "spicetify backup apply" manually.')
-  }
-
-  installDaemon()
-  printMcpSnippets()
-
-  console.log('Installed. Restart Spotify (if open) and open "Euterpe" in the sidebar.')
+  const customApp = join(dest, 'CustomApps', 'euterpe-app')
+  const extensions = join(dest, 'Extensions')
+  mkdirSync(customApp, { recursive: true })
+  mkdirSync(extensions, { recursive: true })
+  copyFileSync(join(appDir, 'euterpe-app/dist/index.js'), join(customApp, 'index.js'))
+  copyFileSync(join(appDir, 'euterpe-app/manifest.json'), join(customApp, 'manifest.json'))
+  copyFileSync(join(appDir, 'euterpe-extension/euterpe.js'), join(extensions, 'euterpe.js'))
+  run(spicetify, ['config', 'custom_apps', 'euterpe-app'])
+  run(spicetify, ['config', 'extensions', 'euterpe.js'])
+  try { run(spicetify, ['apply']) }
+  catch { run(spicetify, ['backup', 'apply']) }
+  const stdio = JSON.stringify({ mcpServers: { euterpe: { command: exe, args: ['mcp', '--stdio'], env: { EUTERPE_DATA_DIR: data } } } }, null, 2)
+  console.log('\nInstalado: ' + version + '\nDados: ' + data + '\nAutostart: ' + (options.startup ? 'ativado' : 'desativado') + '\nDaemon iniciado. Reabra o Spotify.\nMCP HTTP: ' + base + '/mcp\nMCP stdio:\n' + stdio)
 }
 
 try {
-  install()
+  const options = parseOptions(process.argv.slice(2))
+  if (options.help) console.log('node app/install.mjs [--daemon CAMINHO] [--spicetify-dir DIRETORIO] [--no-startup]\nInstala e inicia agora. --no-startup também remove um autostart anterior.')
+  else await install(options)
 } catch (err) {
-  console.error(`\nError: ${err.message}`)
-  process.exit(1)
+  console.error('\nErro: ' + err.message)
+  process.exitCode = 1
 }

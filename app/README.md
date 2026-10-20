@@ -14,13 +14,18 @@ O que ele faz:
 1. gera o bundle da UI (`node app/build.mjs` → `app/euterpe-app/dist/index.js`);
 2. copia o bundle + `manifest.json` para `%appdata%\spicetify\CustomApps\euterpe-app\`;
 3. copia `app/euterpe-extension/euterpe.js` para `%appdata%\spicetify\Extensions\euterpe.js`;
-4. copia `core/target/.../release/euterpe.exe` para `%APPDATA%\euterpe\euterpe.exe` (se existir)
-   e registra o autostart;
+4. exige um binário nativo, migra dados antes do primeiro start, copia o daemon
+   para o diretório de dados da plataforma, registra o autostart e inicia agora;
 5. migra `agent/data/euterpe.db` → `%APPDATA%\euterpe\euterpe.db` (**só** se o destino não existir);
 6. ativa `custom_apps`/`extensions`, roda `spicetify apply` (com fallback
    `spicetify backup apply`) e imprime os snippets prontos para plugar o MCP.
 
 Reinicie o Spotify e abra **Euterpe** na sidebar.
+
+O diretório do Spicetify é descoberto por `spicetify path userdata`, inclusive em
+instalações com caminho personalizado. Opções: `--daemon CAMINHO`,
+`--spicetify-dir DIRETORIO`, `--no-startup` (remove também um registro anterior).
+Veja [o guia multiplataforma](../docs/platforms.md).
 
 ## Manual
 

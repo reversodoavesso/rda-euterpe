@@ -7,24 +7,18 @@
 // nativa usa nos campos. Sem hex.
 import { tr } from "../lib/i18n.js";
 import { BASE, mcpInfo } from "../lib/daemon.js";
+import { stdioSnippet } from "../lib/mcp-config.js";
 import { copyText } from "./markdown.js";
 import { Badge, Button, Text, COLOR, TEXT } from "./ds.js";
 
 const { React } = Spicetify;
 
-const PATH_FALLBACK = "C:\\Users\\<user>\\AppData\\Roaming\\euterpe";
-
-function stdioSnippet(dataDir) {
-  const exe = `${dataDir || PATH_FALLBACK}\\euterpe.exe`;
-  return JSON.stringify({ mcpServers: { euterpe: { command: exe, args: ["mcp", "--stdio"] } } }, null, 2);
-}
-
-function snippetRows(dataDir) {
+function snippetRows(info) {
   const url = `${BASE}/mcp`;
   return [
     { key: "opencode", label: tr("mcp.opencode"), text: `opencode mcp add euterpe --url ${url}` },
     { key: "claude", label: tr("mcp.claude"), text: `claude mcp add --transport http euterpe ${url}` },
-    { key: "stdio", label: tr("mcp.stdio"), text: stdioSnippet(dataDir) },
+    { key: "stdio", label: tr("mcp.stdio"), text: stdioSnippet(info) },
   ];
 }
 
@@ -98,7 +92,7 @@ export function McpPanel({ onToast, enabled = true }) {
       React.createElement(Text, { variant: TEXT.caption, color: COLOR.subdued }, `${tr("mcp.url")}: ${BASE}/mcp`),
     ),
     React.createElement(Text, { as: "p", variant: TEXT.caption, color: COLOR.subdued, style: { margin: 0 } }, tr("mcp.help")),
-    snippetRows(info && info.dataDir).map((row) =>
+    snippetRows(info).map((row) =>
       React.createElement(Snippet, { key: row.key, label: row.label, text: row.text, onCopy: copy })
     ),
   );

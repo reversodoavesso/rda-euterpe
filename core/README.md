@@ -27,7 +27,8 @@ rustup toolchain install 1.99.0-x86_64-pc-windows-gnu --profile minimal -c rustf
 rustup default stable-x86_64-pc-windows-gnu
 ```
 
-`core/.cargo/config.toml` já fixa o alvo, o linker (`x86_64-w64-mingw32-gcc`) e o `ar` (`gcc-ar`).
+`core/.cargo/config.toml` configura o linker GNU (`x86_64-w64-mingw32-gcc`) e o `ar` (`gcc-ar`) apenas para esse alvo.
+O alvo padrão é o host: Linux, macOS e Windows/MSVC não são forçados a usar MinGW.
 `core/rust-toolchain.toml` fixa o canal (**1.99.0**).
 
 > ⚠️ **Antivírus:** o perfil de release **não** usa `strip = true` de propósito. O binário
@@ -50,7 +51,7 @@ cd core
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test                    # 258 testes (124 unit + 134 de integração)
-cargo build --release         # target/x86_64-pc-windows-gnu/release/euterpe.exe (~13,5 MB, com símbolos)
+cargo build --release         # target/release/euterpe[.exe]
 ```
 
 Smoke tests (o daemon precisa estar de pé para o segundo):
@@ -66,10 +67,14 @@ node tools\smoke-bridge.mjs                                       # bridge WS re
 euterpe serve                 # sobe o daemon (127.0.0.1:8337)
 euterpe --ensure              # idempotente: sobe se não houver, exit 0 se já houver
 euterpe mcp --stdio           # servidor MCP por stdio (stdout = só protocolo)
-euterpe install-startup       # atalho na pasta Startup do usuário
+euterpe install-startup       # autostart nativo por usuário
 euterpe install-startup --remove
 euterpe version
 ```
+
+As receitas para Linux/macOS, paths nativos, controles de autostart e limitações
+estão em [docs/platforms.md](../docs/platforms.md). O instalador aceita também
+`--daemon CAMINHO` para um binário já compilado.
 
 ### Variáveis de ambiente
 
