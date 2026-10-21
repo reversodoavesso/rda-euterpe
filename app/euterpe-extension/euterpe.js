@@ -697,11 +697,27 @@
 
         async uploadImage(ref, imageB64) {
           const PlaylistAPI = platformApi("PlaylistAPI", "uploadImage");
-          if (!PlaylistAPI) return null;
+          const updateDetails = platformApi("PlaylistAPI", "updateDetails");
+          if (!PlaylistAPI || !updateDetails) return null;
           try {
-            await PlaylistAPI.uploadImage(playlistUri(ref), imageB64);
-            return { ok: true };
+            const clean = imageB64.includes(",") ? imageB64.split(",")[1] : imageB64;
+            const bin = atob(clean);
+            const u8 = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+            const blob = new Blob([u8], { type: "image/jpeg" });
+
+            const uploadToken = await PlaylistAPI.uploadImage(blob);
+            if (!uploadToken) {
+              dbg("[tier] PlaylistAPI.uploadImage returned no token");
+              return null;
+            }
+
+            const uri = playlistUri(ref);
+            await updateDetails.updateDetails(uri, { imageUploadToken: uploadToken });
+            dbg("[tier] PlaylistAPI.uploadImage registered via Platform API");
+            return { ok: true, source: "platform" };
           } catch (err) {
+            dbg("[tier] PlaylistAPI.uploadImage error: " + (err?.message || err));
             return null;
           }
         },
