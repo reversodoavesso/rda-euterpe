@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-10-23T12:17:07.047658+00:00",
+  "mode": "headless_pairing_code_and_cancel",
+  "user_completed_authorization": false,
+  "checks": [
+    "separate_empty_state",
+    "pairing_requires_auth",
+    "initially_unpaired",
+    "pairing_start_accepted",
+    "real_pairing_code_available",
+    "spotify_verification_url",
+    "code_has_future_expiry",
+    "start_does_not_duplicate_pending_flow",
+    "cancel_returns_idle",
+    "cancel_removes_code",
+    "cancel_saves_no_account"
+  ],
+  "status": "passed"
+}

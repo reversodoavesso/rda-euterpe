@@ -1,0 +1,329 @@
+{
+  "generated_at": "2026-10-23T12:24:56.158570+00:00",
+  "authenticated_spotify_operations_validated": true,
+  "authenticated_playlist_mutations_validated": true,
+  "checks": {
+    "ntify": {
+      "status": "passed_with_confirmed_gaps",
+      "protocol_cases_passed": 9,
+      "confirmed_gaps": 2,
+      "cases_failed": 0,
+      "scope": "offline_interceptor_no_network"
+    },
+    "ntify_public": {
+      "candidate": "ntify-spotapi",
+      "mode": "live_public_search_with_guest_tokens",
+      "authenticated_account": false,
+      "tracks_returned": 1,
+      "status": "passed",
+      "http_attempts": [
+        {
+          "host": "api-partner.spotify.com",
+          "path": "/pathfinder/v2/query",
+          "http_status": 200
+        }
+      ]
+    },
+    "ntify_account": {
+      "candidate": "ntify-spotapi",
+      "mode": "authenticated_read_with_desktop_access_token",
+      "mutations_performed": false,
+      "cases": [
+        {
+          "operation": "rootlist",
+          "status": "passed",
+          "items_returned": 55,
+          "playlist_references": 53,
+          "has_revision": true
+        },
+        {
+          "operation": "saved_tracks_first_page",
+          "status": "passed",
+          "items_returned": 1
+        }
+      ],
+      "status": "passed"
+    },
+    "desktop_migration": {
+      "candidate": "go-librespot",
+      "mode": "desktop_session_migration_read_only",
+      "mutations_performed": false,
+      "playback_started": false,
+      "first_read": {
+        "total": 53,
+        "items_returned": 25,
+        "response_keys": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "item_keys": [
+          "can_edit",
+          "collaborative",
+          "description",
+          "folder",
+          "image_url",
+          "length",
+          "name",
+          "owner_username",
+          "uri"
+        ]
+      },
+      "stored_credentials_created": true,
+      "same_account_confirmed": true,
+      "bootstrap_token_removed_from_config": true,
+      "after_restart_read": {
+        "total": 53,
+        "items_returned": 25,
+        "response_keys": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "item_keys": [
+          "can_edit",
+          "collaborative",
+          "description",
+          "folder",
+          "image_url",
+          "length",
+          "name",
+          "owner_username",
+          "uri"
+        ]
+      },
+      "same_library_after_restart": true,
+      "status": "passed",
+      "temporary_desktop_token_discarded": true,
+      "stored_credential_occurrences_in_shareable_files": 0
+    },
+    "headless_mcp": {
+      "mode": "headless_mcp",
+      "checked_at": "2026-10-23T12:18:52.017754+00:00",
+      "mutations_requested": true,
+      "checks": [
+        "zero_extension_clients",
+        "authenticated_library_read",
+        "track_metadata",
+        "unsupported_tool_explicit",
+        "web_rejection",
+        "create_resolves_track_names",
+        "create_empty",
+        "append_deduplicates_input",
+        "append_keeps_existing_duplicates",
+        "replace_order_and_duplicates",
+        "server_undo_snapshot",
+        "name_and_description",
+        "clear_description_only",
+        "remove_all_duplicate_occurrences",
+        "replace_with_empty",
+        "disposable_playlist_unfollowed",
+        "original_library_count_restored"
+      ],
+      "status": "passed",
+      "playlists_total_before": 53,
+      "read_track_count": 50,
+      "playlists_total_after": 53,
+      "cleanup": "passed"
+    },
+    "headless_validation": {
+      "checked_at": "2026-10-23T12:23:40.322391+00:00",
+      "status": "passed",
+      "rust_tests_passed": 270,
+      "rust_tests_failed": 0,
+      "new_headless_integration_tests": 8,
+      "sidecar_tests_passed": 22,
+      "cargo_fmt": "passed",
+      "cargo_clippy_all_targets_deny_warnings": "passed",
+      "stdio_proxy_authenticated": "passed",
+      "unauthenticated_mcp": "http_401",
+      "shareable_credential_occurrences": 0,
+      "headless_auth_integration_tests": 3,
+      "sidecar_race_detector": "passed",
+      "current_account_replacement": "blocked_http_409"
+    },
+    "headless_catalog": {
+      "mode": "headless_catalog_read_only",
+      "checked_at": "2026-10-23T12:23:30.451931+00:00",
+      "mutations_performed": false,
+      "checks": [
+        "search_four_categories",
+        "search_entity_ids",
+        "batch_metadata_order_and_duplicates",
+        "batch_metadata_fields",
+        "liked_read_with_added_dates",
+        "liked_offset",
+        "liked_newest_first",
+        "resolve_names_and_uris",
+        "resolve_unique_uris",
+        "resolve_preserves_input_order"
+      ],
+      "status": "passed",
+      "search_counts": {
+        "tracks": 3,
+        "artists": 3,
+        "albums": 3,
+        "playlists": 3
+      },
+      "liked_returned": 3
+    },
+    "headless_pairing": {
+      "checked_at": "2026-10-23T12:17:07.047658+00:00",
+      "mode": "headless_pairing_code_and_cancel",
+      "user_completed_authorization": false,
+      "checks": [
+        "separate_empty_state",
+        "pairing_requires_auth",
+        "initially_unpaired",
+        "pairing_start_accepted",
+        "real_pairing_code_available",
+        "spotify_verification_url",
+        "code_has_future_expiry",
+        "start_does_not_duplicate_pending_flow",
+        "cancel_returns_idle",
+        "cancel_removes_code",
+        "cancel_saves_no_account"
+      ],
+      "status": "passed"
+    },
+    "go_native": {
+      "status": "passed",
+      "leaf_cases_passed": 143,
+      "leaf_cases_failed": 0,
+      "leaf_cases_skipped": 0,
+      "packages": {
+        "github.com/devgianlu/go-librespot/dealer": "pass",
+        "github.com/devgianlu/go-librespot/login5": "pass",
+        "github.com/devgianlu/go-librespot/zeroconf": "pass",
+        "github.com/devgianlu/go-librespot/tracks": "pass",
+        "github.com/devgianlu/go-librespot/spclient": "pass"
+      },
+      "scope": "offline_upstream_unit_tests"
+    },
+    "go_linux": {
+      "status": "passed",
+      "leaf_cases_passed": 189,
+      "leaf_cases_failed": 0,
+      "leaf_cases_skipped": 0,
+      "packages": {
+        "github.com/devgianlu/go-librespot/cmd/daemon": "pass",
+        "github.com/devgianlu/go-librespot/daemon": "pass"
+      },
+      "scope": "offline_upstream_unit_tests"
+    },
+    "librespot": {
+      "status": "passed",
+      "cases_passed": 24,
+      "cases_failed": 0,
+      "cases_ignored": 0,
+      "scope": "offline_upstream_unit_tests_no_audio_features"
+    },
+    "spotify_player": {
+      "status": "passed",
+      "cases_passed": 45,
+      "cases_failed": 0,
+      "cases_ignored": 0,
+      "scope": "offline_upstream_unit_tests_no_audio_features"
+    },
+    "spotapi_python": {
+      "status": "failed",
+      "tests": 44,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0,
+      "scope": "unchanged_upstream_offline_tests_staged_without_broken_package_initializer"
+    },
+    "go_container": {
+      "candidate": "go-librespot",
+      "mode": "linux_container_pre_login",
+      "authenticated_account": false,
+      "pairing_endpoint_status": 200,
+      "pairing_response_keys": [
+        "code",
+        "expires_at",
+        "url"
+      ],
+      "pairing_details_available": true,
+      "status_endpoint_status": 204,
+      "library_before_login_status": 204,
+      "status": "passed",
+      "image_id": "sha256:10fda639bf36bf69905a632afb30adb4962aabb4b602ca11918295e5694b0547"
+    },
+    "spotapi_public": {
+      "candidate": "spotapi-python",
+      "mode": "public_read_without_user_login",
+      "authenticated_account": false,
+      "status": "passed",
+      "has_graphql_errors": false,
+      "response_top_level_keys": [
+        "data"
+      ],
+      "playlist_node_keys": [
+        "__typename",
+        "abuseReportingEnabled",
+        "attributes",
+        "basePermission",
+        "content",
+        "currentUserCapabilities",
+        "description",
+        "followers",
+        "following",
+        "format",
+        "images",
+        "members",
+        "name",
+        "ownerV2",
+        "revisionId",
+        "sharingInfo",
+        "uri",
+        "visualIdentity"
+      ],
+      "tracks_returned": 1,
+      "duration_seconds": 5.28,
+      "http_requests": 80
+    }
+  },
+  "account_read": {
+    "candidate": "go-librespot",
+    "mode": "authenticated_read_only",
+    "mutations_performed": false,
+    "http_status": 200,
+    "response_keys": [
+      "items",
+      "limit",
+      "offset",
+      "total"
+    ],
+    "items_count": 25,
+    "items_item_keys": [
+      "can_edit",
+      "collaborative",
+      "description",
+      "folder",
+      "image_url",
+      "length",
+      "name",
+      "owner_username",
+      "uri"
+    ],
+    "limit": 25,
+    "offset": 0,
+    "total": 53,
+    "status": "passed",
+    "pagination": {
+      "pages": 3,
+      "items_returned": 53,
+      "complete": true
+    },
+    "context_read": {
+      "status": "passed",
+      "declared_length": 31,
+      "returned_length": 31,
+      "cached_metadata": 31,
+      "ready": true,
+      "playback_started": false
+    }
+  }
+}

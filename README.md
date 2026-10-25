@@ -17,12 +17,33 @@ do chat (o espelho da Fase 2 / D6).
 - Plano de Diff Engine e Versionamento Incremental: [`PLAN-DIFF-ENGINE.md`](./PLAN-DIFF-ENGINE.md)
 - Tom de voz da marca (copy, status, erros): [`BRAND-VOICE.md`](./BRAND-VOICE.md)
 
+## Interface web headless
+
+A aplicação em [`web/`](./web/README.md) roda em um container Linux, com login próprio,
+contas Spotify separadas, chat com streaming, biblioteca, busca, revisão editável,
+aprovações, histórico e configurações de IA. O build baixa o go-librespot em uma revisão
+fixa e compila o daemon Rust; esta modalidade dispensa o Spotify desktop e o Spicetify.
+
+```powershell
+docker compose -f headless-lab/compose.web.yml up -d --build
+```
+
+Abra **http://127.0.0.1:18339**, crie sua conta Euterpe, conecte o Spotify pelo código de
+pareamento e configure o provedor de IA em **Ajustes**. A sessão migrada nesta máquina já
+está provisionada no usuário local; o acesso está no arquivo privado descrito no guia.
+
+O backend headless cobre 12 ferramentas de biblioteca, catálogo e playlists. Player,
+capas e recomendações nativas continuam no roteiro de migração. Veja o
+[guia de execução, arquitetura e testes](./web/README.md) para os limites atuais.
+
 ## Estrutura
 
 ```
 core/      daemon Rust: bridge WS (8337) + servidor MCP + loop LLM + tools de servidor
 app/       Custom App + Extension do spicetify (interface dentro do Spotify)
 agent/     agente Node/TS — oráculo de teste e upstream opcional do chat (CHAT_UPSTREAM)
+web/       interface web + gateway autenticado + supervisão de workers por usuário
+headless-lab/ backend Spotify em Go, compose e testes da migração headless
 tools/     instaladores auxiliares e verificações de integração
 searxng/   docker-compose opcional do metabuscador (o web_search funciona sem ele)
 ```

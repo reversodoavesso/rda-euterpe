@@ -1,0 +1,16 @@
+{
+  "candidate": "go-librespot",
+  "mode": "linux_container_pre_login",
+  "authenticated_account": false,
+  "pairing_endpoint_status": 200,
+  "pairing_response_keys": [
+    "code",
+    "expires_at",
+    "url"
+  ],
+  "pairing_details_available": true,
+  "status_endpoint_status": 204,
+  "library_before_login_status": 204,
+  "status": "passed",
+  "image_id": "sha256:10fda639bf36bf69905a632afb30adb4962aabb4b602ca11918295e5694b0547"
+}

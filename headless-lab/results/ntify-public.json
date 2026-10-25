@@ -1,0 +1,14 @@
+{
+  "candidate": "ntify-spotapi",
+  "mode": "live_public_search_with_guest_tokens",
+  "authenticated_account": false,
+  "tracks_returned": 1,
+  "status": "passed",
+  "http_attempts": [
+    {
+      "host": "api-partner.spotify.com",
+      "path": "/pathfinder/v2/query",
+      "http_status": 200
+    }
+  ]
+}

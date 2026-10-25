@@ -4,12 +4,12 @@
 //! Invariantes (PLAN-REFACTOR.md §2.3) implementadas e testadas em
 //! `tests/bridge_concurrency.rs`:
 //!
-//! 1. `clients` é um `HashMap<Uuid, ClientHandle>` — **N** conexões possíveis, mas
+//! 1. `clients` mantém **N** conexões possíveis, mas
 //!    só a **mais recente** autenticada é usada (equivalente ao `activeClient`
 //!    singular do Node, sem o bug de reuso do socket).
 //! 2. `mutation_lock` garante **exatamente uma** mutação em voo, cobrindo
 //!    proposta → snapshot → escrita (protege snapshot × escrita).
-//! 3. Sem extensão viva, tool de cliente devolve `{ok:false,code:"client_offline"}`
+//! 3. No modo desktop, sem extensão viva, tool devolve `client_offline`
 //!    **imediato**: nunca cache velho, nunca esperar 30 s.
 //! 4. Nenhum id de chamada é reutilizado enquanto pendente (falha explícita).
 //! 5. `pending` é global (ids são únicos), então o MCP chama tools em paralelo sem
@@ -27,6 +27,8 @@ use crate::config::{Config, MutationPolicy};
 use crate::protocol::{Decision, ServerMsg, ToolResult};
 use crate::tools::{catalog, server::ServerToolContext};
 
+pub mod headless;
+
 /// Canal de saída de uma conexão (WS ou SSE).
 pub type Sink = mpsc::UnboundedSender<ServerMsg>;
 
@@ -42,12 +44,25 @@ struct Pending {
     tx: oneshot::Sender<ToolResult>,
 }
 
+struct ProposalGuard<'a> {
+    bridge: &'a Bridge,
+    id: String,
+}
+
+impl Drop for ProposalGuard<'_> {
+    fn drop(&mut self) {
+        self.bridge.proposals.lock().remove(&self.id);
+    }
+}
+
 /// Bridge compartilhado.
 pub struct Bridge {
     clients: Mutex<Vec<ClientHandle>>,
     pending: Mutex<HashMap<String, Pending>>,
-    proposals: Mutex<HashMap<String, oneshot::Sender<Decision>>>,
+    proposals: Mutex<HashMap<String, (oneshot::Sender<Decision>, serde_json::Value)>>,
+    proposal_sinks: Mutex<HashMap<String, Sink>>,
     mutation_lock: AsyncMutex<()>,
+    headless: Option<headless::Headless>,
 }
 
 /// Guarda de vida de uma conexão autenticada: ao dropar, desregistra.
@@ -68,8 +83,55 @@ impl Bridge {
             clients: Mutex::new(Vec::new()),
             pending: Mutex::new(HashMap::new()),
             proposals: Mutex::new(HashMap::new()),
+            proposal_sinks: Mutex::new(HashMap::new()),
             mutation_lock: AsyncMutex::new(()),
+            headless: None,
         }
+    }
+
+    pub fn from_config(cfg: &Config) -> anyhow::Result<Self> {
+        let mut bridge = Self::new();
+        if !cfg.headless_url.is_empty() {
+            bridge.headless = Some(headless::Headless::with_secret(
+                &cfg.headless_url,
+                &cfg.headless_secret,
+            )?);
+        }
+        Ok(bridge)
+    }
+
+    pub fn is_headless(&self) -> bool {
+        self.headless.is_some()
+    }
+
+    pub async fn headless_auth(
+        &self,
+        action: &str,
+    ) -> Result<(u16, headless::AuthStatus), headless::AuthUnavailable> {
+        match &self.headless {
+            Some(backend) => backend.auth(action).await,
+            None => Err(headless::AuthUnavailable),
+        }
+    }
+
+    pub fn has_backend(&self) -> bool {
+        self.is_headless() || self.has_client()
+    }
+
+    pub fn pending_proposals(&self) -> Vec<serde_json::Value> {
+        self.proposals
+            .lock()
+            .values()
+            .map(|(_, v)| v.clone())
+            .collect()
+    }
+
+    pub fn watch_proposals(&self, session: &str, sink: Sink) {
+        self.proposal_sinks.lock().insert(session.to_string(), sink);
+    }
+
+    pub fn unwatch_proposals(&self, session: &str) {
+        self.proposal_sinks.lock().remove(session);
     }
 
     /* ------------------------------------------------------------- registry */
@@ -167,7 +229,7 @@ impl Bridge {
     pub fn resolve_proposal(&self, proposal_id: &str, decision: Decision) -> bool {
         let entry = self.proposals.lock().remove(proposal_id);
         match entry {
-            Some(tx) => {
+            Some((tx, _)) => {
                 let _ = tx.send(decision);
                 true
             }
@@ -177,10 +239,10 @@ impl Bridge {
 
     /* ---------------------------------------------------------- tool calling */
 
-    /// Chama uma tool de **cliente** (a que roda dentro do Spotify).
+    /// Chama uma tool Spotify no backend selecionado (extensão ou headless).
     ///
     /// * `mutation` decide o gate: `Allow` executa direto; `Confirm` abre proposta
-    ///   no Spotify; `Deny` recusa sem tocar no cliente.
+    ///   no Spotify ou na fila web; `Deny` recusa sem tocar no backend.
     /// * `snapshot` grava o estado anterior da playlist antes da escrita.
     pub async fn call_tool(
         self: &Arc<Self>,
@@ -191,15 +253,17 @@ impl Bridge {
     ) -> ToolResult {
         let call_id = opts.call_id.clone();
         let mutating = catalog::is_mutating(name);
+        // A guarda precisa sobreviver até o retorno da escrita abaixo.
+        let _mutation_guard;
         if mutating {
             if opts.mutation == MutationPolicy::Deny {
                 return ToolResult::err("mutation_denied");
             }
-            if !self.has_client() {
+            if !self.has_backend() {
                 return ToolResult::err("client_offline");
             }
             // Invariante 2: serializa proposta + snapshot + escrita.
-            let _guard = self.mutation_lock.lock().await;
+            _mutation_guard = self.mutation_lock.lock().await;
 
             if opts.mutation == MutationPolicy::Confirm {
                 match self.ask_proposal(cfg, name, &args, &opts).await {
@@ -226,6 +290,19 @@ impl Bridge {
                             .await
                         {
                             ToolResult { ok: true, data, .. } => {
+                                if self.is_headless()
+                                    && !data.as_ref().is_some_and(|d| {
+                                        d.as_array().is_some_and(|items| {
+                                            items.iter().all(|t| {
+                                                t.get("uri")
+                                                    .and_then(|v| v.as_str())
+                                                    .is_some_and(|s| !s.is_empty())
+                                            })
+                                        })
+                                    })
+                                {
+                                    return ToolResult::err("snapshot_unavailable");
+                                }
                                 let uris: Vec<String> = data
                                     .as_ref()
                                     .and_then(|d| d.as_array())
@@ -237,16 +314,20 @@ impl Bridge {
                                             .collect()
                                     })
                                     .unwrap_or_default();
-                                store
-                                    .with(|c| {
-                                        crate::store::snapshots::save_snapshot(
-                                            c,
-                                            &playlist_id,
-                                            &uris,
-                                        );
-                                        Ok(())
-                                    })
-                                    .ok();
+                                let saved = store.with(|c| {
+                                    crate::store::snapshots::try_save_snapshot(
+                                        c,
+                                        &playlist_id,
+                                        &uris,
+                                    )?;
+                                    Ok(())
+                                });
+                                if saved.is_err() && self.is_headless() {
+                                    return ToolResult::err("snapshot_unavailable");
+                                }
+                            }
+                            _ if self.is_headless() => {
+                                return ToolResult::err("snapshot_unavailable")
                             }
                             _ => {
                                 tracing::warn!(call = %call_id, "snapshot indisponível; seguindo sem restaurável");
@@ -270,6 +351,10 @@ impl Bridge {
         args: serde_json::Value,
         opts: Option<CallOptions<'_>>,
     ) -> ToolResult {
+        if let Some(backend) = &self.headless {
+            let timeout_ms = opts.map(|o| o.timeout_ms).unwrap_or(cfg.tool_timeout_ms);
+            return backend.call(name, args, timeout_ms).await;
+        }
         let client = match self.active_client() {
             Some(c) => c,
             // Invariante 3: fail-closed imediato.
@@ -332,10 +417,14 @@ impl Bridge {
         args: &serde_json::Value,
         opts: &CallOptions<'_>,
     ) -> Result<bool, String> {
-        let client = match self.active_client() {
-            Some(c) => c,
-            None => return Err("client_offline".to_string()),
+        let client = if self.is_headless() {
+            None
+        } else {
+            self.active_client()
         };
+        if client.is_none() && !self.is_headless() {
+            return Err("client_offline".to_string());
+        }
         let proposal_id = Uuid::new_v4().to_string();
         let summary = summarize(&opts.locale, name, args);
         if let Some(logs) = opts.sessions_dir {
@@ -352,17 +441,31 @@ impl Bridge {
             );
         }
         let (tx, rx) = oneshot::channel();
-        self.proposals.lock().insert(proposal_id.clone(), tx);
-        let sent = client.tx.send(ServerMsg::ProposalCreate {
+        let message = ServerMsg::ProposalCreate {
             proposal_id: proposal_id.clone(),
             kind: "tool".to_string(),
             title: summary,
             name: name.to_string(),
             args: args.clone(),
-        });
-        if sent.is_err() {
-            self.proposals.lock().remove(&proposal_id);
-            return Err("client_offline".to_string());
+        };
+        self.proposals.lock().insert(
+            proposal_id.clone(),
+            (tx, serde_json::to_value(&message).unwrap_or_default()),
+        );
+        let _proposal_guard = ProposalGuard {
+            bridge: self,
+            id: proposal_id.clone(),
+        };
+        if self.is_headless() {
+            if let Some(sink) = self.proposal_sinks.lock().get(&opts.session_id) {
+                let _ = sink.send(message.clone());
+            }
+        }
+        if let Some(client) = client {
+            if client.tx.send(message).is_err() {
+                self.proposals.lock().remove(&proposal_id);
+                return Err("client_offline".to_string());
+            }
         }
         let decision =
             tokio::time::timeout(Duration::from_millis(cfg.proposal_timeout_ms), rx).await;

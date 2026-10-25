@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-10-23T12:23:40.322391+00:00",
+  "status": "passed",
+  "rust_tests_passed": 270,
+  "rust_tests_failed": 0,
+  "new_headless_integration_tests": 8,
+  "sidecar_tests_passed": 22,
+  "cargo_fmt": "passed",
+  "cargo_clippy_all_targets_deny_warnings": "passed",
+  "stdio_proxy_authenticated": "passed",
+  "unauthenticated_mcp": "http_401",
+  "shareable_credential_occurrences": 0,
+  "headless_auth_integration_tests": 3,
+  "sidecar_race_detector": "passed",
+  "current_account_replacement": "blocked_http_409"
+}

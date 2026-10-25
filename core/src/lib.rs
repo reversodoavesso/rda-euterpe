@@ -26,6 +26,8 @@ pub mod ws;
 pub const VERSION: &str = "0.2.0";
 
 use std::sync::Arc;
+type ChatRegistry =
+    std::collections::HashMap<String, (uuid::Uuid, tokio_util::sync::CancellationToken)>;
 
 /// Estado compartilhado entre as rotas HTTP e as conexões WS.
 #[derive(Clone)]
@@ -37,13 +39,14 @@ pub struct AppState {
     /// Conexão de espelho para o agente Node (Fase 2 / D6). Inerte quando
     /// `CHAT_UPSTREAM` está vazio.
     pub upstream: Arc<upstream::Upstream>,
+    pub chats: Arc<std::sync::Mutex<ChatRegistry>>,
 }
 
 impl AppState {
     pub fn new(cfg: config::Config) -> anyhow::Result<Self> {
         let store = Arc::new(store::Store::open(&cfg.db_path)?);
         let settings = Arc::new(store::settings::SettingsCache::load(&store)?);
-        let bridge = Arc::new(bridge::Bridge::new());
+        let bridge = Arc::new(bridge::Bridge::from_config(&cfg)?);
         let upstream = Arc::new(upstream::Upstream::new(&cfg));
         Ok(Self {
             cfg: Arc::new(cfg),
@@ -51,6 +54,7 @@ impl AppState {
             bridge,
             settings,
             upstream,
+            chats: Arc::default(),
         })
     }
 

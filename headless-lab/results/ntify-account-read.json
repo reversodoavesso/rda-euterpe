@@ -1,0 +1,20 @@
+{
+  "candidate": "ntify-spotapi",
+  "mode": "authenticated_read_with_desktop_access_token",
+  "mutations_performed": false,
+  "cases": [
+    {
+      "operation": "rootlist",
+      "status": "passed",
+      "items_returned": 55,
+      "playlist_references": 53,
+      "has_revision": true
+    },
+    {
+      "operation": "saved_tracks_first_page",
+      "status": "passed",
+      "items_returned": 1
+    }
+  ],
+  "status": "passed"
+}

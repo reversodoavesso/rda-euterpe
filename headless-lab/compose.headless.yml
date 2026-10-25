@@ -1,0 +1,38 @@
+name: euterpe-headless
+services:
+  spotify-tools:
+    image: euterpe-headless-tools:lab
+    build:
+      context: .
+      dockerfile: sidecar/Dockerfile
+    volumes:
+      - ./private/desktop-migration/go-librespot:/config:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3679/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 45s
+  daemon:
+    image: euterpe-headless-daemon:lab
+    build:
+      context: ..
+      dockerfile: headless-lab/Dockerfile.daemon
+    ports:
+      - "127.0.0.1:18337:8337"
+    environment:
+      EUTERPE_HEADLESS_URL: http://spotify-tools:3679
+      EUTERPE_MUTATION_POLICY: confirm
+    volumes:
+      - ./private/headless-mcp:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    depends_on:
+      spotify-tools:
+        condition: service_healthy

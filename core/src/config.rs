@@ -252,6 +252,11 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub ws_secret: String,
+    /// Serviço de ferramentas headless. Vazio mantém a extensão como backend.
+    #[serde(default)]
+    pub headless_url: String,
+    #[serde(default)]
+    pub headless_secret: String,
     pub data_dir: PathBuf,
     pub db_path: PathBuf,
     pub providers: Vec<ProviderConfig>,
@@ -401,6 +406,8 @@ impl Config {
             host,
             port,
             ws_secret: pick("WS_SECRET").unwrap_or_default(),
+            headless_url: pick("EUTERPE_HEADLESS_URL").unwrap_or_default(),
+            headless_secret: pick("EUTERPE_HEADLESS_SECRET").unwrap_or_default(),
             data_dir: paths::data_dir(),
             db_path: paths::db_path(),
             providers,
@@ -438,6 +445,8 @@ impl Config {
             host: "127.0.0.1".into(),
             port: 0,
             ws_secret: "test-secret".into(),
+            headless_url: String::new(),
+            headless_secret: String::new(),
             db_path: data_dir.join("euterpe.db"),
             providers: vec![ProviderConfig::preset("deepseek").unwrap()],
             active_provider: "deepseek".into(),

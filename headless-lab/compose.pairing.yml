@@ -1,0 +1,34 @@
+# Separate account state and daemon: never replaces the migrated account.
+name: euterpe-headless-pairing
+services:
+  spotify-tools:
+    image: euterpe-headless-tools:lab
+    environment:
+      SPOTIFY_PAIRING_ENABLED: "true"
+    volumes:
+      - ./private/web-pairing:/config
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3679/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  daemon:
+    image: euterpe-headless-daemon:lab
+    ports:
+      - "127.0.0.1:18338:8337"
+    environment:
+      EUTERPE_HEADLESS_URL: http://spotify-tools:3679
+      EUTERPE_MUTATION_POLICY: confirm
+    volumes:
+      - ./private/web-pairing-mcp:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    depends_on:
+      spotify-tools:
+        condition: service_healthy

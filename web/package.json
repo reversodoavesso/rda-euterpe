@@ -1,0 +1,12 @@
+{
+  "name": "euterpe-web-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test test_frontend.cjs",
+    "format": "prettier --write dist/app.js dist/style.css dist/index.html"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0",
+    "prettier": "3.6.2"
+  }
+}

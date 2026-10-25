@@ -78,6 +78,35 @@ impl Drop for DropCancel {
     }
 }
 
+struct ActiveChat {
+    state: AppState,
+    id: String,
+    run: uuid::Uuid,
+}
+impl Drop for ActiveChat {
+    fn drop(&mut self) {
+        let mut chats = self.state.chats.lock().unwrap_or_else(|e| e.into_inner());
+        if chats.get(&self.id).is_some_and(|(run, _)| *run == self.run) {
+            chats.remove(&self.id);
+            self.state.bridge.unwatch_proposals(&self.id);
+        }
+    }
+}
+
+pub async fn cancel(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Json<Value> {
+    let chats = state.chats.lock().unwrap_or_else(|e| e.into_inner());
+    let found = if let Some((_, token)) = chats.get(&id) {
+        token.cancel();
+        true
+    } else {
+        false
+    };
+    Json(json!({"ok":true,"cancelled":found}))
+}
+
 pub async fn chat(
     State(state): State<AppState>,
     Json(req): Json<ChatRequest>,
@@ -91,14 +120,33 @@ pub async fn chat(
 
     let cancel_token = tokio_util::sync::CancellationToken::new();
     let drop_guard = DropCancel(Some(cancel_token.clone()));
+    let run = uuid::Uuid::new_v4();
+    {
+        let mut chats = state.chats.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, old)) = chats.insert(session_id.clone(), (run, cancel_token.clone())) {
+            old.cancel();
+        }
+        if state.bridge.is_headless() {
+            state.bridge.watch_proposals(&session_id, tx.clone());
+        }
+    }
+    let active = ActiveChat {
+        state: state.clone(),
+        id: session_id.clone(),
+        run,
+    };
 
     let state = Arc::new(state);
     let task_state = AppState::clone(&state);
     let text = req.text.clone();
     tokio::spawn(async move {
+        let _active = active;
         let upstream = crate::upstream::UpstreamChat::new(task_state.clone(), tx.clone());
         if upstream.is_enabled() {
-            upstream.chat(&session_id, &text, Some(&locale)).await;
+            tokio::select! {
+                _ = cancel_token.cancelled() => {},
+                _ = upstream.chat(&session_id, &text, Some(&locale)) => {},
+            }
             return;
         }
         let eff = task_state.effective_for_session(Some(&session_id));
@@ -114,9 +162,12 @@ pub async fn chat(
             adapter,
             // Caminho SSE: deltas reais (a UI nova mostra o texto enquanto sai).
             stream_deltas: true,
-            cancel_token: Some(cancel_token),
+            cancel_token: Some(cancel_token.clone()),
         };
-        crate::llm::handle_chat(&deps, &text).await;
+        tokio::select! {
+            _ = cancel_token.cancelled() => {},
+            _ = crate::llm::handle_chat(&deps, &text) => {},
+        }
         drop(tx);
     });
 

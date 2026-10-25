@@ -1,0 +1,55 @@
+{
+  "candidate": "go-librespot",
+  "mode": "desktop_session_migration_read_only",
+  "mutations_performed": false,
+  "playback_started": false,
+  "first_read": {
+    "total": 53,
+    "items_returned": 25,
+    "response_keys": [
+      "items",
+      "limit",
+      "offset",
+      "total"
+    ],
+    "item_keys": [
+      "can_edit",
+      "collaborative",
+      "description",
+      "folder",
+      "image_url",
+      "length",
+      "name",
+      "owner_username",
+      "uri"
+    ]
+  },
+  "stored_credentials_created": true,
+  "same_account_confirmed": true,
+  "bootstrap_token_removed_from_config": true,
+  "after_restart_read": {
+    "total": 53,
+    "items_returned": 25,
+    "response_keys": [
+      "items",
+      "limit",
+      "offset",
+      "total"
+    ],
+    "item_keys": [
+      "can_edit",
+      "collaborative",
+      "description",
+      "folder",
+      "image_url",
+      "length",
+      "name",
+      "owner_username",
+      "uri"
+    ]
+  },
+  "same_library_after_restart": true,
+  "status": "passed",
+  "temporary_desktop_token_discarded": true,
+  "stored_credential_occurrences_in_shareable_files": 0
+}

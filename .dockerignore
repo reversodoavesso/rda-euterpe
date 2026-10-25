@@ -1,0 +1,10 @@
+**/target
+**/node_modules
+.git
+headless-lab/private
+headless-lab/repos
+headless-lab/toolchains
+headless-lab/envs
+headless-lab/runs
+**/__pycache__
+web/runs

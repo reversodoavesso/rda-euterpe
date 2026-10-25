@@ -1,0 +1,62 @@
+{
+  "sources": [
+    {
+      "id": "ntify-spotapi",
+      "url": "https://github.com/NTifyApp/NTify-SpotAPI.git",
+      "role": "Internal playlist, library and Pathfinder API candidate",
+      "priority": 1,
+      "commit": "abe6ea8a2deacd20470cc9b6800310efc950d558",
+      "committed_at": "2026-08-08T23:43:25+02:00",
+      "subject": "Update LibraryResponse.java",
+      "license_files": []
+    },
+    {
+      "id": "librespot",
+      "url": "https://github.com/librespot-org/librespot.git",
+      "role": "Native Rust authentication, Spotify session and internal transport",
+      "priority": 2,
+      "commit": "99b6088bf3ea028f90192676ac1a337fa4b2ed12",
+      "committed_at": "2026-10-21T15:12:35+01:00",
+      "subject": "docs: document Android NDK context initialization for Rodio/CPAL backend (#1812)",
+      "license_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "go-librespot",
+      "url": "https://github.com/devgianlu/go-librespot.git",
+      "role": "Headless player, account pairing and HTTP API",
+      "priority": 3,
+      "commit": "bd3fa7407eb1ab595295446e1be50cb9663e69cb",
+      "committed_at": "2026-10-18T17:23:19+02:00",
+      "subject": "feat: add GET /library/albums and /library/artists",
+      "license_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "spotify-player",
+      "url": "https://github.com/aome510/spotify-player.git",
+      "role": "Existing CLI baseline for playlists, authentication and daemon mode",
+      "priority": 4,
+      "commit": "7dc9d17a7bf5671eb6129fdf9127729f659637fc",
+      "committed_at": "2026-09-19T10:40:09-04:00",
+      "subject": "Add TLS backend features (rustls-tls / native-tls) — fixes auth panic on Termux (#1060)",
+      "license_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "spotapi-python",
+      "url": "https://github.com/Aran404/SpotAPI.git",
+      "role": "Alternative private API implementation; compare authentication and mutations",
+      "priority": 5,
+      "commit": "cb862571574e1ddbf5f8975f58a4f61a0e3d2050",
+      "committed_at": "2026-10-04T17:28:50-04:00",
+      "subject": "Merge pull request #83 from M1h4n1k/main",
+      "license_files": [
+        "LICENSE"
+      ]
+    }
+  ]
+}

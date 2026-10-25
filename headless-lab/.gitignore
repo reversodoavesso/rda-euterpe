@@ -1,0 +1,8 @@
+# Upstream checkouts keep their own Git history; never vendor them into Euterpe.
+/repos/
+/toolchains/
+/envs/
+/runs/
+/private/
+__pycache__/
+*.pyc

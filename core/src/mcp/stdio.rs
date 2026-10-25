@@ -57,7 +57,7 @@ pub async fn run_proxy(host: &str, port: u16, secret: Option<String>) -> anyhow:
             .header("accept", "application/json")
             .body(trimmed.to_string());
         if let Some(secret) = secret.as_deref() {
-            req = req.header("x-euterpe-secret", secret);
+            req = req.header("x-euterpe-secret", secret).bearer_auth(secret);
         }
         let response = match req.send().await {
             Ok(res) => res.text().await.unwrap_or_else(|e| {

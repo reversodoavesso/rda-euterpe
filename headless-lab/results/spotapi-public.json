@@ -1,0 +1,514 @@
+{
+  "candidate": "spotapi-python",
+  "mode": "public_read_without_user_login",
+  "authenticated_account": false,
+  "status": "passed",
+  "has_graphql_errors": false,
+  "response_top_level_keys": [
+    "data"
+  ],
+  "playlist_node_keys": [
+    "__typename",
+    "abuseReportingEnabled",
+    "attributes",
+    "basePermission",
+    "content",
+    "currentUserCapabilities",
+    "description",
+    "followers",
+    "following",
+    "format",
+    "images",
+    "members",
+    "name",
+    "ownerV2",
+    "revisionId",
+    "sharingInfo",
+    "uri",
+    "visualIdentity"
+  ],
+  "tracks_returned": 1,
+  "duration_seconds": 5.28,
+  "http_attempts": [
+    {
+      "method": "GET",
+      "host": "open.spotify.com",
+      "path": "",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotify.com",
+      "path": "/api/token",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/web-player.ee8c52ee.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-pip-mini-player.38964775.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-see-all-playlist-leavebehinds.9189e903.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-offline-browse.2dc5c92c.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-offline-empty-state.bb82c1af.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-music-video-prerelease.2d80e983.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-episode-more-like-this.1f14cbfb.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-buddy-feed.7f442d9d.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-playlist.27ae10e0.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-venues.1b870871.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-root-dialogs.2ffb3b1b.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/podcast-charts.f850ba23.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/trending-near-you-toolbar.b17d536e.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-premium-upsell-page.50546e8e.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-web-settings.556e86f6.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-label-artists.fa3d1e56.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-page-error-template.76dfb25d.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-collection-episodes.7c88a979.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-collection-songs.66245841.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-recent-searches.bd494476.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-video-player.574b534c.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-recents.a21339a9.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-blend.2afa752f.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-collection-local-files.b9373c94.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-desktop-modals.37550d52.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-podcast-chapter.ca3e5456.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-now-playing-bar.3178b336.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-premium-page.3d3b673e.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-show-more-like-this.7eaaa04c.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/browse-v2.729f3de3.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-whats-new-feed.32a36db4.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-user-comments.358c5c9b.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-country-hub.c2fd6b34.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-your-library-x.b27f2237.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-all-show-ads.fee3c398.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-country-hub-section.a690a2d1.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-search.e00a0fd1.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-show.0308b6e0.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-album.3090e22e.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-stage-page.ae1d88ea.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-socialPrompting.33e1d0e7.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/your-sound-capsule-modal.742a2a9c.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-debug-window-contents.97bf7498.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/playlist-leavebehinds.2a76a245.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-track-v2.362fe394.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-leaderboard-component.2b97e941.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-collection-concerts.497ca411.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/listening-stats-modal.248f498b.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-concert.f1513099.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-collection-concert-gallery.3a0dc862.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-cultural-moment-hub.4642997f.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-artist.6175c499.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-home-chips-row.54b605e9.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/ubi-highlighting.9a17e2bf.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/home-subfeed.665e8a84.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-profile.029f8f31.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-taste-profile.62620208.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/this-is-playlist-concerts-carousel.6c7be5eb.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-label.d530c159.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/desktop-update-notification.ee935bed.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-watch-feed-view-container.2a26ae95.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-home-header.ac0481f5.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/podcast-charts-hub.8ed17685.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-promptedPlaylists.27c380bd.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/home-ads-container.ad943cc9.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-error-page.447247a5.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-top-bar.8f565a1f.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-concert-campaign.e50c0995.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-feedback-bar.04cd3bec.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-episode.b62309df.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-recently-played.85c17c46.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-video-takeover.2017eecf.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/concerts-on-tour-playlist-card.88333d71.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/xpui-routes-album-prerelease.9d640a77.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-tuna.f2f3a46c.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "open.spotifycdn.com",
+      "path": "/cdn/build/web-player/dwp-panel-section.ec1b4608.js",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "host": "api-partner.spotify.com",
+      "path": "/pathfinder/v1/query",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "host": "clienttoken.spotify.com",
+      "path": "/v1/clienttoken",
+      "status": 200
+    }
+  ]
+}

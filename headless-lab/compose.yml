@@ -1,0 +1,10 @@
+services:
+  go-librespot:
+    image: euterpe-headless-lab-go:bd3fa74
+    build:
+      context: ./repos/go-librespot
+    ports:
+      - "127.0.0.1:18378:3678"
+    volumes:
+      - ./configs/go-librespot.yml:/config/config.yml:ro
+      - ./private/go-librespot:/config

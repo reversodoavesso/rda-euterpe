@@ -1,0 +1,23 @@
+name: euterpe-web
+services:
+  web:
+    image: euterpe-web:lab
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    ports:
+      - "127.0.0.1:18339:8080"
+    volumes:
+      - ./private/web:/data
+    environment:
+      WEB_REGISTRATION: ${WEB_REGISTRATION:-open}
+      WEB_MAX_ACTIVE_USERS: ${WEB_MAX_ACTIVE_USERS:-16}
+      WEB_PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN:-}
+      WEB_COOKIE_SECURE: ${WEB_COOKIE_SECURE:-0}
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN, FOWNER, DAC_OVERRIDE, KILL]
+    tmpfs: [/tmp]
+    pids_limit: 512
+    restart: unless-stopped

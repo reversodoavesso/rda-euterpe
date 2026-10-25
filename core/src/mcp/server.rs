@@ -14,7 +14,7 @@ pub const SERVER_VERSION: &str = crate::VERSION;
 /// Executa um método MCP. `Err` = erro JSON-RPC.
 pub async fn dispatch(state: &AppState, method: &str, params: &Value) -> Result<Value, Error> {
     match method {
-        "initialize" => Ok(initialize(params)),
+        "initialize" => Ok(initialize(state, params)),
         "notifications/initialized" | "notifications/cancelled" => Ok(json!({})),
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": crate::tools::catalog::mcp_list() })),
@@ -28,7 +28,7 @@ pub async fn dispatch(state: &AppState, method: &str, params: &Value) -> Result<
     }
 }
 
-fn initialize(params: &Value) -> Value {
+fn initialize(state: &AppState, params: &Value) -> Value {
     let requested = params.get("protocolVersion").and_then(|v| v.as_str());
     json!({
         "protocolVersion": negotiate_version(requested),
@@ -39,8 +39,11 @@ fn initialize(params: &Value) -> Value {
             "prompts": { "listChanged": false },
         },
         "serverInfo": { "name": SERVER_NAME, "version": SERVER_VERSION },
-        "instructions": "Ferramentas do Spotify rodando dentro do cliente desktop do usuário. \
-    Leia primeiro (get_*), confirme mutações de playlist e use spotify_undo_last_mutation se precisar reverter.",
+        "instructions": if state.bridge.is_headless() {
+            "Spotify via backend headless experimental. Algumas ferramentas retornam unsupported_in_headless. Leia antes de escrever; headless_outcome_unknown exige leitura de verificação antes de qualquer repetição. Confirmações ficam em /proposals."
+        } else {
+            "Ferramentas do Spotify rodando dentro do cliente desktop do usuário. Leia primeiro (get_*), confirme mutações de playlist e use spotify_undo_last_mutation se precisar reverter."
+        },
     })
 }
 
@@ -70,7 +73,7 @@ pub async fn call_tool(state: &AppState, params: &Value) -> Result<Value, Error>
         crate::config::MutationPolicy::Allow
     };
 
-    if !state.bridge.has_client() {
+    if !state.bridge.has_backend() {
         return Ok(error_content("client_offline".to_string(), None));
     }
 
@@ -189,7 +192,7 @@ async fn read_resource(state: &AppState, params: &Value) -> Result<Value, Error>
             json!({ "uri": uri }),
         ));
     };
-    if !state.bridge.has_client() {
+    if !state.bridge.has_backend() {
         return Err(Error::new(
             crate::mcp::jsonrpc::INTERNAL_ERROR,
             "client_offline",

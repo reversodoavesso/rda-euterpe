@@ -5,13 +5,23 @@ use rusqlite::Connection;
 
 /// Grava `uris` como snapshot da playlist.
 pub fn save_snapshot(conn: &Connection, playlist_id: &str, uris: &[String]) {
-    let body = serde_json::to_string(uris).unwrap_or_else(|_| "[]".to_string());
-    if let Err(err) = conn.execute(
-        "INSERT INTO snapshots (playlist_id, snapshot, created_at) VALUES (?, ?, ?)",
-        rusqlite::params![playlist_id, body, chrono::Utc::now().timestamp_millis()],
-    ) {
+    if let Err(err) = try_save_snapshot(conn, playlist_id, uris) {
         tracing::error!(error = %err, "falha ao salvar snapshot");
     }
+}
+
+/// Variante que permite ao backend headless interromper uma escrita sem backup.
+pub fn try_save_snapshot(
+    conn: &Connection,
+    playlist_id: &str,
+    uris: &[String],
+) -> rusqlite::Result<()> {
+    let body = serde_json::to_string(uris).unwrap_or_else(|_| "[]".to_string());
+    conn.execute(
+        "INSERT INTO snapshots (playlist_id, snapshot, created_at) VALUES (?, ?, ?)",
+        rusqlite::params![playlist_id, body, chrono::Utc::now().timestamp_millis()],
+    )?;
+    Ok(())
 }
 
 /// Snapshot mais recente ainda não desfeito.

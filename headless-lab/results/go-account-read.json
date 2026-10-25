@@ -1,0 +1,41 @@
+{
+  "candidate": "go-librespot",
+  "mode": "authenticated_read_only",
+  "mutations_performed": false,
+  "http_status": 200,
+  "response_keys": [
+    "items",
+    "limit",
+    "offset",
+    "total"
+  ],
+  "items_count": 25,
+  "items_item_keys": [
+    "can_edit",
+    "collaborative",
+    "description",
+    "folder",
+    "image_url",
+    "length",
+    "name",
+    "owner_username",
+    "uri"
+  ],
+  "limit": 25,
+  "offset": 0,
+  "total": 53,
+  "status": "passed",
+  "pagination": {
+    "pages": 3,
+    "items_returned": 53,
+    "complete": true
+  },
+  "context_read": {
+    "status": "passed",
+    "declared_length": 31,
+    "returned_length": 31,
+    "cached_metadata": 31,
+    "ready": true,
+    "playback_started": false
+  }
+}

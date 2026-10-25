@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+/runs/
+node_modules/
+
+# Hand-written runtime assets are source files in this buildless frontend.
+!/dist/
+!/dist/**

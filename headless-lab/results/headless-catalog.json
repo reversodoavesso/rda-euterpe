@@ -1,0 +1,25 @@
+{
+  "mode": "headless_catalog_read_only",
+  "checked_at": "2026-10-23T12:23:30.451931+00:00",
+  "mutations_performed": false,
+  "checks": [
+    "search_four_categories",
+    "search_entity_ids",
+    "batch_metadata_order_and_duplicates",
+    "batch_metadata_fields",
+    "liked_read_with_added_dates",
+    "liked_offset",
+    "liked_newest_first",
+    "resolve_names_and_uris",
+    "resolve_unique_uris",
+    "resolve_preserves_input_order"
+  ],
+  "status": "passed",
+  "search_counts": {
+    "tracks": 3,
+    "artists": 3,
+    "albums": 3,
+    "playlists": 3
+  },
+  "liked_returned": 3
+}

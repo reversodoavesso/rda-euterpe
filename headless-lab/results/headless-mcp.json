@@ -1,0 +1,29 @@
+{
+  "mode": "headless_mcp",
+  "checked_at": "2026-10-23T12:18:52.017754+00:00",
+  "mutations_requested": true,
+  "checks": [
+    "zero_extension_clients",
+    "authenticated_library_read",
+    "track_metadata",
+    "unsupported_tool_explicit",
+    "web_rejection",
+    "create_resolves_track_names",
+    "create_empty",
+    "append_deduplicates_input",
+    "append_keeps_existing_duplicates",
+    "replace_order_and_duplicates",
+    "server_undo_snapshot",
+    "name_and_description",
+    "clear_description_only",
+    "remove_all_duplicate_occurrences",
+    "replace_with_empty",
+    "disposable_playlist_unfollowed",
+    "original_library_count_restored"
+  ],
+  "status": "passed",
+  "playlists_total_before": 53,
+  "read_track_count": 50,
+  "playlists_total_after": 53,
+  "cleanup": "passed"
+}

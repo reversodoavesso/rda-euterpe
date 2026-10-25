@@ -63,6 +63,7 @@ VARIÁVEIS:
   EUTERPE_PORTABLE=1            Dados ao lado do executável
   CHAT_UPSTREAM                 Ex.: ws://127.0.0.1:8338/ws (Fase 2 / D6)
   EUTERPE_MUTATION_POLICY       allow | confirm | deny
+  EUTERPE_HEADLESS_URL          Serviço HTTP de tools (opcional; substitui a extensão)
 ";
 
 /// Ponto de entrada.
@@ -100,7 +101,7 @@ pub async fn run() -> anyhow::Result<()> {
             crate::logging::init(false, &crate::paths::log_file());
             let cfg = crate::config::Config::load()?;
             if crate::startup::probe_health(&cfg.host, cfg.port).await {
-                crate::mcp::stdio::run_proxy(&cfg.host, cfg.port, None).await
+                crate::mcp::stdio::run_proxy(&cfg.host, cfg.port, Some(cfg.ws_secret.clone())).await
             } else {
                 // Sem daemon: roda o MCP em processo (útil em teste e offline).
                 let state = Arc::new(AppState::new(cfg)?);
