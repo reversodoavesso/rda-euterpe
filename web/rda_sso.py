@@ -56,7 +56,7 @@ class RdaSso:
     @staticmethod
     def _request(url, body=None, headers=None):
         data = None if body is None else urllib.parse.urlencode(body).encode()
-        req = urllib.request.Request(url, data=data, headers={"Accept": "application/json", **(headers or {})})
+        req = urllib.request.Request(url, data=data, headers={"Accept": "application/json", "User-Agent": "RDA-Euterpe/1.0", **(headers or {})})
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *_args, **_kwargs):
                 raise SsoError()
