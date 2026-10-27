@@ -454,6 +454,12 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def common_headers(self):
+        # Routes such as logout/link need no JSON fields. Close an HTTP/1.1
+        # connection when its body was not consumed, so bytes cannot become the
+        # next request line (e.g. "{}GET" returning an HTML 501 response).
+        if self.command not in {'GET', 'HEAD', 'OPTIONS'} and not getattr(self, '_body_consumed', False):
+            self.send_header('Connection', 'close')
+            self.close_connection = True
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
@@ -461,7 +467,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
     def cookie(self, token, clear=False):
-        value = f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={0 if clear else SESSION_SECONDS}"
+        same_site = 'Lax' if self.app.sso else 'Strict'
+        value = f"{COOKIE}={token}; Path=/; HttpOnly; SameSite={same_site}; Max-Age={0 if clear else SESSION_SECONDS}"
         if os.getenv("WEB_COOKIE_SECURE") == "1":
             value += "; Secure"
         return value
@@ -484,7 +491,9 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             if not 0 < size <= 1048576:
                 raise APIError("request_too_large", 413)
-            body = json.loads(self.rfile.read(size))
+            raw = self.rfile.read(size)
+            self._body_consumed = len(raw) == size
+            body = json.loads(raw)
             if not isinstance(body, dict):
                 raise ValueError()
             return body
@@ -532,6 +541,7 @@ class Handler(BaseHTTPRequestHandler):
         self.reply({"error": "origin_rejected"}, 403)
 
     def handle_route(self):
+        self._body_consumed = False
         try:
             self.route()
         except APIError as error:

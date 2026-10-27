@@ -117,6 +117,19 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.request("/api/account/register", "POST", {"username": "valid", "password": "short"})[0], 400)
         self.assertEqual(self.request("/api/account/login", "POST", {"username": "missing", "password": "long-test-password"})[0], 401)
 
+    def test_unused_logout_body_cannot_corrupt_the_next_http_request(self):
+        auth, _ = self.account()
+        client = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        client.request('POST', '/api/account/logout', '{}', {'Content-Type':'application/json','Cookie':auth[0],'X-CSRF-Token':auth[1]})
+        response = client.getresponse()
+        self.assertEqual(response.status, 200)
+        response.read()
+        client.request('GET', '/api/me', headers={'Cookie':auth[0]})
+        response = client.getresponse()
+        self.assertEqual(response.status, 401)
+        self.assertEqual(json.loads(response.read())['error'], 'login_required')
+        client.close()
+
     def test_conversations_are_owned_and_erased(self):
         a, _ = self.account()
         b, _ = self.account()
