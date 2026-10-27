@@ -28,6 +28,8 @@ const state = {
   activity: [],
   polling: false,
   authMode: "login",
+  sso: { enabled: false },
+  ssoLinked: false,
 };
 const names = {
   get_playlists: "Consultar playlists",
@@ -45,6 +47,11 @@ const names = {
   undo_last_mutation: "Desfazer última alteração",
 };
 const errors = {
+  rda_sso_required: "Esta conta já usa RDA. Entre pelo botão Entrar com RDA.",
+  sso_login_failed: "Não foi possível entrar com RDA. Inicie o login novamente.",
+  sso_identity_already_linked: "Esta identidade RDA já está vinculada a outra conta Euterpe.",
+  local_account_already_linked: "Esta conta Euterpe já está vinculada ao RDA.",
+  local_account_proof_expired: "Sua sessão local expirou. Entre novamente antes de vincular.",
   login_required: "Entre para acessar seu espaço.",
   invalid_credentials: "Usuário ou senha incorretos.",
   invalid_username:
@@ -220,7 +227,7 @@ function render() {
   app.replaceChildren(state.user ? shell() : authScreen());
 }
 function authScreen() {
-  const register = state.authMode === "register";
+  const register = !state.sso.enabled && state.authMode === "register";
   const user = h("input", {
     name: "username",
     autocomplete: "username",
@@ -324,8 +331,13 @@ function authScreen() {
           { class: "small muted" },
           "Sua conta Euterpe mantém conversas, preferências e conexão Spotify em um só lugar.",
         ),
+        state.sso.enabled && button("Entrar com RDA", () => {
+          window.location.assign("/api/account/sso/login");
+        }, "primary"),
+        state.sso.enabled && h("p", { class: "small muted" },
+          "Já possui uma conta local? Entre abaixo e vincule sua conta RDA em Ajustes para manter suas conversas e conexão Spotify."),
         form,
-        h(
+        !state.sso.enabled && h(
           "div",
           { class: "auth-switch" },
           register ? "Já tem uma conta? " : "Primeira vez por aqui? ",
@@ -349,6 +361,7 @@ function authScreen() {
 }
 async function signedIn(r) {
   state.user = r.user;
+  state.ssoLinked = Boolean(r.ssoLinked);
   state.csrf = r.csrf;
   state.view = "chat";
   render();
@@ -2357,6 +2370,17 @@ function settingsView() {
     h(
       "div",
       { class: "settings-form" },
+      state.sso.enabled && h("section", { class: "settings-card stack" },
+        h("h2", {}, "Conta RDA"),
+        h("p", { class: "small muted" }, state.ssoLinked
+          ? "Sua conta está vinculada ao RDA. Seus dados e sua conexão Spotify continuam neste espaço."
+          : "Vincule sua conta para entrar com RDA e manter os dados deste espaço. Depois da vinculação, o acesso será pelo RDA."),
+        !state.ssoLinked && button("Vincular conta RDA", async () => {
+          const result = await api("/account/sso/link", "POST", {});
+          const target = new URL(result.url);
+          if (target.origin !== "https://id.reversodoavesso.com") throw Error("request_failed");
+          window.location.assign(target.href);
+        }, "primary")),
       h(
         "section",
         { class: "settings-card stack" },
@@ -2471,6 +2495,11 @@ $("#modal").addEventListener("click", (e) => {
   if (e.target === $("#modal")) closeModal();
 });
 (async () => {
+  try {
+    state.sso = await api("/account/sso/config");
+  } catch {
+    state.sso = { enabled: false };
+  }
   try {
     const r = await api("/me");
     await signedIn(r);

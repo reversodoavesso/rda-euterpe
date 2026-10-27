@@ -29,6 +29,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from rda_sso import RdaSso, SsoError
 
 STATIC = Path(__file__).parent / "dist"
 READ_TOOLS = {"get_playlists", "get_playlist_tracks", "get_saved_tracks", "get_several_tracks", "search_spotify", "resolve_tracks"}
@@ -79,6 +80,11 @@ class Store:
                 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), tool TEXT NOT NULL, args TEXT NOT NULL, status TEXT NOT NULL, result TEXT, created REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS sso_bindings(issuer TEXT NOT NULL, subject TEXT NOT NULL,
+                    platform_user_id TEXT NOT NULL, user_id TEXT NOT NULL UNIQUE REFERENCES users(id), created REAL NOT NULL,
+                    PRIMARY KEY(issuer,subject));
+                CREATE TABLE IF NOT EXISTS sso_sessions(hash TEXT PRIMARY KEY REFERENCES sessions(hash) ON DELETE CASCADE,
+                    subject TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS conversations_owner ON conversations(user_id,updated);
                 CREATE INDEX IF NOT EXISTS activity_owner ON activity(user_id,created);
             """)
@@ -129,11 +135,43 @@ class Store:
             raise APIError("invalid_credentials", 401)
         with self.db() as c:
             row = c.execute("SELECT id,salt,password FROM users WHERE username=?", (username,)).fetchone()
+            if row and c.execute('SELECT 1 FROM sso_bindings WHERE user_id=?', (row['id'],)).fetchone():
+                raise APIError('rda_sso_required', 401)
         salt = bytes(row["salt"]) if row else b"euterpe-invalid-user"
         candidate = password_hash(password, salt)
         if row is None or not hmac.compare_digest(candidate, bytes(row["password"])):
             raise APIError("invalid_credentials", 401)
         return self.user(row["id"])
+
+    def bind_sso(self, profile, local_user_id=None, local_session_hash=None):
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            if local_user_id:
+                proof = c.execute('SELECT user_id FROM sessions WHERE hash=? AND expires>?', (local_session_hash, time.time())).fetchone()
+                if not proof or proof['user_id'] != local_user_id:
+                    raise APIError('local_account_proof_expired', 401)
+            found = c.execute('SELECT user_id,platform_user_id FROM sso_bindings WHERE issuer=? AND subject=?', (profile['issuer'], profile['sub'])).fetchone()
+            if found:
+                if found['platform_user_id'] != profile['id'] or local_user_id and found['user_id'] != local_user_id:
+                    raise APIError('sso_identity_already_linked', 409)
+                return self.user(found['user_id'])
+            if local_user_id:
+                if c.execute('SELECT 1 FROM sso_bindings WHERE user_id=?', (local_user_id,)).fetchone():
+                    raise APIError('local_account_already_linked', 409)
+                user_id = local_user_id
+            else:
+                user_id = str(uuid.uuid4())
+                username = 'rda-' + uuid.uuid4().hex
+                c.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?)', (user_id, username, str(profile.get('displayName') or 'Conta RDA')[:80],
+                    secrets.token_bytes(16), secrets.token_bytes(64), secrets.token_urlsafe(36), secrets.token_urlsafe(36), time.time()))
+            c.execute('INSERT INTO sso_bindings VALUES (?,?,?,?,?)', (profile['issuer'], profile['sub'], profile['id'], user_id, time.time()))
+            c.execute('DELETE FROM sessions WHERE user_id=?', (user_id,))
+        return self.user(user_id)
+
+    def sso_binding(self, user_id):
+        with self.db() as c:
+            row = c.execute('SELECT issuer,subject,platform_user_id FROM sso_bindings WHERE user_id=?', (user_id,)).fetchone()
+        return dict(row) if row else None
 
     def issue_session(self, user_id):
         token = secrets.token_urlsafe(36)
@@ -159,6 +197,8 @@ class Store:
         return hmac.new(self.csrf_key, token.encode(), hashlib.sha256).hexdigest()
 
     def ticket(self, user_id):
+        if self.sso_binding(user_id):
+            raise APIError('rda_sso_required', 401)
         token = secrets.token_urlsafe(36)
         with self.db() as c:
             c.execute("INSERT INTO tickets VALUES (?,?,?)", (digest(token), user_id, time.time() + 600))
@@ -171,6 +211,8 @@ class Store:
             c.execute("DELETE FROM tickets WHERE hash=?", (digest(token),))
         if not row:
             raise APIError("access_link_expired", 401)
+        if self.sso_binding(row['user_id']):
+            raise APIError('rda_sso_required', 401)
         return self.issue_session(row["user_id"])
 
     def conversation(self, user_id, conversation_id):
@@ -359,6 +401,10 @@ class Application:
         self.chat_locks = {}
         self.login_attempts = {}
         self.seen_proposals = set()
+        self.sso = None
+        if os.getenv('WEB_SSO_ENABLED') == 'true':
+            self.sso = RdaSso(origin=os.environ['WEB_PUBLIC_ORIGIN'], client_id=os.environ['WEB_SSO_CLIENT_ID'],
+                project_id=os.environ['RDA_SSO_PROJECT_ID'], secret_file=os.getenv('WEB_SSO_CLIENT_SECRET_FILE'))
 
     def login_limit(self, address):
         now = time.monotonic()
@@ -454,6 +500,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def authenticated(self):
         user, token = self.app.store.authenticate(self.headers.get("Cookie"))
+        binding = self.app.store.sso_binding(user['id'])
+        if binding:
+            with self.app.store.db() as c:
+                marked = c.execute('SELECT subject FROM sso_sessions WHERE hash=?', (digest(token),)).fetchone()
+            if not self.app.sso or not marked or marked['subject'] != binding['subject']:
+                raise APIError('rda_sso_required', 401)
+            self.app.sso.verify_session(token, binding['subject'])
         if self.command not in {"GET", "HEAD"}:
             self.origin()
             if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), self.app.store.csrf(token)):
@@ -483,6 +536,8 @@ class Handler(BaseHTTPRequestHandler):
             self.route()
         except APIError as error:
             self.reply({"error": error.code}, error.status)
+        except SsoError as error:
+            self.reply({"error": error.code}, error.status)
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             self.close_connection = True
         except Exception:
@@ -504,11 +559,55 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/health" and self.command == "GET":
             return self.reply({"ok": True, "app": "euterpe-web"})
+        if path == '/api/account/sso/config' and self.command == 'GET':
+            return self.reply({'enabled': bool(self.app.sso), 'loginUrl': '/api/account/sso/login'})
+        if path in {'/api/account/sso/login', '/api/account/sso/link'}:
+            if not self.app.sso:
+                raise APIError('sso_not_configured', 503)
+            link = None
+            if path.endswith('/link'):
+                if self.command != 'POST':
+                    raise APIError('method_not_allowed', 405)
+                local_user, local_token = self.authenticated()
+                link = {'user_id': local_user['id'], 'session_hash': digest(local_token)}
+            elif self.command != 'GET':
+                raise APIError('method_not_allowed', 405)
+            self.app.login_limit(self.client_address[0])
+            url, transaction = self.app.sso.start(link)
+            transaction_cookie = f'euterpe_sso_state={transaction}; Path=/api/account/sso; HttpOnly; SameSite=Lax; Max-Age=600'
+            if self.app.sso.cookie_secure:
+                transaction_cookie += '; Secure'
+            if link:
+                return self.reply({'url': url}, cookie=transaction_cookie)
+            self.send_response(303); self.common_headers()
+            self.send_header('Location', url); self.send_header('Set-Cookie', transaction_cookie)
+            self.send_header('Content-Length', '0'); self.end_headers(); return
+        if path == '/api/account/sso/callback' and self.command == 'GET':
+            if not self.app.sso:
+                raise APIError('sso_not_configured', 503)
+            cookies = SimpleCookie(); cookies.load(self.headers.get('Cookie', ''))
+            query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+            if any(len(value) != 1 for value in query.values()):
+                raise APIError('invalid_oauth_callback')
+            identity = self.app.sso.finish({key: value[0] for key, value in query.items()}, cookies['euterpe_sso_state'].value if 'euterpe_sso_state' in cookies else '')
+            link = identity['link'] or {}
+            user = self.app.store.bind_sso(identity['profile'], link.get('user_id'), link.get('session_hash'))
+            token = self.app.store.issue_session(user['id'])
+            with self.app.store.db() as c:
+                c.execute('UPDATE sessions SET expires=? WHERE hash=?', (identity['expires'], digest(token)))
+                c.execute('INSERT INTO sso_sessions VALUES (?,?)', (digest(token), identity['profile']['sub']))
+            self.app.sso.remember(token, identity)
+            self.send_response(303); self.common_headers()
+            self.send_header('Set-Cookie', self.cookie(token))
+            self.send_header('Set-Cookie', 'euterpe_sso_state=; Path=/api/account/sso; HttpOnly; SameSite=Lax; Max-Age=0' + ('; Secure' if self.app.sso.cookie_secure else ''))
+            self.send_header('Location', '/'); self.send_header('Content-Length', '0'); self.end_headers(); return
         if path in {"/api/account/login", "/api/account/register"} and self.command == "POST":
             self.origin()
             self.app.login_limit(self.client_address[0])
             body = self.body()
             if path.endswith("register"):
+                if self.app.sso:
+                    raise APIError('use_rda_sso_registration', 403)
                 if os.getenv("WEB_REGISTRATION", "open") != "open":
                     raise APIError("registration_closed", 403)
                 user = self.app.store.register(body)
@@ -534,8 +633,10 @@ class Handler(BaseHTTPRequestHandler):
         user, token = self.authenticated()
         user_id = user["id"]
         if path == "/api/me" and self.command == "GET":
-            return self.reply({"user": self.public_user(user), "csrf": self.app.store.csrf(token)})
+            return self.reply({"user": self.public_user(user), "csrf": self.app.store.csrf(token), 'ssoLinked': bool(self.app.store.sso_binding(user_id))})
         if path == "/api/account/logout" and self.command == "POST":
+            if self.app.sso:
+                self.app.sso.forget(token)
             with self.app.store.db() as c:
                 c.execute("DELETE FROM sessions WHERE hash=?", (digest(token),))
             return self.reply({"ok": True}, cookie=self.cookie("", True))

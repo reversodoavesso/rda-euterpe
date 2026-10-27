@@ -7,6 +7,20 @@ const { JSDOM } = require('jsdom');
 const source = fs.readFileSync(__dirname + '/dist/app.js', 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('RDA login replaces registration and existing accounts have an explicit linking action', async()=>{
+  const p=await page();
+  try {
+    p.run('state.user=null;state.sso={enabled:true};state.authMode="register";render()');
+    assert.match(p.dom.window.document.querySelector('#app').textContent, /Entrar com RDA/);
+    assert(![...p.dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='Criar conta'));
+    assert.match(p.dom.window.document.querySelector('#app').textContent, /vincule sua conta RDA em Ajustes/);
+    p.run('state.user={id:"me"};state.view="settings";state.settings={};state.providers=[];render()');
+    assert.match(p.dom.window.document.querySelector('#app').textContent, /Vincular conta RDA/);
+    p.run('state.ssoLinked=true;render()');
+    assert(![...p.dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='Vincular conta RDA'));
+  }finally{p.dom.window.close();}
+});
+
 async function page() {
   const dom = new JSDOM('<div id="app"></div><div id="notifications"></div><dialog id="modal"></dialog>', {url:'http://localhost/', runScripts:'outside-only'});
   const requests = [];
