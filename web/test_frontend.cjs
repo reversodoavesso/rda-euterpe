@@ -14,7 +14,7 @@ test('RDA login replaces registration and existing accounts have an explicit lin
     assert.match(p.dom.window.document.querySelector('#app').textContent, /Entrar com RDA/);
     assert(![...p.dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='Criar conta'));
     assert.match(p.dom.window.document.querySelector('#app').textContent, /vincule sua conta RDA em Ajustes/);
-    p.run('state.user={id:"me"};state.view="settings";state.settings={};state.providers=[];render()');
+    p.run('state.user={id:"me",username:"synthetic",display_name:"Synthetic"};state.view="settings";state.settings={};state.providers=[];render()');
     assert.match(p.dom.window.document.querySelector('#app').textContent, /Vincular conta RDA/);
     p.run('state.ssoLinked=true;render()');
     assert(![...p.dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='Vincular conta RDA'));
