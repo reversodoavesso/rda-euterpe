@@ -27,6 +27,8 @@ agent/data/probes/
 # Corpus de replay (PLAN-REFACTOR.md, gate da Fase 2): contem termos de busca e
 # nomes de playlists do usuario -> dado pessoal, gerado localmente, fora do repo
 core/tests/fixtures/sessions/
+data/
+web/data/
 agent/data/*.db
 agent/data/*.db-journal
 agent/data/*.db-wal

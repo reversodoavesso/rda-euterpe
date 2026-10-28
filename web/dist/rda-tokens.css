@@ -1,0 +1,2624 @@
+/**
+ * RDA Design System — CSS Variables (CDN Bundle)
+ * AUTO-GERADO — NÃO EDITE MANUALMENTE.
+ * @version 3.0.0-alpha
+ */
+
+@layer rda.reset, rda.tokens, rda.intents, rda.components, rda.variants, rda.overrides;
+
+/* Typed CSS Properties (§3.2.2) */
+@property --rda-spacing-0 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rda-spacing-1 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.25rem;
+}
+
+@property --rda-spacing-2 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.5rem;
+}
+
+@property --rda-spacing-3 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.75rem;
+}
+
+@property --rda-spacing-4 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-spacing-5 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.25rem;
+}
+
+@property --rda-spacing-6 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.5rem;
+}
+
+@property --rda-spacing-8 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2rem;
+}
+
+@property --rda-spacing-10 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.5rem;
+}
+
+@property --rda-spacing-12 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3rem;
+}
+
+@property --rda-spacing-16 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4rem;
+}
+
+@property --rda-spacing-20 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 5rem;
+}
+
+@property --rda-spacing-24 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 6rem;
+}
+
+@property --rda-spacing-32 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8rem;
+}
+
+@property --rda-spacing-40 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 10rem;
+}
+
+@property --rda-spacing-48 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 12rem;
+}
+
+@property --rda-spacing-64 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 16rem;
+}
+
+@property --rda-spacing-80 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 20rem;
+}
+
+@property --rda-spacing-96 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 24rem;
+}
+
+@property --rda-font-size-xs {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.75rem;
+}
+
+@property --rda-line-height-xs {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-letter-spacing-xs {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.025em;
+}
+
+@property --rda-font-size-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.875rem;
+}
+
+@property --rda-line-height-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.25rem;
+}
+
+@property --rda-letter-spacing-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.025em;
+}
+
+@property --rda-font-size-base {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-line-height-base {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.5rem;
+}
+
+@property --rda-letter-spacing-base {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rda-font-size-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.125rem;
+}
+
+@property --rda-line-height-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.75rem;
+}
+
+@property --rda-letter-spacing-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rda-font-size-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.25rem;
+}
+
+@property --rda-line-height-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.75rem;
+}
+
+@property --rda-letter-spacing-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rda-font-size-2xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.5rem;
+}
+
+@property --rda-line-height-2xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2rem;
+}
+
+@property --rda-letter-spacing-2xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-3xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.875rem;
+}
+
+@property --rda-line-height-3xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.25rem;
+}
+
+@property --rda-letter-spacing-3xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-4xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.25rem;
+}
+
+@property --rda-line-height-4xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.5rem;
+}
+
+@property --rda-letter-spacing-4xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-5xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3rem;
+}
+
+@property --rda-line-height-5xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3.5rem;
+}
+
+@property --rda-letter-spacing-5xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-6xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3.75rem;
+}
+
+@property --rda-line-height-6xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4.5rem;
+}
+
+@property --rda-letter-spacing-6xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-7xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4.5rem;
+}
+
+@property --rda-line-height-7xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 5rem;
+}
+
+@property --rda-letter-spacing-7xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-8xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 6rem;
+}
+
+@property --rda-line-height-8xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 6.5rem;
+}
+
+@property --rda-letter-spacing-8xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-9xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8rem;
+}
+
+@property --rda-line-height-9xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8.5rem;
+}
+
+@property --rda-letter-spacing-9xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-display-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3rem;
+}
+
+@property --rda-line-height-display-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3.5rem;
+}
+
+@property --rda-letter-spacing-display-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-display-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3.75rem;
+}
+
+@property --rda-line-height-display-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4.5rem;
+}
+
+@property --rda-letter-spacing-display-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-display-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4.5rem;
+}
+
+@property --rda-line-height-display-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 5rem;
+}
+
+@property --rda-letter-spacing-display-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-size-display-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 6rem;
+}
+
+@property --rda-line-height-display-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 6.5rem;
+}
+
+@property --rda-letter-spacing-display-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-font-weight-thin {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 100;
+}
+
+@property --rda-font-weight-extralight {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 200;
+}
+
+@property --rda-font-weight-light {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 300;
+}
+
+@property --rda-font-weight-normal {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 400;
+}
+
+@property --rda-font-weight-medium {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 500;
+}
+
+@property --rda-font-weight-semibold {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 600;
+}
+
+@property --rda-font-weight-bold {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 700;
+}
+
+@property --rda-font-weight-extrabold {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 800;
+}
+
+@property --rda-font-weight-black {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 900;
+}
+
+@property --rda-line-height-none {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --rda-line-height-tight {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.25;
+}
+
+@property --rda-line-height-snug {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.375;
+}
+
+@property --rda-line-height-normal {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.5;
+}
+
+@property --rda-line-height-relaxed {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.625;
+}
+
+@property --rda-line-height-loose {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2;
+}
+
+@property --rda-letter-spacing-tighter {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.05em;
+}
+
+@property --rda-letter-spacing-tight {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -0.025em;
+}
+
+@property --rda-letter-spacing-normal {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0em;
+}
+
+@property --rda-letter-spacing-wide {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.025em;
+}
+
+@property --rda-letter-spacing-wider {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.05em;
+}
+
+@property --rda-letter-spacing-widest {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.1em;
+}
+
+@property --rda-border-radius-none {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rda-border-radius-sm {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 0.25rem;
+}
+
+@property --rda-border-radius-md {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 0.5rem;
+}
+
+@property --rda-border-radius-lg {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 0.75rem;
+}
+
+@property --rda-border-radius-xl {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-border-radius-2xl {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 1.5rem;
+}
+
+@property --rda-border-radius-3xl {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 2rem;
+}
+
+@property --rda-border-radius-full {
+  syntax: "<length-percentage>";
+  inherits: true;
+  initial-value: 9999px;
+}
+
+@property --rda-border-width-0 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --rda-border-width-1 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1px;
+}
+
+@property --rda-border-width-2 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2px;
+}
+
+@property --rda-border-width-4 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4px;
+}
+
+@property --rda-border-width-8 {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8px;
+}
+
+@property --rda-border-width-default {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1px;
+}
+
+@property --rda-duration-75 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 75ms;
+}
+
+@property --rda-duration-100 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 100ms;
+}
+
+@property --rda-duration-150 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 150ms;
+}
+
+@property --rda-duration-200 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 200ms;
+}
+
+@property --rda-duration-300 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 300ms;
+}
+
+@property --rda-duration-500 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 500ms;
+}
+
+@property --rda-duration-700 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 700ms;
+}
+
+@property --rda-duration-1000 {
+  syntax: "<time>";
+  inherits: true;
+  initial-value: 1000ms;
+}
+
+@property --rda-z-index-0 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rda-z-index-10 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 10;
+}
+
+@property --rda-z-index-20 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 20;
+}
+
+@property --rda-z-index-30 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 30;
+}
+
+@property --rda-z-index-40 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 40;
+}
+
+@property --rda-z-index-50 {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 50;
+}
+
+@property --rda-z-index-auto {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: auto;
+}
+
+@property --rda-z-index-base {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --rda-z-index-dropdown {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 10;
+}
+
+@property --rda-z-index-sticky {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 20;
+}
+
+@property --rda-z-index-fixed {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 30;
+}
+
+@property --rda-z-index-modal-backdrop {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 40;
+}
+
+@property --rda-z-index-modal {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 50;
+}
+
+@property --rda-z-index-popover {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 60;
+}
+
+@property --rda-z-index-tooltip {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 70;
+}
+
+@property --rda-z-index-max {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 100;
+}
+
+@property --rda-control-height-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2rem;
+}
+
+@property --rda-control-height-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(2rem + 0.25rem);
+}
+
+@property --rda-control-height-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.5rem;
+}
+
+@property --rda-control-font-size-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.875rem;
+}
+
+@property --rda-control-font-size-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.875rem;
+}
+
+@property --rda-control-font-size-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-control-icon-size-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-control-icon-size-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1rem;
+}
+
+@property --rda-control-icon-size-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.25rem;
+}
+
+@property --rda-control-touch-height-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.5rem;
+}
+
+@property --rda-control-touch-height-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(2.5rem + 0.25rem);
+}
+
+@property --rda-control-touch-height-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3rem;
+}
+
+@property --rda-indicator-height-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.25rem;
+}
+
+@property --rda-indicator-height-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.5rem;
+}
+
+@property --rda-indicator-height-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(1.5rem + 0.25rem);
+}
+
+@property --rda-indicator-font-size-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.75rem;
+}
+
+@property --rda-indicator-font-size-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.75rem;
+}
+
+@property --rda-indicator-font-size-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0.875rem;
+}
+
+@property --rda-avatar-size-xs {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1.5rem;
+}
+
+@property --rda-avatar-size-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2rem;
+}
+
+@property --rda-avatar-size-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 2.5rem;
+}
+
+@property --rda-avatar-size-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 3rem;
+}
+
+@property --rda-avatar-size-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 4rem;
+}
+
+@property --rda-dialog-width-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(2.5rem * 10);
+}
+
+@property --rda-dialog-width-md {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(2.5rem * 14);
+}
+
+@property --rda-dialog-width-lg {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(3rem * 15);
+}
+
+@property --rda-dialog-width-xl {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: calc(2.5rem * 24);
+}
+
+@property --rda-action-primary-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #22d3ee;
+}
+
+@property --rda-action-danger-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f87171;
+}
+
+@property --rda-action-success-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #4ade80;
+}
+
+@property --rda-action-warning-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fbbf24;
+}
+
+@property --rda-action-info-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #60a5fa;
+}
+
+@property --rda-action-veiled-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #99a1a8;
+}
+
+@property --rda-action-acolyte-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8093a6;
+}
+
+@property --rda-action-initiate-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #56ccec;
+}
+
+@property --rda-action-artificer-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #44c2ac;
+}
+
+@property --rda-action-abyssal-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #6b6fc6;
+}
+
+@property --rda-action-weaver-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c3994c;
+}
+
+@property --rda-action-sentinel-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #5092ea;
+}
+
+@property --rda-action-chronicler-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #d68c8a;
+}
+
+@property --rda-action-envoy-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #48c1b3;
+}
+
+@property --rda-action-hierophant-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a87fd6;
+}
+
+@property --rda-action-eminence-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #eb7da3;
+}
+
+@property --rda-action-oathkeeper-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f2ae8b;
+}
+
+@property --rda-action-archon-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #eb989c;
+}
+
+@property --rda-action-demiurge-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f5c768;
+}
+
+@property --rda-action-familiar-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c1e2ec;
+}
+
+@property --rda-action-golem-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #d9dedc;
+}
+
+@property --rda-action-aegis-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f4bfce;
+}
+
+@property --rda-action-oracle-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #d4c6f2;
+}
+
+@property --rda-action-homunculus-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c8e88e;
+}
+
+@property --rda-action-wraith-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #dcdce9;
+}
+
+@property --rda-tier-veiled-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8a929a;
+}
+
+@property --rda-tier-acolyte-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8093a6;
+}
+
+@property --rda-tier-initiate-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #009fbc;
+}
+
+@property --rda-tier-artificer-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0fa38e;
+}
+
+@property --rda-tier-abyssal-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #888bce;
+}
+
+@property --rda-tier-weaver-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #b38a36;
+}
+
+@property --rda-tier-sentinel-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #5092ea;
+}
+
+@property --rda-tier-chronicler-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c25450;
+}
+
+@property --rda-tier-envoy-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #18a296;
+}
+
+@property --rda-tier-hierophant-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a87fd6;
+}
+
+@property --rda-tier-eminence-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #b92b6a;
+}
+
+@property --rda-tier-oathkeeper-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #d67928;
+}
+
+@property --rda-tier-archon-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ee636b;
+}
+
+@property --rda-tier-demiurge-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #b58b06;
+}
+
+@property --rda-tier-familiar-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #3c9db0;
+}
+
+@property --rda-tier-golem-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8c9390;
+}
+
+@property --rda-tier-aegis-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ff4a96;
+}
+
+@property --rda-tier-oracle-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a37ee2;
+}
+
+@property --rda-tier-homunculus-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #83995c;
+}
+
+@property --rda-tier-wraith-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8d8db8;
+}
+
+@property --rda-action-secondary-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #64748b;
+}
+
+@property --rda-action-ghost-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --rda-action-neutral-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #737373;
+}
+
+@property --rda-surface-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a0a0a;
+}
+
+@property --rda-surface-secondary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --rda-surface-tertiary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #262626;
+}
+
+@property --rda-surface-hover {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #262626;
+}
+
+@property --rda-surface-active {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #404040;
+}
+
+@property --rda-surface-card {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --rda-surface-input {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --rda-surface-elevated {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #262626;
+}
+
+@property --rda-surface-overlay {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(0, 0, 0, 0.5);
+}
+
+@property --rda-content-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fafafa;
+}
+
+@property --rda-content-secondary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #e5e5e5;
+}
+
+@property --rda-content-tertiary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a3a3a3;
+}
+
+@property --rda-content-muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #737373;
+}
+
+@property --rda-content-inverse {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a0a0a;
+}
+
+@property --rda-content-brand {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #22d3ee;
+}
+
+@property --rda-content-disabled {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #525252;
+}
+
+@property --rda-border-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #404040;
+}
+
+@property --rda-border-subtle {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #262626;
+}
+
+@property --rda-border-input {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #404040;
+}
+
+@property --rda-border-focus {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #22d3ee;
+}
+
+@property --rda-status-success {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #4ade80;
+}
+
+@property --rda-status-warning {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fbbf24;
+}
+
+@property --rda-status-error {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f87171;
+}
+
+@property --rda-status-info {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #60a5fa;
+}
+
+@property --rda-status-success-surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #052e16;
+}
+
+@property --rda-status-warning-surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #451a03;
+}
+
+@property --rda-status-error-surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #450a0a;
+}
+
+@property --rda-status-info-surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #172554;
+}
+
+@layer rda.tokens {
+  /* Tokens comuns + Dark (padrão) */
+  :root {
+    color-scheme: dark;
+    --rda-spacing-0: 0;
+    --rda-spacing-1: 0.25rem;
+    --rda-spacing-2: 0.5rem;
+    --rda-spacing-3: 0.75rem;
+    --rda-spacing-4: 1rem;
+    --rda-spacing-5: 1.25rem;
+    --rda-spacing-6: 1.5rem;
+    --rda-spacing-8: 2rem;
+    --rda-spacing-10: 2.5rem;
+    --rda-spacing-12: 3rem;
+    --rda-spacing-16: 4rem;
+    --rda-spacing-20: 5rem;
+    --rda-spacing-24: 6rem;
+    --rda-spacing-32: 8rem;
+    --rda-spacing-40: 10rem;
+    --rda-spacing-48: 12rem;
+    --rda-spacing-64: 16rem;
+    --rda-spacing-80: 20rem;
+    --rda-spacing-96: 24rem;
+    --rda-font-family-body: Inter, system-ui, sans-serif;
+    --rda-font-family-display: Archivo, system-ui, sans-serif;
+    --rda-font-family-mono: 'Fira Code', Consolas, Monaco, monospace;
+    --rda-font-size-xs: 0.75rem;
+    --rda-line-height-xs: 1rem;
+    --rda-letter-spacing-xs: 0.025em;
+    --rda-font-size-sm: 0.875rem;
+    --rda-line-height-sm: 1.25rem;
+    --rda-letter-spacing-sm: 0.025em;
+    --rda-font-size-base: 1rem;
+    --rda-line-height-base: 1.5rem;
+    --rda-letter-spacing-base: 0;
+    --rda-font-size-lg: 1.125rem;
+    --rda-line-height-lg: 1.75rem;
+    --rda-letter-spacing-lg: 0;
+    --rda-font-size-xl: 1.25rem;
+    --rda-line-height-xl: 1.75rem;
+    --rda-letter-spacing-xl: 0;
+    --rda-font-size-2xl: 1.5rem;
+    --rda-line-height-2xl: 2rem;
+    --rda-letter-spacing-2xl: -0.025em;
+    --rda-font-size-3xl: 1.875rem;
+    --rda-line-height-3xl: 2.25rem;
+    --rda-letter-spacing-3xl: -0.025em;
+    --rda-font-size-4xl: 2.25rem;
+    --rda-line-height-4xl: 2.5rem;
+    --rda-letter-spacing-4xl: -0.025em;
+    --rda-font-size-5xl: 3rem;
+    --rda-line-height-5xl: 3.5rem;
+    --rda-letter-spacing-5xl: -0.025em;
+    --rda-font-size-6xl: 3.75rem;
+    --rda-line-height-6xl: 4.5rem;
+    --rda-letter-spacing-6xl: -0.025em;
+    --rda-font-size-7xl: 4.5rem;
+    --rda-line-height-7xl: 5rem;
+    --rda-letter-spacing-7xl: -0.025em;
+    --rda-font-size-8xl: 6rem;
+    --rda-line-height-8xl: 6.5rem;
+    --rda-letter-spacing-8xl: -0.025em;
+    --rda-font-size-9xl: 8rem;
+    --rda-line-height-9xl: 8.5rem;
+    --rda-letter-spacing-9xl: -0.025em;
+    --rda-font-size-display-sm: 3rem;
+    --rda-line-height-display-sm: 3.5rem;
+    --rda-letter-spacing-display-sm: -0.025em;
+    --rda-font-size-display-md: 3.75rem;
+    --rda-line-height-display-md: 4.5rem;
+    --rda-letter-spacing-display-md: -0.025em;
+    --rda-font-size-display-lg: 4.5rem;
+    --rda-line-height-display-lg: 5rem;
+    --rda-letter-spacing-display-lg: -0.025em;
+    --rda-font-size-display-xl: 6rem;
+    --rda-line-height-display-xl: 6.5rem;
+    --rda-letter-spacing-display-xl: -0.025em;
+    --rda-font-weight-thin: 100;
+    --rda-font-weight-extralight: 200;
+    --rda-font-weight-light: 300;
+    --rda-font-weight-normal: 400;
+    --rda-font-weight-medium: 500;
+    --rda-font-weight-semibold: 600;
+    --rda-font-weight-bold: 700;
+    --rda-font-weight-extrabold: 800;
+    --rda-font-weight-black: 900;
+    --rda-line-height-none: 1;
+    --rda-line-height-tight: 1.25;
+    --rda-line-height-snug: 1.375;
+    --rda-line-height-normal: 1.5;
+    --rda-line-height-relaxed: 1.625;
+    --rda-line-height-loose: 2;
+    --rda-letter-spacing-tighter: -0.05em;
+    --rda-letter-spacing-tight: -0.025em;
+    --rda-letter-spacing-normal: 0em;
+    --rda-letter-spacing-wide: 0.025em;
+    --rda-letter-spacing-wider: 0.05em;
+    --rda-letter-spacing-widest: 0.1em;
+    --rda-border-radius-none: 0;
+    --rda-border-radius-sm: 0.25rem;
+    --rda-border-radius-md: 0.5rem;
+    --rda-border-radius-lg: 0.75rem;
+    --rda-border-radius-xl: 1rem;
+    --rda-border-radius-2xl: 1.5rem;
+    --rda-border-radius-3xl: 2rem;
+    --rda-border-radius-full: 9999px;
+    --rda-border-width-0: 0px;
+    --rda-border-width-1: 1px;
+    --rda-border-width-2: 2px;
+    --rda-border-width-4: 4px;
+    --rda-border-width-8: 8px;
+    --rda-border-width-default: 1px;
+    --rda-duration-75: 75ms;
+    --rda-duration-100: 100ms;
+    --rda-duration-150: 150ms;
+    --rda-duration-200: 200ms;
+    --rda-duration-300: 300ms;
+    --rda-duration-500: 500ms;
+    --rda-duration-700: 700ms;
+    --rda-duration-1000: 1000ms;
+    --rda-easing-linear: linear;
+    --rda-easing-in: cubic-bezier(0.4, 0, 1, 1);
+    --rda-easing-out: cubic-bezier(0, 0, 0.2, 1);
+    --rda-easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --rda-easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --rda-box-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --rda-box-shadow-default: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --rda-box-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+    --rda-box-shadow-none: none;
+    --rda-box-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --rda-box-shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --rda-z-index-0: 0;
+    --rda-z-index-10: 10;
+    --rda-z-index-20: 20;
+    --rda-z-index-30: 30;
+    --rda-z-index-40: 40;
+    --rda-z-index-50: 50;
+    --rda-z-index-auto: auto;
+    --rda-z-index-base: 1;
+    --rda-z-index-dropdown: 10;
+    --rda-z-index-sticky: 20;
+    --rda-z-index-fixed: 30;
+    --rda-z-index-modal-backdrop: 40;
+    --rda-z-index-modal: 50;
+    --rda-z-index-popover: 60;
+    --rda-z-index-tooltip: 70;
+    --rda-z-index-max: 100;
+    --rda-control-height-sm: 2rem;
+    --rda-control-height-md: calc(2rem + 0.25rem);
+    --rda-control-height-lg: 2.5rem;
+    --rda-control-font-size-sm: 0.875rem;
+    --rda-control-font-size-md: 0.875rem;
+    --rda-control-font-size-lg: 1rem;
+    --rda-control-icon-size-sm: 1rem;
+    --rda-control-icon-size-md: 1rem;
+    --rda-control-icon-size-lg: 1.25rem;
+    --rda-control-padding-sm: 0.75rem;
+    --rda-control-padding-md: 0.75rem;
+    --rda-control-padding-lg: 1rem;
+    --rda-control-gap-sm: 0.25rem;
+    --rda-control-gap-md: 0.5rem;
+    --rda-control-gap-lg: 0.5rem;
+    --rda-control-touch-height-sm: 2.5rem;
+    --rda-control-touch-height-md: calc(2.5rem + 0.25rem);
+    --rda-control-touch-height-lg: 3rem;
+    --rda-indicator-height-sm: 1.25rem;
+    --rda-indicator-height-md: 1.5rem;
+    --rda-indicator-height-lg: calc(1.5rem + 0.25rem);
+    --rda-indicator-font-size-sm: 0.75rem;
+    --rda-indicator-font-size-md: 0.75rem;
+    --rda-indicator-font-size-lg: 0.875rem;
+    --rda-indicator-padding-sm: 0.5rem;
+    --rda-indicator-padding-md: 0.5rem;
+    --rda-indicator-padding-lg: 0.75rem;
+    --rda-avatar-size-xs: 1.5rem;
+    --rda-avatar-size-sm: 2rem;
+    --rda-avatar-size-md: 2.5rem;
+    --rda-avatar-size-lg: 3rem;
+    --rda-avatar-size-xl: 4rem;
+    --rda-dialog-width-sm: calc(2.5rem * 10);
+    --rda-dialog-width-md: calc(2.5rem * 14);
+    --rda-dialog-width-lg: calc(3rem * 15);
+    --rda-dialog-width-xl: calc(2.5rem * 24);
+    --rda-action-primary-bg: #06b6d4;
+    --rda-action-primary-bg-hover: #22d3ee;
+    --rda-action-primary-bg-active: #0891b2;
+    --rda-action-primary-fg: #0a0a0a;
+    --rda-action-primary-border: #22d3ee;
+    --rda-action-danger-bg: #ef4444;
+    --rda-action-danger-bg-hover: #f87171;
+    --rda-action-danger-bg-active: #dc2626;
+    --rda-action-danger-fg: #ffffff;
+    --rda-action-danger-border: #f87171;
+    --rda-action-success-bg: #22c55e;
+    --rda-action-success-bg-hover: #4ade80;
+    --rda-action-success-bg-active: #16a34a;
+    --rda-action-success-fg: #0a0a0a;
+    --rda-action-success-border: #4ade80;
+    --rda-action-warning-bg: #f59e0b;
+    --rda-action-warning-bg-hover: #fbbf24;
+    --rda-action-warning-bg-active: #d97706;
+    --rda-action-warning-fg: #0a0a0a;
+    --rda-action-warning-border: #fbbf24;
+    --rda-action-info-bg: #3b82f6;
+    --rda-action-info-bg-hover: #60a5fa;
+    --rda-action-info-bg-active: #2563eb;
+    --rda-action-info-fg: #ffffff;
+    --rda-action-info-border: #60a5fa;
+    --rda-action-veiled-bg: #8a929a;
+    --rda-action-veiled-bg-hover: #99a1a8;
+    --rda-action-veiled-bg-active: #72787f;
+    --rda-action-veiled-fg: #0a0a0a;
+    --rda-action-veiled-border: #99a1a8;
+    --rda-action-acolyte-bg: #5c6c7b;
+    --rda-action-acolyte-bg-hover: #8093a6;
+    --rda-action-acolyte-bg-active: #52606e;
+    --rda-action-acolyte-fg: #ffffff;
+    --rda-action-acolyte-border: #8093a6;
+    --rda-action-initiate-bg: #00a5c4;
+    --rda-action-initiate-bg-hover: #56ccec;
+    --rda-action-initiate-bg-active: #00aecf;
+    --rda-action-initiate-fg: #0a0a0a;
+    --rda-action-initiate-border: #56ccec;
+    --rda-action-artificer-bg: #0fa48f;
+    --rda-action-artificer-bg-hover: #44c2ac;
+    --rda-action-artificer-bg-active: #0fa38e;
+    --rda-action-artificer-fg: #0a0a0a;
+    --rda-action-artificer-border: #44c2ac;
+    --rda-action-abyssal-bg: #3b42a4;
+    --rda-action-abyssal-bg-hover: #6b6fc6;
+    --rda-action-abyssal-bg-active: #363d98;
+    --rda-action-abyssal-fg: #ffffff;
+    --rda-action-abyssal-border: #6b6fc6;
+    --rda-action-weaver-bg: #b38a36;
+    --rda-action-weaver-bg-hover: #c3994c;
+    --rda-action-weaver-bg-active: #95722b;
+    --rda-action-weaver-fg: #0a0a0a;
+    --rda-action-weaver-border: #c3994c;
+    --rda-action-weaver-glow: #c3994c;
+    --rda-action-sentinel-bg: #296bb6;
+    --rda-action-sentinel-bg-hover: #5092ea;
+    --rda-action-sentinel-bg-active: #2460a4;
+    --rda-action-sentinel-fg: #ffffff;
+    --rda-action-sentinel-border: #5092ea;
+    --rda-action-sentinel-glow: #5092ea;
+    --rda-action-chronicler-bg: #c25450;
+    --rda-action-chronicler-bg-hover: #d68c8a;
+    --rda-action-chronicler-bg-active: #c35450;
+    --rda-action-chronicler-fg: #ffffff;
+    --rda-action-chronicler-border: #d68c8a;
+    --rda-action-chronicler-glow: #d68c8a;
+    --rda-action-envoy-bg: #138d82;
+    --rda-action-envoy-bg-hover: #48c1b3;
+    --rda-action-envoy-bg-active: #18a296;
+    --rda-action-envoy-fg: #ffffff;
+    --rda-action-envoy-border: #48c1b3;
+    --rda-action-envoy-glow: #48c1b3;
+    --rda-action-hierophant-bg: #8445ba;
+    --rda-action-hierophant-bg-hover: #a87fd6;
+    --rda-action-hierophant-bg-active: #7d41b1;
+    --rda-action-hierophant-fg: #ffffff;
+    --rda-action-hierophant-border: #a87fd6;
+    --rda-action-hierophant-glow: #a87fd6;
+    --rda-action-eminence-bg: #b92b6a;
+    --rda-action-eminence-bg-hover: #eb7da3;
+    --rda-action-eminence-bg-active: #d8347d;
+    --rda-action-eminence-fg: #ffffff;
+    --rda-action-eminence-border: #eb7da3;
+    --rda-action-eminence-glow: #eb7da3;
+    --rda-action-oathkeeper-bg: #d97b29;
+    --rda-action-oathkeeper-bg-hover: #f2ae8b;
+    --rda-action-oathkeeper-bg-active: #eb862d;
+    --rda-action-oathkeeper-fg: #0a0a0a;
+    --rda-action-oathkeeper-border: #f2ae8b;
+    --rda-action-oathkeeper-glow: #f2ae8b;
+    --rda-action-archon-bg: #d63341;
+    --rda-action-archon-bg-hover: #eb989c;
+    --rda-action-archon-bg-active: #ee636b;
+    --rda-action-archon-fg: #ffffff;
+    --rda-action-archon-border: #eb989c;
+    --rda-action-archon-glow: #eb989c;
+    --rda-action-demiurge-bg: #f0b90b;
+    --rda-action-demiurge-bg-hover: #f5c768;
+    --rda-action-demiurge-bg-active: #d9a709;
+    --rda-action-demiurge-fg: #0a0a0a;
+    --rda-action-demiurge-border: #f5c768;
+    --rda-action-demiurge-glow: #f5c768;
+    --rda-action-familiar-bg: #9ee8fa;
+    --rda-action-familiar-bg-hover: #c1e2ec;
+    --rda-action-familiar-bg-active: #51cde5;
+    --rda-action-familiar-fg: #0a0a0a;
+    --rda-action-familiar-border: #c1e2ec;
+    --rda-action-familiar-glow: #c1e2ec;
+    --rda-action-golem-bg: #cad4d0;
+    --rda-action-golem-bg-hover: #d9dedc;
+    --rda-action-golem-bg-active: #b7c0bc;
+    --rda-action-golem-fg: #0a0a0a;
+    --rda-action-golem-border: #d9dedc;
+    --rda-action-golem-glow: #d9dedc;
+    --rda-action-aegis-bg: #ff9ebd;
+    --rda-action-aegis-bg-hover: #f4bfce;
+    --rda-action-aegis-bg-active: #ff8ab2;
+    --rda-action-aegis-fg: #0a0a0a;
+    --rda-action-aegis-border: #f4bfce;
+    --rda-action-aegis-glow: #f4bfce;
+    --rda-action-oracle-bg: #bda6eb;
+    --rda-action-oracle-bg-hover: #d4c6f2;
+    --rda-action-oracle-bg-active: #bba3ea;
+    --rda-action-oracle-fg: #0a0a0a;
+    --rda-action-oracle-border: #d4c6f2;
+    --rda-action-oracle-glow: #d4c6f2;
+    --rda-action-homunculus-bg: #c8e88e;
+    --rda-action-homunculus-bg-hover: #c8e88e;
+    --rda-action-homunculus-bg-active: #bad884;
+    --rda-action-homunculus-fg: #0a0a0a;
+    --rda-action-homunculus-border: #c8e88e;
+    --rda-action-homunculus-glow: #c8e88e;
+    --rda-action-wraith-bg: #b5b5d1;
+    --rda-action-wraith-bg-hover: #dcdce9;
+    --rda-action-wraith-bg-active: #bcbcd5;
+    --rda-action-wraith-fg: #0a0a0a;
+    --rda-action-wraith-border: #dcdce9;
+    --rda-action-wraith-glow: #dcdce9;
+    --rda-tier-veiled-color: #8a929a;
+    --rda-tier-acolyte-color: #8093a6;
+    --rda-tier-initiate-color: #009fbc;
+    --rda-tier-artificer-color: #0fa38e;
+    --rda-tier-abyssal-color: #888bce;
+    --rda-tier-weaver-color: #b38a36;
+    --rda-tier-sentinel-color: #5092ea;
+    --rda-tier-chronicler-color: #c25450;
+    --rda-tier-envoy-color: #18a296;
+    --rda-tier-hierophant-color: #a87fd6;
+    --rda-tier-eminence-color: #b92b6a;
+    --rda-tier-oathkeeper-color: #d67928;
+    --rda-tier-archon-color: #ee636b;
+    --rda-tier-demiurge-color: #b58b06;
+    --rda-tier-familiar-color: #3c9db0;
+    --rda-tier-golem-color: #8c9390;
+    --rda-tier-aegis-color: #ff4a96;
+    --rda-tier-oracle-color: #a37ee2;
+    --rda-tier-homunculus-color: #83995c;
+    --rda-tier-wraith-color: #8d8db8;
+    --rda-action-secondary-bg: #334155;
+    --rda-action-secondary-bg-hover: #475569;
+    --rda-action-secondary-bg-active: #1e293b;
+    --rda-action-secondary-fg: #f1f5f9;
+    --rda-action-secondary-border: #64748b;
+    --rda-action-ghost-bg: transparent;
+    --rda-action-ghost-bg-hover: #262626;
+    --rda-action-ghost-bg-active: #404040;
+    --rda-action-ghost-fg: #f5f5f5;
+    --rda-action-ghost-border: transparent;
+    --rda-action-neutral-bg: #a3a3a3;
+    --rda-action-neutral-bg-hover: #737373;
+    --rda-action-neutral-bg-active: #d4d4d4;
+    --rda-action-neutral-fg: #fafafa;
+    --rda-action-neutral-border: #737373;
+    --rda-surface-primary: #0a0a0a;
+    --rda-surface-secondary: #171717;
+    --rda-surface-tertiary: #262626;
+    --rda-surface-hover: #262626;
+    --rda-surface-active: #404040;
+    --rda-surface-card: #171717;
+    --rda-surface-input: #171717;
+    --rda-surface-elevated: #262626;
+    --rda-surface-overlay: rgba(0, 0, 0, 0.5);
+    --rda-content-primary: #fafafa;
+    --rda-content-secondary: #e5e5e5;
+    --rda-content-tertiary: #a3a3a3;
+    --rda-content-muted: #737373;
+    --rda-content-inverse: #0a0a0a;
+    --rda-content-brand: #22d3ee;
+    --rda-content-disabled: #525252;
+    --rda-border-primary: #404040;
+    --rda-border-subtle: #262626;
+    --rda-border-input: #404040;
+    --rda-border-focus: #22d3ee;
+    --rda-status-success: #4ade80;
+    --rda-status-warning: #fbbf24;
+    --rda-status-error: #f87171;
+    --rda-status-info: #60a5fa;
+    --rda-status-success-surface: #052e16;
+    --rda-status-warning-surface: #451a03;
+    --rda-status-error-surface: #450a0a;
+    --rda-status-info-surface: #172554;
+    --rda-images-bg-00: image-set(url("https://cdn.reversodoavesso.com/images/bg-00-dark.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-00-dark.webp") type("image/webp"));
+    --rda-images-bg-01: image-set(url("https://cdn.reversodoavesso.com/images/bg-01-dark.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-01-dark.webp") type("image/webp"));
+    --rda-images-bg-02: image-set(url("https://cdn.reversodoavesso.com/images/bg-02-dark.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-02-dark.webp") type("image/webp"));
+  }
+
+  /* Tema Light */
+  .light {
+    color-scheme: light;
+    --rda-spacing-0: 0;
+    --rda-spacing-1: 0.25rem;
+    --rda-spacing-2: 0.5rem;
+    --rda-spacing-3: 0.75rem;
+    --rda-spacing-4: 1rem;
+    --rda-spacing-5: 1.25rem;
+    --rda-spacing-6: 1.5rem;
+    --rda-spacing-8: 2rem;
+    --rda-spacing-10: 2.5rem;
+    --rda-spacing-12: 3rem;
+    --rda-spacing-16: 4rem;
+    --rda-spacing-20: 5rem;
+    --rda-spacing-24: 6rem;
+    --rda-spacing-32: 8rem;
+    --rda-spacing-40: 10rem;
+    --rda-spacing-48: 12rem;
+    --rda-spacing-64: 16rem;
+    --rda-spacing-80: 20rem;
+    --rda-spacing-96: 24rem;
+    --rda-font-family-body: Inter, system-ui, sans-serif;
+    --rda-font-family-display: Archivo, system-ui, sans-serif;
+    --rda-font-family-mono: 'Fira Code', Consolas, Monaco, monospace;
+    --rda-font-size-xs: 0.75rem;
+    --rda-line-height-xs: 1rem;
+    --rda-letter-spacing-xs: 0.025em;
+    --rda-font-size-sm: 0.875rem;
+    --rda-line-height-sm: 1.25rem;
+    --rda-letter-spacing-sm: 0.025em;
+    --rda-font-size-base: 1rem;
+    --rda-line-height-base: 1.5rem;
+    --rda-letter-spacing-base: 0;
+    --rda-font-size-lg: 1.125rem;
+    --rda-line-height-lg: 1.75rem;
+    --rda-letter-spacing-lg: 0;
+    --rda-font-size-xl: 1.25rem;
+    --rda-line-height-xl: 1.75rem;
+    --rda-letter-spacing-xl: 0;
+    --rda-font-size-2xl: 1.5rem;
+    --rda-line-height-2xl: 2rem;
+    --rda-letter-spacing-2xl: -0.025em;
+    --rda-font-size-3xl: 1.875rem;
+    --rda-line-height-3xl: 2.25rem;
+    --rda-letter-spacing-3xl: -0.025em;
+    --rda-font-size-4xl: 2.25rem;
+    --rda-line-height-4xl: 2.5rem;
+    --rda-letter-spacing-4xl: -0.025em;
+    --rda-font-size-5xl: 3rem;
+    --rda-line-height-5xl: 3.5rem;
+    --rda-letter-spacing-5xl: -0.025em;
+    --rda-font-size-6xl: 3.75rem;
+    --rda-line-height-6xl: 4.5rem;
+    --rda-letter-spacing-6xl: -0.025em;
+    --rda-font-size-7xl: 4.5rem;
+    --rda-line-height-7xl: 5rem;
+    --rda-letter-spacing-7xl: -0.025em;
+    --rda-font-size-8xl: 6rem;
+    --rda-line-height-8xl: 6.5rem;
+    --rda-letter-spacing-8xl: -0.025em;
+    --rda-font-size-9xl: 8rem;
+    --rda-line-height-9xl: 8.5rem;
+    --rda-letter-spacing-9xl: -0.025em;
+    --rda-font-size-display-sm: 3rem;
+    --rda-line-height-display-sm: 3.5rem;
+    --rda-letter-spacing-display-sm: -0.025em;
+    --rda-font-size-display-md: 3.75rem;
+    --rda-line-height-display-md: 4.5rem;
+    --rda-letter-spacing-display-md: -0.025em;
+    --rda-font-size-display-lg: 4.5rem;
+    --rda-line-height-display-lg: 5rem;
+    --rda-letter-spacing-display-lg: -0.025em;
+    --rda-font-size-display-xl: 6rem;
+    --rda-line-height-display-xl: 6.5rem;
+    --rda-letter-spacing-display-xl: -0.025em;
+    --rda-font-weight-thin: 100;
+    --rda-font-weight-extralight: 200;
+    --rda-font-weight-light: 300;
+    --rda-font-weight-normal: 400;
+    --rda-font-weight-medium: 500;
+    --rda-font-weight-semibold: 600;
+    --rda-font-weight-bold: 700;
+    --rda-font-weight-extrabold: 800;
+    --rda-font-weight-black: 900;
+    --rda-line-height-none: 1;
+    --rda-line-height-tight: 1.25;
+    --rda-line-height-snug: 1.375;
+    --rda-line-height-normal: 1.5;
+    --rda-line-height-relaxed: 1.625;
+    --rda-line-height-loose: 2;
+    --rda-letter-spacing-tighter: -0.05em;
+    --rda-letter-spacing-tight: -0.025em;
+    --rda-letter-spacing-normal: 0em;
+    --rda-letter-spacing-wide: 0.025em;
+    --rda-letter-spacing-wider: 0.05em;
+    --rda-letter-spacing-widest: 0.1em;
+    --rda-border-radius-none: 0;
+    --rda-border-radius-sm: 0.25rem;
+    --rda-border-radius-md: 0.5rem;
+    --rda-border-radius-lg: 0.75rem;
+    --rda-border-radius-xl: 1rem;
+    --rda-border-radius-2xl: 1.5rem;
+    --rda-border-radius-3xl: 2rem;
+    --rda-border-radius-full: 9999px;
+    --rda-border-width-0: 0px;
+    --rda-border-width-1: 1px;
+    --rda-border-width-2: 2px;
+    --rda-border-width-4: 4px;
+    --rda-border-width-8: 8px;
+    --rda-border-width-default: 1px;
+    --rda-duration-75: 75ms;
+    --rda-duration-100: 100ms;
+    --rda-duration-150: 150ms;
+    --rda-duration-200: 200ms;
+    --rda-duration-300: 300ms;
+    --rda-duration-500: 500ms;
+    --rda-duration-700: 700ms;
+    --rda-duration-1000: 1000ms;
+    --rda-easing-linear: linear;
+    --rda-easing-in: cubic-bezier(0.4, 0, 1, 1);
+    --rda-easing-out: cubic-bezier(0, 0, 0.2, 1);
+    --rda-easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --rda-easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --rda-box-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --rda-box-shadow-default: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --rda-box-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+    --rda-box-shadow-none: none;
+    --rda-box-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --rda-box-shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --rda-z-index-0: 0;
+    --rda-z-index-10: 10;
+    --rda-z-index-20: 20;
+    --rda-z-index-30: 30;
+    --rda-z-index-40: 40;
+    --rda-z-index-50: 50;
+    --rda-z-index-auto: auto;
+    --rda-z-index-base: 1;
+    --rda-z-index-dropdown: 10;
+    --rda-z-index-sticky: 20;
+    --rda-z-index-fixed: 30;
+    --rda-z-index-modal-backdrop: 40;
+    --rda-z-index-modal: 50;
+    --rda-z-index-popover: 60;
+    --rda-z-index-tooltip: 70;
+    --rda-z-index-max: 100;
+    --rda-control-height-sm: 2rem;
+    --rda-control-height-md: calc(2rem + 0.25rem);
+    --rda-control-height-lg: 2.5rem;
+    --rda-control-font-size-sm: 0.875rem;
+    --rda-control-font-size-md: 0.875rem;
+    --rda-control-font-size-lg: 1rem;
+    --rda-control-icon-size-sm: 1rem;
+    --rda-control-icon-size-md: 1rem;
+    --rda-control-icon-size-lg: 1.25rem;
+    --rda-control-padding-sm: 0.75rem;
+    --rda-control-padding-md: 0.75rem;
+    --rda-control-padding-lg: 1rem;
+    --rda-control-gap-sm: 0.25rem;
+    --rda-control-gap-md: 0.5rem;
+    --rda-control-gap-lg: 0.5rem;
+    --rda-control-touch-height-sm: 2.5rem;
+    --rda-control-touch-height-md: calc(2.5rem + 0.25rem);
+    --rda-control-touch-height-lg: 3rem;
+    --rda-indicator-height-sm: 1.25rem;
+    --rda-indicator-height-md: 1.5rem;
+    --rda-indicator-height-lg: calc(1.5rem + 0.25rem);
+    --rda-indicator-font-size-sm: 0.75rem;
+    --rda-indicator-font-size-md: 0.75rem;
+    --rda-indicator-font-size-lg: 0.875rem;
+    --rda-indicator-padding-sm: 0.5rem;
+    --rda-indicator-padding-md: 0.5rem;
+    --rda-indicator-padding-lg: 0.75rem;
+    --rda-avatar-size-xs: 1.5rem;
+    --rda-avatar-size-sm: 2rem;
+    --rda-avatar-size-md: 2.5rem;
+    --rda-avatar-size-lg: 3rem;
+    --rda-avatar-size-xl: 4rem;
+    --rda-dialog-width-sm: calc(2.5rem * 10);
+    --rda-dialog-width-md: calc(2.5rem * 14);
+    --rda-dialog-width-lg: calc(3rem * 15);
+    --rda-dialog-width-xl: calc(2.5rem * 24);
+    --rda-action-primary-bg: #06b6d4;
+    --rda-action-primary-bg-hover: #22d3ee;
+    --rda-action-primary-bg-active: #0891b2;
+    --rda-action-primary-fg: #0a0a0a;
+    --rda-action-primary-border: #22d3ee;
+    --rda-action-danger-bg: #ef4444;
+    --rda-action-danger-bg-hover: #f87171;
+    --rda-action-danger-bg-active: #dc2626;
+    --rda-action-danger-fg: #ffffff;
+    --rda-action-danger-border: #f87171;
+    --rda-action-success-bg: #22c55e;
+    --rda-action-success-bg-hover: #4ade80;
+    --rda-action-success-bg-active: #16a34a;
+    --rda-action-success-fg: #0a0a0a;
+    --rda-action-success-border: #4ade80;
+    --rda-action-warning-bg: #f59e0b;
+    --rda-action-warning-bg-hover: #fbbf24;
+    --rda-action-warning-bg-active: #d97706;
+    --rda-action-warning-fg: #0a0a0a;
+    --rda-action-warning-border: #fbbf24;
+    --rda-action-info-bg: #3b82f6;
+    --rda-action-info-bg-hover: #60a5fa;
+    --rda-action-info-bg-active: #2563eb;
+    --rda-action-info-fg: #ffffff;
+    --rda-action-info-border: #60a5fa;
+    --rda-action-veiled-bg: #8a929a;
+    --rda-action-veiled-bg-hover: #99a1a8;
+    --rda-action-veiled-bg-active: #72787f;
+    --rda-action-veiled-fg: #0a0a0a;
+    --rda-action-veiled-border: #99a1a8;
+    --rda-action-acolyte-bg: #5c6c7b;
+    --rda-action-acolyte-bg-hover: #8093a6;
+    --rda-action-acolyte-bg-active: #52606e;
+    --rda-action-acolyte-fg: #ffffff;
+    --rda-action-acolyte-border: #8093a6;
+    --rda-action-initiate-bg: #00a5c4;
+    --rda-action-initiate-bg-hover: #56ccec;
+    --rda-action-initiate-bg-active: #00aecf;
+    --rda-action-initiate-fg: #0a0a0a;
+    --rda-action-initiate-border: #56ccec;
+    --rda-action-artificer-bg: #0fa48f;
+    --rda-action-artificer-bg-hover: #44c2ac;
+    --rda-action-artificer-bg-active: #0fa38e;
+    --rda-action-artificer-fg: #0a0a0a;
+    --rda-action-artificer-border: #44c2ac;
+    --rda-action-abyssal-bg: #3b42a4;
+    --rda-action-abyssal-bg-hover: #6b6fc6;
+    --rda-action-abyssal-bg-active: #363d98;
+    --rda-action-abyssal-fg: #ffffff;
+    --rda-action-abyssal-border: #6b6fc6;
+    --rda-action-weaver-bg: #b38a36;
+    --rda-action-weaver-bg-hover: #c3994c;
+    --rda-action-weaver-bg-active: #95722b;
+    --rda-action-weaver-fg: #0a0a0a;
+    --rda-action-weaver-border: #c3994c;
+    --rda-action-weaver-glow: #c3994c;
+    --rda-action-sentinel-bg: #296bb6;
+    --rda-action-sentinel-bg-hover: #5092ea;
+    --rda-action-sentinel-bg-active: #2460a4;
+    --rda-action-sentinel-fg: #ffffff;
+    --rda-action-sentinel-border: #5092ea;
+    --rda-action-sentinel-glow: #5092ea;
+    --rda-action-chronicler-bg: #c25450;
+    --rda-action-chronicler-bg-hover: #d68c8a;
+    --rda-action-chronicler-bg-active: #c35450;
+    --rda-action-chronicler-fg: #ffffff;
+    --rda-action-chronicler-border: #d68c8a;
+    --rda-action-chronicler-glow: #d68c8a;
+    --rda-action-envoy-bg: #138d82;
+    --rda-action-envoy-bg-hover: #48c1b3;
+    --rda-action-envoy-bg-active: #18a296;
+    --rda-action-envoy-fg: #ffffff;
+    --rda-action-envoy-border: #48c1b3;
+    --rda-action-envoy-glow: #48c1b3;
+    --rda-action-hierophant-bg: #8445ba;
+    --rda-action-hierophant-bg-hover: #a87fd6;
+    --rda-action-hierophant-bg-active: #7d41b1;
+    --rda-action-hierophant-fg: #ffffff;
+    --rda-action-hierophant-border: #a87fd6;
+    --rda-action-hierophant-glow: #a87fd6;
+    --rda-action-eminence-bg: #b92b6a;
+    --rda-action-eminence-bg-hover: #eb7da3;
+    --rda-action-eminence-bg-active: #d8347d;
+    --rda-action-eminence-fg: #ffffff;
+    --rda-action-eminence-border: #eb7da3;
+    --rda-action-eminence-glow: #eb7da3;
+    --rda-action-oathkeeper-bg: #d97b29;
+    --rda-action-oathkeeper-bg-hover: #f2ae8b;
+    --rda-action-oathkeeper-bg-active: #eb862d;
+    --rda-action-oathkeeper-fg: #0a0a0a;
+    --rda-action-oathkeeper-border: #f2ae8b;
+    --rda-action-oathkeeper-glow: #f2ae8b;
+    --rda-action-archon-bg: #d63341;
+    --rda-action-archon-bg-hover: #eb989c;
+    --rda-action-archon-bg-active: #ee636b;
+    --rda-action-archon-fg: #ffffff;
+    --rda-action-archon-border: #eb989c;
+    --rda-action-archon-glow: #eb989c;
+    --rda-action-demiurge-bg: #f0b90b;
+    --rda-action-demiurge-bg-hover: #f5c768;
+    --rda-action-demiurge-bg-active: #d9a709;
+    --rda-action-demiurge-fg: #0a0a0a;
+    --rda-action-demiurge-border: #f5c768;
+    --rda-action-demiurge-glow: #f5c768;
+    --rda-action-familiar-bg: #9ee8fa;
+    --rda-action-familiar-bg-hover: #c1e2ec;
+    --rda-action-familiar-bg-active: #51cde5;
+    --rda-action-familiar-fg: #0a0a0a;
+    --rda-action-familiar-border: #c1e2ec;
+    --rda-action-familiar-glow: #c1e2ec;
+    --rda-action-golem-bg: #cad4d0;
+    --rda-action-golem-bg-hover: #d9dedc;
+    --rda-action-golem-bg-active: #b7c0bc;
+    --rda-action-golem-fg: #0a0a0a;
+    --rda-action-golem-border: #d9dedc;
+    --rda-action-golem-glow: #d9dedc;
+    --rda-action-aegis-bg: #ff9ebd;
+    --rda-action-aegis-bg-hover: #f4bfce;
+    --rda-action-aegis-bg-active: #ff8ab2;
+    --rda-action-aegis-fg: #0a0a0a;
+    --rda-action-aegis-border: #f4bfce;
+    --rda-action-aegis-glow: #f4bfce;
+    --rda-action-oracle-bg: #bda6eb;
+    --rda-action-oracle-bg-hover: #d4c6f2;
+    --rda-action-oracle-bg-active: #bba3ea;
+    --rda-action-oracle-fg: #0a0a0a;
+    --rda-action-oracle-border: #d4c6f2;
+    --rda-action-oracle-glow: #d4c6f2;
+    --rda-action-homunculus-bg: #c8e88e;
+    --rda-action-homunculus-bg-hover: #c8e88e;
+    --rda-action-homunculus-bg-active: #bad884;
+    --rda-action-homunculus-fg: #0a0a0a;
+    --rda-action-homunculus-border: #c8e88e;
+    --rda-action-homunculus-glow: #c8e88e;
+    --rda-action-wraith-bg: #b5b5d1;
+    --rda-action-wraith-bg-hover: #dcdce9;
+    --rda-action-wraith-bg-active: #bcbcd5;
+    --rda-action-wraith-fg: #0a0a0a;
+    --rda-action-wraith-border: #dcdce9;
+    --rda-action-wraith-glow: #dcdce9;
+    --rda-tier-veiled-color: #8a929a;
+    --rda-tier-acolyte-color: #8093a6;
+    --rda-tier-initiate-color: #009fbc;
+    --rda-tier-artificer-color: #0fa38e;
+    --rda-tier-abyssal-color: #888bce;
+    --rda-tier-weaver-color: #b38a36;
+    --rda-tier-sentinel-color: #5092ea;
+    --rda-tier-chronicler-color: #c25450;
+    --rda-tier-envoy-color: #18a296;
+    --rda-tier-hierophant-color: #a87fd6;
+    --rda-tier-eminence-color: #b92b6a;
+    --rda-tier-oathkeeper-color: #d67928;
+    --rda-tier-archon-color: #ee636b;
+    --rda-tier-demiurge-color: #b58b06;
+    --rda-tier-familiar-color: #3c9db0;
+    --rda-tier-golem-color: #8c9390;
+    --rda-tier-aegis-color: #ff4a96;
+    --rda-tier-oracle-color: #a37ee2;
+    --rda-tier-homunculus-color: #83995c;
+    --rda-tier-wraith-color: #8d8db8;
+    --rda-action-secondary-bg: #cbd5e1;
+    --rda-action-secondary-bg-hover: #94a3b8;
+    --rda-action-secondary-bg-active: #64748b;
+    --rda-action-secondary-fg: #0f172a;
+    --rda-action-secondary-border: #94a3b8;
+    --rda-action-ghost-bg: transparent;
+    --rda-action-ghost-bg-hover: #e5e5e5;
+    --rda-action-ghost-bg-active: #d4d4d4;
+    --rda-action-ghost-fg: #171717;
+    --rda-action-ghost-border: transparent;
+    --rda-action-neutral-bg: #737373;
+    --rda-action-neutral-bg-hover: #a3a3a3;
+    --rda-action-neutral-bg-active: #525252;
+    --rda-action-neutral-fg: #0a0a0a;
+    --rda-action-neutral-border: #a3a3a3;
+    --rda-surface-primary: #fafafa;
+    --rda-surface-secondary: #f5f5f5;
+    --rda-surface-tertiary: #e5e5e5;
+    --rda-surface-hover: #e5e5e5;
+    --rda-surface-active: #d4d4d4;
+    --rda-surface-card: #f5f5f5;
+    --rda-surface-input: #f5f5f5;
+    --rda-surface-elevated: #e5e5e5;
+    --rda-surface-overlay: rgba(0, 0, 0, 0.4);
+    --rda-content-primary: #171717;
+    --rda-content-secondary: #404040;
+    --rda-content-tertiary: #737373;
+    --rda-content-muted: #a3a3a3;
+    --rda-content-inverse: #fafafa;
+    --rda-content-brand: #0891b2;
+    --rda-content-disabled: #d4d4d4;
+    --rda-border-primary: #d4d4d4;
+    --rda-border-subtle: #e5e5e5;
+    --rda-border-input: #d4d4d4;
+    --rda-border-focus: #0891b2;
+    --rda-status-success: #16a34a;
+    --rda-status-warning: #d97706;
+    --rda-status-error: #dc2626;
+    --rda-status-info: #2563eb;
+    --rda-status-success-surface: #f0fdf4;
+    --rda-status-warning-surface: #fffbeb;
+    --rda-status-error-surface: #fef2f2;
+    --rda-status-info-surface: #eff6ff;
+    --rda-images-bg-00: image-set(url("https://cdn.reversodoavesso.com/images/bg-00-light.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-00-light.webp") type("image/webp"));
+    --rda-images-bg-01: image-set(url("https://cdn.reversodoavesso.com/images/bg-01-light.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-01-light.webp") type("image/webp"));
+    --rda-images-bg-02: image-set(url("https://cdn.reversodoavesso.com/images/bg-02-light.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-02-light.webp") type("image/webp"));
+  }
+
+  [data-theme="light"] {
+    color-scheme: light;
+    --rda-spacing-0: 0;
+    --rda-spacing-1: 0.25rem;
+    --rda-spacing-2: 0.5rem;
+    --rda-spacing-3: 0.75rem;
+    --rda-spacing-4: 1rem;
+    --rda-spacing-5: 1.25rem;
+    --rda-spacing-6: 1.5rem;
+    --rda-spacing-8: 2rem;
+    --rda-spacing-10: 2.5rem;
+    --rda-spacing-12: 3rem;
+    --rda-spacing-16: 4rem;
+    --rda-spacing-20: 5rem;
+    --rda-spacing-24: 6rem;
+    --rda-spacing-32: 8rem;
+    --rda-spacing-40: 10rem;
+    --rda-spacing-48: 12rem;
+    --rda-spacing-64: 16rem;
+    --rda-spacing-80: 20rem;
+    --rda-spacing-96: 24rem;
+    --rda-font-family-body: Inter, system-ui, sans-serif;
+    --rda-font-family-display: Archivo, system-ui, sans-serif;
+    --rda-font-family-mono: 'Fira Code', Consolas, Monaco, monospace;
+    --rda-font-size-xs: 0.75rem;
+    --rda-line-height-xs: 1rem;
+    --rda-letter-spacing-xs: 0.025em;
+    --rda-font-size-sm: 0.875rem;
+    --rda-line-height-sm: 1.25rem;
+    --rda-letter-spacing-sm: 0.025em;
+    --rda-font-size-base: 1rem;
+    --rda-line-height-base: 1.5rem;
+    --rda-letter-spacing-base: 0;
+    --rda-font-size-lg: 1.125rem;
+    --rda-line-height-lg: 1.75rem;
+    --rda-letter-spacing-lg: 0;
+    --rda-font-size-xl: 1.25rem;
+    --rda-line-height-xl: 1.75rem;
+    --rda-letter-spacing-xl: 0;
+    --rda-font-size-2xl: 1.5rem;
+    --rda-line-height-2xl: 2rem;
+    --rda-letter-spacing-2xl: -0.025em;
+    --rda-font-size-3xl: 1.875rem;
+    --rda-line-height-3xl: 2.25rem;
+    --rda-letter-spacing-3xl: -0.025em;
+    --rda-font-size-4xl: 2.25rem;
+    --rda-line-height-4xl: 2.5rem;
+    --rda-letter-spacing-4xl: -0.025em;
+    --rda-font-size-5xl: 3rem;
+    --rda-line-height-5xl: 3.5rem;
+    --rda-letter-spacing-5xl: -0.025em;
+    --rda-font-size-6xl: 3.75rem;
+    --rda-line-height-6xl: 4.5rem;
+    --rda-letter-spacing-6xl: -0.025em;
+    --rda-font-size-7xl: 4.5rem;
+    --rda-line-height-7xl: 5rem;
+    --rda-letter-spacing-7xl: -0.025em;
+    --rda-font-size-8xl: 6rem;
+    --rda-line-height-8xl: 6.5rem;
+    --rda-letter-spacing-8xl: -0.025em;
+    --rda-font-size-9xl: 8rem;
+    --rda-line-height-9xl: 8.5rem;
+    --rda-letter-spacing-9xl: -0.025em;
+    --rda-font-size-display-sm: 3rem;
+    --rda-line-height-display-sm: 3.5rem;
+    --rda-letter-spacing-display-sm: -0.025em;
+    --rda-font-size-display-md: 3.75rem;
+    --rda-line-height-display-md: 4.5rem;
+    --rda-letter-spacing-display-md: -0.025em;
+    --rda-font-size-display-lg: 4.5rem;
+    --rda-line-height-display-lg: 5rem;
+    --rda-letter-spacing-display-lg: -0.025em;
+    --rda-font-size-display-xl: 6rem;
+    --rda-line-height-display-xl: 6.5rem;
+    --rda-letter-spacing-display-xl: -0.025em;
+    --rda-font-weight-thin: 100;
+    --rda-font-weight-extralight: 200;
+    --rda-font-weight-light: 300;
+    --rda-font-weight-normal: 400;
+    --rda-font-weight-medium: 500;
+    --rda-font-weight-semibold: 600;
+    --rda-font-weight-bold: 700;
+    --rda-font-weight-extrabold: 800;
+    --rda-font-weight-black: 900;
+    --rda-line-height-none: 1;
+    --rda-line-height-tight: 1.25;
+    --rda-line-height-snug: 1.375;
+    --rda-line-height-normal: 1.5;
+    --rda-line-height-relaxed: 1.625;
+    --rda-line-height-loose: 2;
+    --rda-letter-spacing-tighter: -0.05em;
+    --rda-letter-spacing-tight: -0.025em;
+    --rda-letter-spacing-normal: 0em;
+    --rda-letter-spacing-wide: 0.025em;
+    --rda-letter-spacing-wider: 0.05em;
+    --rda-letter-spacing-widest: 0.1em;
+    --rda-border-radius-none: 0;
+    --rda-border-radius-sm: 0.25rem;
+    --rda-border-radius-md: 0.5rem;
+    --rda-border-radius-lg: 0.75rem;
+    --rda-border-radius-xl: 1rem;
+    --rda-border-radius-2xl: 1.5rem;
+    --rda-border-radius-3xl: 2rem;
+    --rda-border-radius-full: 9999px;
+    --rda-border-width-0: 0px;
+    --rda-border-width-1: 1px;
+    --rda-border-width-2: 2px;
+    --rda-border-width-4: 4px;
+    --rda-border-width-8: 8px;
+    --rda-border-width-default: 1px;
+    --rda-duration-75: 75ms;
+    --rda-duration-100: 100ms;
+    --rda-duration-150: 150ms;
+    --rda-duration-200: 200ms;
+    --rda-duration-300: 300ms;
+    --rda-duration-500: 500ms;
+    --rda-duration-700: 700ms;
+    --rda-duration-1000: 1000ms;
+    --rda-easing-linear: linear;
+    --rda-easing-in: cubic-bezier(0.4, 0, 1, 1);
+    --rda-easing-out: cubic-bezier(0, 0, 0.2, 1);
+    --rda-easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --rda-easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --rda-box-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --rda-box-shadow-default: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --rda-box-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --rda-box-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+    --rda-box-shadow-none: none;
+    --rda-box-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --rda-box-shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --rda-z-index-0: 0;
+    --rda-z-index-10: 10;
+    --rda-z-index-20: 20;
+    --rda-z-index-30: 30;
+    --rda-z-index-40: 40;
+    --rda-z-index-50: 50;
+    --rda-z-index-auto: auto;
+    --rda-z-index-base: 1;
+    --rda-z-index-dropdown: 10;
+    --rda-z-index-sticky: 20;
+    --rda-z-index-fixed: 30;
+    --rda-z-index-modal-backdrop: 40;
+    --rda-z-index-modal: 50;
+    --rda-z-index-popover: 60;
+    --rda-z-index-tooltip: 70;
+    --rda-z-index-max: 100;
+    --rda-control-height-sm: 2rem;
+    --rda-control-height-md: calc(2rem + 0.25rem);
+    --rda-control-height-lg: 2.5rem;
+    --rda-control-font-size-sm: 0.875rem;
+    --rda-control-font-size-md: 0.875rem;
+    --rda-control-font-size-lg: 1rem;
+    --rda-control-icon-size-sm: 1rem;
+    --rda-control-icon-size-md: 1rem;
+    --rda-control-icon-size-lg: 1.25rem;
+    --rda-control-padding-sm: 0.75rem;
+    --rda-control-padding-md: 0.75rem;
+    --rda-control-padding-lg: 1rem;
+    --rda-control-gap-sm: 0.25rem;
+    --rda-control-gap-md: 0.5rem;
+    --rda-control-gap-lg: 0.5rem;
+    --rda-control-touch-height-sm: 2.5rem;
+    --rda-control-touch-height-md: calc(2.5rem + 0.25rem);
+    --rda-control-touch-height-lg: 3rem;
+    --rda-indicator-height-sm: 1.25rem;
+    --rda-indicator-height-md: 1.5rem;
+    --rda-indicator-height-lg: calc(1.5rem + 0.25rem);
+    --rda-indicator-font-size-sm: 0.75rem;
+    --rda-indicator-font-size-md: 0.75rem;
+    --rda-indicator-font-size-lg: 0.875rem;
+    --rda-indicator-padding-sm: 0.5rem;
+    --rda-indicator-padding-md: 0.5rem;
+    --rda-indicator-padding-lg: 0.75rem;
+    --rda-avatar-size-xs: 1.5rem;
+    --rda-avatar-size-sm: 2rem;
+    --rda-avatar-size-md: 2.5rem;
+    --rda-avatar-size-lg: 3rem;
+    --rda-avatar-size-xl: 4rem;
+    --rda-dialog-width-sm: calc(2.5rem * 10);
+    --rda-dialog-width-md: calc(2.5rem * 14);
+    --rda-dialog-width-lg: calc(3rem * 15);
+    --rda-dialog-width-xl: calc(2.5rem * 24);
+    --rda-action-primary-bg: #06b6d4;
+    --rda-action-primary-bg-hover: #22d3ee;
+    --rda-action-primary-bg-active: #0891b2;
+    --rda-action-primary-fg: #0a0a0a;
+    --rda-action-primary-border: #22d3ee;
+    --rda-action-danger-bg: #ef4444;
+    --rda-action-danger-bg-hover: #f87171;
+    --rda-action-danger-bg-active: #dc2626;
+    --rda-action-danger-fg: #ffffff;
+    --rda-action-danger-border: #f87171;
+    --rda-action-success-bg: #22c55e;
+    --rda-action-success-bg-hover: #4ade80;
+    --rda-action-success-bg-active: #16a34a;
+    --rda-action-success-fg: #0a0a0a;
+    --rda-action-success-border: #4ade80;
+    --rda-action-warning-bg: #f59e0b;
+    --rda-action-warning-bg-hover: #fbbf24;
+    --rda-action-warning-bg-active: #d97706;
+    --rda-action-warning-fg: #0a0a0a;
+    --rda-action-warning-border: #fbbf24;
+    --rda-action-info-bg: #3b82f6;
+    --rda-action-info-bg-hover: #60a5fa;
+    --rda-action-info-bg-active: #2563eb;
+    --rda-action-info-fg: #ffffff;
+    --rda-action-info-border: #60a5fa;
+    --rda-action-veiled-bg: #8a929a;
+    --rda-action-veiled-bg-hover: #99a1a8;
+    --rda-action-veiled-bg-active: #72787f;
+    --rda-action-veiled-fg: #0a0a0a;
+    --rda-action-veiled-border: #99a1a8;
+    --rda-action-acolyte-bg: #5c6c7b;
+    --rda-action-acolyte-bg-hover: #8093a6;
+    --rda-action-acolyte-bg-active: #52606e;
+    --rda-action-acolyte-fg: #ffffff;
+    --rda-action-acolyte-border: #8093a6;
+    --rda-action-initiate-bg: #00a5c4;
+    --rda-action-initiate-bg-hover: #56ccec;
+    --rda-action-initiate-bg-active: #00aecf;
+    --rda-action-initiate-fg: #0a0a0a;
+    --rda-action-initiate-border: #56ccec;
+    --rda-action-artificer-bg: #0fa48f;
+    --rda-action-artificer-bg-hover: #44c2ac;
+    --rda-action-artificer-bg-active: #0fa38e;
+    --rda-action-artificer-fg: #0a0a0a;
+    --rda-action-artificer-border: #44c2ac;
+    --rda-action-abyssal-bg: #3b42a4;
+    --rda-action-abyssal-bg-hover: #6b6fc6;
+    --rda-action-abyssal-bg-active: #363d98;
+    --rda-action-abyssal-fg: #ffffff;
+    --rda-action-abyssal-border: #6b6fc6;
+    --rda-action-weaver-bg: #b38a36;
+    --rda-action-weaver-bg-hover: #c3994c;
+    --rda-action-weaver-bg-active: #95722b;
+    --rda-action-weaver-fg: #0a0a0a;
+    --rda-action-weaver-border: #c3994c;
+    --rda-action-weaver-glow: #c3994c;
+    --rda-action-sentinel-bg: #296bb6;
+    --rda-action-sentinel-bg-hover: #5092ea;
+    --rda-action-sentinel-bg-active: #2460a4;
+    --rda-action-sentinel-fg: #ffffff;
+    --rda-action-sentinel-border: #5092ea;
+    --rda-action-sentinel-glow: #5092ea;
+    --rda-action-chronicler-bg: #c25450;
+    --rda-action-chronicler-bg-hover: #d68c8a;
+    --rda-action-chronicler-bg-active: #c35450;
+    --rda-action-chronicler-fg: #ffffff;
+    --rda-action-chronicler-border: #d68c8a;
+    --rda-action-chronicler-glow: #d68c8a;
+    --rda-action-envoy-bg: #138d82;
+    --rda-action-envoy-bg-hover: #48c1b3;
+    --rda-action-envoy-bg-active: #18a296;
+    --rda-action-envoy-fg: #ffffff;
+    --rda-action-envoy-border: #48c1b3;
+    --rda-action-envoy-glow: #48c1b3;
+    --rda-action-hierophant-bg: #8445ba;
+    --rda-action-hierophant-bg-hover: #a87fd6;
+    --rda-action-hierophant-bg-active: #7d41b1;
+    --rda-action-hierophant-fg: #ffffff;
+    --rda-action-hierophant-border: #a87fd6;
+    --rda-action-hierophant-glow: #a87fd6;
+    --rda-action-eminence-bg: #b92b6a;
+    --rda-action-eminence-bg-hover: #eb7da3;
+    --rda-action-eminence-bg-active: #d8347d;
+    --rda-action-eminence-fg: #ffffff;
+    --rda-action-eminence-border: #eb7da3;
+    --rda-action-eminence-glow: #eb7da3;
+    --rda-action-oathkeeper-bg: #d97b29;
+    --rda-action-oathkeeper-bg-hover: #f2ae8b;
+    --rda-action-oathkeeper-bg-active: #eb862d;
+    --rda-action-oathkeeper-fg: #0a0a0a;
+    --rda-action-oathkeeper-border: #f2ae8b;
+    --rda-action-oathkeeper-glow: #f2ae8b;
+    --rda-action-archon-bg: #d63341;
+    --rda-action-archon-bg-hover: #eb989c;
+    --rda-action-archon-bg-active: #ee636b;
+    --rda-action-archon-fg: #ffffff;
+    --rda-action-archon-border: #eb989c;
+    --rda-action-archon-glow: #eb989c;
+    --rda-action-demiurge-bg: #f0b90b;
+    --rda-action-demiurge-bg-hover: #f5c768;
+    --rda-action-demiurge-bg-active: #d9a709;
+    --rda-action-demiurge-fg: #0a0a0a;
+    --rda-action-demiurge-border: #f5c768;
+    --rda-action-demiurge-glow: #f5c768;
+    --rda-action-familiar-bg: #9ee8fa;
+    --rda-action-familiar-bg-hover: #c1e2ec;
+    --rda-action-familiar-bg-active: #51cde5;
+    --rda-action-familiar-fg: #0a0a0a;
+    --rda-action-familiar-border: #c1e2ec;
+    --rda-action-familiar-glow: #c1e2ec;
+    --rda-action-golem-bg: #cad4d0;
+    --rda-action-golem-bg-hover: #d9dedc;
+    --rda-action-golem-bg-active: #b7c0bc;
+    --rda-action-golem-fg: #0a0a0a;
+    --rda-action-golem-border: #d9dedc;
+    --rda-action-golem-glow: #d9dedc;
+    --rda-action-aegis-bg: #ff9ebd;
+    --rda-action-aegis-bg-hover: #f4bfce;
+    --rda-action-aegis-bg-active: #ff8ab2;
+    --rda-action-aegis-fg: #0a0a0a;
+    --rda-action-aegis-border: #f4bfce;
+    --rda-action-aegis-glow: #f4bfce;
+    --rda-action-oracle-bg: #bda6eb;
+    --rda-action-oracle-bg-hover: #d4c6f2;
+    --rda-action-oracle-bg-active: #bba3ea;
+    --rda-action-oracle-fg: #0a0a0a;
+    --rda-action-oracle-border: #d4c6f2;
+    --rda-action-oracle-glow: #d4c6f2;
+    --rda-action-homunculus-bg: #c8e88e;
+    --rda-action-homunculus-bg-hover: #c8e88e;
+    --rda-action-homunculus-bg-active: #bad884;
+    --rda-action-homunculus-fg: #0a0a0a;
+    --rda-action-homunculus-border: #c8e88e;
+    --rda-action-homunculus-glow: #c8e88e;
+    --rda-action-wraith-bg: #b5b5d1;
+    --rda-action-wraith-bg-hover: #dcdce9;
+    --rda-action-wraith-bg-active: #bcbcd5;
+    --rda-action-wraith-fg: #0a0a0a;
+    --rda-action-wraith-border: #dcdce9;
+    --rda-action-wraith-glow: #dcdce9;
+    --rda-tier-veiled-color: #8a929a;
+    --rda-tier-acolyte-color: #8093a6;
+    --rda-tier-initiate-color: #009fbc;
+    --rda-tier-artificer-color: #0fa38e;
+    --rda-tier-abyssal-color: #888bce;
+    --rda-tier-weaver-color: #b38a36;
+    --rda-tier-sentinel-color: #5092ea;
+    --rda-tier-chronicler-color: #c25450;
+    --rda-tier-envoy-color: #18a296;
+    --rda-tier-hierophant-color: #a87fd6;
+    --rda-tier-eminence-color: #b92b6a;
+    --rda-tier-oathkeeper-color: #d67928;
+    --rda-tier-archon-color: #ee636b;
+    --rda-tier-demiurge-color: #b58b06;
+    --rda-tier-familiar-color: #3c9db0;
+    --rda-tier-golem-color: #8c9390;
+    --rda-tier-aegis-color: #ff4a96;
+    --rda-tier-oracle-color: #a37ee2;
+    --rda-tier-homunculus-color: #83995c;
+    --rda-tier-wraith-color: #8d8db8;
+    --rda-action-secondary-bg: #cbd5e1;
+    --rda-action-secondary-bg-hover: #94a3b8;
+    --rda-action-secondary-bg-active: #64748b;
+    --rda-action-secondary-fg: #0f172a;
+    --rda-action-secondary-border: #94a3b8;
+    --rda-action-ghost-bg: transparent;
+    --rda-action-ghost-bg-hover: #e5e5e5;
+    --rda-action-ghost-bg-active: #d4d4d4;
+    --rda-action-ghost-fg: #171717;
+    --rda-action-ghost-border: transparent;
+    --rda-action-neutral-bg: #737373;
+    --rda-action-neutral-bg-hover: #a3a3a3;
+    --rda-action-neutral-bg-active: #525252;
+    --rda-action-neutral-fg: #0a0a0a;
+    --rda-action-neutral-border: #a3a3a3;
+    --rda-surface-primary: #fafafa;
+    --rda-surface-secondary: #f5f5f5;
+    --rda-surface-tertiary: #e5e5e5;
+    --rda-surface-hover: #e5e5e5;
+    --rda-surface-active: #d4d4d4;
+    --rda-surface-card: #f5f5f5;
+    --rda-surface-input: #f5f5f5;
+    --rda-surface-elevated: #e5e5e5;
+    --rda-surface-overlay: rgba(0, 0, 0, 0.4);
+    --rda-content-primary: #171717;
+    --rda-content-secondary: #404040;
+    --rda-content-tertiary: #737373;
+    --rda-content-muted: #a3a3a3;
+    --rda-content-inverse: #fafafa;
+    --rda-content-brand: #0891b2;
+    --rda-content-disabled: #d4d4d4;
+    --rda-border-primary: #d4d4d4;
+    --rda-border-subtle: #e5e5e5;
+    --rda-border-input: #d4d4d4;
+    --rda-border-focus: #0891b2;
+    --rda-status-success: #16a34a;
+    --rda-status-warning: #d97706;
+    --rda-status-error: #dc2626;
+    --rda-status-info: #2563eb;
+    --rda-status-success-surface: #f0fdf4;
+    --rda-status-warning-surface: #fffbeb;
+    --rda-status-error-surface: #fef2f2;
+    --rda-status-info-surface: #eff6ff;
+    --rda-images-bg-00: image-set(url("https://cdn.reversodoavesso.com/images/bg-00-light.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-00-light.webp") type("image/webp"));
+    --rda-images-bg-01: image-set(url("https://cdn.reversodoavesso.com/images/bg-01-light.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-01-light.webp") type("image/webp"));
+    --rda-images-bg-02: image-set(url("https://cdn.reversodoavesso.com/images/bg-02-light.avif") type("image/avif"), url("https://cdn.reversodoavesso.com/images/bg-02-light.webp") type("image/webp"));
+  }
+
+  /* Tokens de Variantes (glass) */
+  :root {
+    --rda-glass-bg: color-mix(in srgb, #0a0a0a 20%, transparent);
+    --rda-glass-blur: 1rem;
+    --rda-glass-border-color: color-mix(in srgb, #404040 50%, transparent);
+    --rda-glass-border-width: 1px;
+    --rda-glass-border-style: solid;
+    --rda-glass-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --rda-glass-fallback-background: #171717;
+    --rda-glass-fallback-opacity: 0.95;
+    --rda-glass-background-dark: color-mix(in srgb, #0a0a0a 20%, transparent);
+    --rda-glass-background-light: color-mix(in srgb, #fafafa 20%, transparent);
+    --rda-glass-border-dark: color-mix(in srgb, #404040 50%, transparent);
+    --rda-glass-border-light: color-mix(in srgb, #d4d4d4 50%, transparent);
+    --rda-glass-hover-bg: color-mix(in srgb, #262626 30%, transparent);
+    --rda-glass-hover-border-color: color-mix(in srgb, #262626 60%, transparent);
+    --rda-glass-active-bg: color-mix(in srgb, #404040 40%, transparent);
+    --rda-glass-active-border-color: color-mix(in srgb, #404040 70%, transparent);
+    --rda-glass-disabled-bg: color-mix(in srgb, #171717 10%, transparent);
+    --rda-glass-disabled-border-color: color-mix(in srgb, #404040 20%, transparent);
+    --rda-glass-disabled-opacity: 0.5;
+  }
+}
+
+@layer rda.reset {
+  /* Base styles */
+  body {
+    background-color: var(--rda-surface-primary);
+    color: var(--rda-content-primary);
+    font-family: var(--rda-font-family-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Focus visible */
+  :focus-visible {
+    outline: 2px solid var(--rda-border-focus);
+    outline-offset: 2px;
+  }
+}

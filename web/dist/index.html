@@ -1,19 +1,21 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#141714" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>Euterpe — sua música, em boa companhia</title>
     <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/rda-tokens.css" />
+    <link rel="stylesheet" href="/rda-ds.css" />
     <link rel="stylesheet" href="/style.css" />
     <script defer src="/app.js"></script>
   </head>
-  <body>
+  <body class="rda-body">
     <div id="app">
       <div class="loading">Preparando seu espaço musical…</div>
     </div>
     <div id="notifications" aria-live="polite"></div>
-    <dialog id="modal"></dialog>
+    <dialog id="modal" class="rda-dialog" data-size="lg"></dialog>
   </body>
 </html>

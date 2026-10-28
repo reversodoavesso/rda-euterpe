@@ -45,7 +45,7 @@ test('review has no stray zero and all sections are available', async()=>{
   try {
     const review=p.dom.window.document.querySelector('.review');
     assert(!Array.from(review.childNodes).some(n=>n.nodeType===3&&n.textContent==='0'));
-    assert.equal(p.dom.window.document.querySelectorAll('nav button').length,5);
+    assert.equal(p.dom.window.document.querySelectorAll('nav button').length,6);
   }finally{p.dom.window.close();}
 });
 
@@ -123,4 +123,140 @@ test('chat reads fragmented SSE including UTF-8 and keeps the final answer', asy
     assert.equal(p.run('state.streaming'),false);
     assert.match(p.dom.window.document.querySelector('.message.assistant').textContent,/Olá, música!/);
   }finally{p.dom.window.close();}
+});
+
+test('curations and visual workflow editor render canvas, nodes, inspector, and approval gates', async()=>{
+  const p=await page();
+  try {
+    // 1. Navigate to curations
+    await p.run('navigate("curations")');
+    assert.match(p.dom.window.document.querySelector('#app').textContent, /Curadorias/);
+    assert.match(p.dom.window.document.querySelector('#app').textContent, /Novo Projeto/);
+
+    // 2. Set active curation with workflow
+    p.run(`
+      state.curations = [{
+        id: "cur-1",
+        title: "Sertão Cósmico",
+        editorial_model: "escuta-e-imagem-v2",
+        dramaturgia: "transe_espiral",
+        status: "draft",
+        workflow: {
+          version: 1,
+          steps: [
+            { id: "step_1", kind: "briefing", label: "Briefing", role_function: "briefing", model_alias: "rda/reasoning", position: { x: 100, y: 150 } },
+            { id: "step_2", kind: "approval_gate", label: "Publicação", role_function: "synthesis", requires_approval: true, position: { x: 340, y: 150 } }
+          ],
+          edges: [
+            { id: "e1", source: "step_1", target: "step_2" }
+          ]
+        }
+      }];
+      state.activeCuration = state.curations[0];
+      state.curationsTab = "workflow";
+      state.workflowSelectedStep = state.activeCuration.workflow.steps[0];
+      render();
+    `);
+
+    // Verify canvas rendered
+    const canvas = p.dom.window.document.querySelector('.workflow-canvas-svg');
+    assert.ok(canvas, "Canvas SVG must be present");
+    const nodes = p.dom.window.document.querySelectorAll('.workflow-node');
+    assert.equal(nodes.length, 2, "2 workflow step nodes must be rendered");
+    assert.match(p.dom.window.document.querySelector('#app').textContent, /rda\/reasoning/);
+
+    // Verify property inspector
+    assert.match(p.dom.window.document.querySelector('.workflow-inspector').textContent, /Editar: Briefing/);
+
+    // Verify accessible list mode toggle
+    p.run('state.workflowMode = "list"; render();');
+    assert.ok(p.dom.window.document.querySelector('.workflow-list-container'), "Accessible list container must be rendered");
+    assert.match(p.dom.window.document.querySelector('.workflow-list-container').textContent, /Modo Acessível/);
+
+    // Verify human approval gate banner
+    p.run(`
+      state.workflowExecution = {
+        status: "awaiting_approval",
+        pending_approval: {
+          step_id: "step_2",
+          approval_id: "app-1",
+          action_type: "publish_curation",
+          payload_hash: "hash_canonical_123456"
+        }
+      };
+      render();
+    `);
+    const banner = p.dom.window.document.querySelector('.approval-gate-banner');
+    assert.ok(banner, "Approval gate banner must be present");
+    assert.match(banner.textContent, /Confirmação Humana Obrigatória/);
+    assert.match(banner.textContent, /hash_canonical_123456/);
+  }finally{p.dom.window.close();}
+});
+
+test('RDA Design System canonical classes, tokens, and data attributes are genuinely utilized across the UI', async()=>{
+  const p = await page();
+  try {
+    // 1. App Shell and Layout structure
+    const shell = p.dom.window.document.querySelector('.rda-app-shell');
+    assert.ok(shell, "Root shell must use rda-app-shell");
+    assert.equal(shell.getAttribute('data-layout'), 'console', "App shell must use console layout");
+
+    const sidebar = p.dom.window.document.querySelector('.rda-app-shell__sidebar.rda-sidebar');
+    assert.ok(sidebar, "Sidebar must use rda-app-shell__sidebar and rda-sidebar");
+
+    const main = p.dom.window.document.querySelector('.rda-app-shell__main');
+    assert.ok(main, "Workspace must use rda-app-shell__main");
+
+    const header = p.dom.window.document.querySelector('.rda-app-shell__header');
+    assert.ok(header, "Header must use rda-app-shell__header");
+
+    const content = p.dom.window.document.querySelector('.rda-app-shell__content');
+    assert.ok(content, "Content area must use rda-app-shell__content");
+
+    // 2. Sidebar Navigation Items
+    const navItems = p.dom.window.document.querySelectorAll('.rda-sidebar__item');
+    assert.ok(navItems.length >= 6, "Sidebar items must use rda-sidebar__item");
+    const activeItem = p.dom.window.document.querySelector('.rda-sidebar__item--active');
+    assert.ok(activeItem, "Active navigation item must have rda-sidebar__item--active");
+
+    // 3. RDA Buttons with data-color and data-style
+    const buttons = p.dom.window.document.querySelectorAll('.rda-button');
+    assert.ok(buttons.length > 5, "Buttons must genuinely use rda-button");
+    const primaryButton = Array.from(buttons).find(b => b.getAttribute('data-color') === 'primary');
+    assert.ok(primaryButton, "RDA button with data-color='primary' must be present");
+
+    // 4. Segmented Controls on tabbed views
+    p.run('state.view="library"; state.playlists=[]; render();');
+    const segmentedControl = p.dom.window.document.querySelector('.rda-segmented-control');
+    assert.ok(segmentedControl, "Library tabs must use rda-segmented-control");
+    const activeSegment = segmentedControl.querySelector('.rda-segmented-control__item[aria-pressed="true"]');
+    assert.ok(activeSegment, "Active tab must have rda-segmented-control__item[aria-pressed='true']");
+
+    // 5. RDA Cards & Badges in Curations
+    p.run(`
+      state.curations = [{
+        id: "cur-1",
+        title: "Sertão Cósmico",
+        editorial_model: "escuta-e-imagem-v2",
+        dramaturgia: "transe_espiral",
+        status: "draft"
+      }];
+      state.view = "curations";
+      state.curationsTab = "projects";
+      render();
+    `);
+    const card = p.dom.window.document.querySelector('.curation-card.rda-card');
+    assert.ok(card, "Curation card must use rda-card");
+    const badges = p.dom.window.document.querySelectorAll('.rda-badge');
+    assert.ok(badges.length >= 1, "RDA badges must be rendered");
+
+    // 6. RDA Form Fields and Inputs
+    p.run('state.view="settings"; state.settings={}; state.providers=[]; render();');
+    const formFields = p.dom.window.document.querySelectorAll('.rda-form-field');
+    assert.ok(formFields.length >= 2, "Settings must render rda-form-field");
+    const rdaInputs = p.dom.window.document.querySelectorAll('.rda-input, .rda-select__field, .rda-textarea__field');
+    assert.ok(rdaInputs.length >= 2, "Inputs must use rda-input / rda-select__field / rda-textarea__field");
+  } finally {
+    p.dom.window.close();
+  }
 });

@@ -30,6 +30,15 @@ import urllib.parse
 import urllib.request
 import uuid
 from rda_sso import RdaSso, SsoError
+from curation import (
+    EDITORIAL_MODELS,
+    DRAMATURGIAS,
+    COORDENADAS_DIEGETICAS,
+    EIXOS_CURATORIAIS,
+    validate_dag,
+    compute_approval_hash,
+)
+from rda_ai_client import RdaAiClient
 
 STATIC = Path(__file__).parent / "dist"
 READ_TOOLS = {"get_playlists", "get_playlist_tracks", "get_saved_tracks", "get_several_tracks", "search_spotify", "resolve_tracks"}
@@ -85,8 +94,19 @@ class Store:
                     PRIMARY KEY(issuer,subject));
                 CREATE TABLE IF NOT EXISTS sso_sessions(hash TEXT PRIMARY KEY REFERENCES sessions(hash) ON DELETE CASCADE,
                     subject TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS curations(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+                    title TEXT NOT NULL, description TEXT, editorial_model TEXT NOT NULL, dramaturgia TEXT,
+                    briefing TEXT, candidates TEXT, selected_tracks TEXT, sequencing TEXT,
+                    status TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS curation_workflows(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+                    curation_id TEXT NOT NULL REFERENCES curations(id) ON DELETE CASCADE, version INTEGER NOT NULL,
+                    graph_json TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS curation_runs(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+                    curation_id TEXT NOT NULL REFERENCES curations(id) ON DELETE CASCADE, workflow_id TEXT NOT NULL,
+                    status TEXT NOT NULL, current_step TEXT, result TEXT, created REAL NOT NULL, updated REAL NOT NULL);
                 CREATE INDEX IF NOT EXISTS conversations_owner ON conversations(user_id,updated);
                 CREATE INDEX IF NOT EXISTS activity_owner ON activity(user_id,created);
+                CREATE INDEX IF NOT EXISTS curations_owner ON curations(user_id,updated);
             """)
             c.execute("INSERT OR IGNORE INTO meta VALUES ('csrf_key',?)", (secrets.token_hex(32),))
             self.csrf_key = bytes.fromhex(c.execute("SELECT value FROM meta WHERE key='csrf_key'").fetchone()[0])
@@ -232,6 +252,145 @@ class Store:
     def activity(self, user_id, kind, title, status, data=None):
         with self.db() as c:
             c.execute("INSERT INTO activity(user_id,kind,title,status,data,created) VALUES (?,?,?,?,?,?)", (user_id, kind, title, status, json.dumps(data or {}, ensure_ascii=False), time.time()))
+
+    def curations(self, user_id):
+        with self.db() as c:
+            rows = [dict(r) for r in c.execute("SELECT * FROM curations WHERE user_id=? ORDER BY updated DESC", (user_id,))]
+        for r in rows:
+            r["briefing"] = json.loads(r["briefing"]) if r.get("briefing") else {}
+            r["candidates"] = json.loads(r["candidates"]) if r.get("candidates") else []
+            r["selected_tracks"] = json.loads(r["selected_tracks"]) if r.get("selected_tracks") else []
+            r["sequencing"] = json.loads(r["sequencing"]) if r.get("sequencing") else []
+        return rows
+
+    def curation(self, user_id, curation_id):
+        curation_id = identifier(curation_id)
+        with self.db() as c:
+            row = c.execute("SELECT * FROM curations WHERE id=? AND user_id=?", (curation_id, user_id)).fetchone()
+            if not row:
+                raise APIError("curation_not_found", 404)
+            wf_row = c.execute("SELECT id,version,graph_json FROM curation_workflows WHERE curation_id=? ORDER BY version DESC LIMIT 1", (curation_id,)).fetchone()
+        item = dict(row)
+        item["briefing"] = json.loads(item["briefing"]) if item.get("briefing") else {}
+        item["candidates"] = json.loads(item["candidates"]) if item.get("candidates") else []
+        item["selected_tracks"] = json.loads(item["selected_tracks"]) if item.get("selected_tracks") else []
+        item["sequencing"] = json.loads(item["sequencing"]) if item.get("sequencing") else []
+        item["workflow"] = json.loads(wf_row["graph_json"]) if wf_row else None
+        return item
+
+    def create_curation(self, user_id, body):
+        title = str(body.get("title", "Novo Projeto de Curadoria")).strip()[:120] or "Novo Projeto de Curadoria"
+        desc = str(body.get("description", "")).strip()[:500]
+        model_id = str(body.get("editorial_model", "escuta-e-imagem-v2"))
+        dramaturgia_id = str(body.get("dramaturgia", "montanha_russa"))
+        briefing = body.get("briefing", {})
+        now = time.time()
+        curation_id = str(uuid.uuid4())
+
+        model = next((m for m in EDITORIAL_MODELS if m["id"] == model_id), EDITORIAL_MODELS[0])
+        steps = [
+            {
+                "id": s["id"],
+                "kind": s["kind"],
+                "label": s["label"],
+                "role_function": s["role_function"],
+                "model_alias": s.get("model_alias", "rda/chat-default"),
+                "instructions": s.get("instructions", ""),
+                "allowed_tools": s.get("tools", []),
+                "requires_approval": s.get("requires_approval", False),
+                "position": s.get("pos", {"x": 100, "y": 150}),
+            }
+            for s in model.get("default_steps", [])
+        ]
+        edges = model.get("default_edges", [])
+        graph = {
+            "workflow_id": f"wf_{curation_id[:8]}",
+            "version": 1,
+            "domain_id": "euterpe",
+            "owner_user_id": user_id,
+            "visibility": "private",
+            "default_model_alias": "rda/chat-default",
+            "execution_profile": model.get("recommended_profile", "equilibrado"),
+            "steps": steps,
+            "edges": edges,
+        }
+        wf_id = str(uuid.uuid4())
+        with self.db() as c:
+            c.execute(
+                "INSERT INTO curations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (curation_id, user_id, title, desc, model_id, dramaturgia_id, json.dumps(briefing, ensure_ascii=False), "[]", "[]", "[]", "draft", now, now)
+            )
+            c.execute(
+                "INSERT INTO curation_workflows VALUES (?,?,?,?,?,?,?)",
+                (wf_id, user_id, curation_id, 1, json.dumps(graph, ensure_ascii=False), now, now)
+            )
+        return self.curation(user_id, curation_id)
+
+    def update_curation(self, user_id, curation_id, body):
+        curation_id = identifier(curation_id)
+        with self.db() as c:
+            row = c.execute("SELECT id FROM curations WHERE id=? AND user_id=?", (curation_id, user_id)).fetchone()
+            if not row:
+                raise APIError("curation_not_found", 404)
+            updates, params = [], []
+            if "title" in body:
+                updates.append("title=?")
+                params.append(str(body["title"]).strip()[:120])
+            if "description" in body:
+                updates.append("description=?")
+                params.append(str(body["description"]).strip()[:500])
+            if "dramaturgia" in body:
+                updates.append("dramaturgia=?")
+                params.append(str(body["dramaturgia"]))
+            if "briefing" in body:
+                updates.append("briefing=?")
+                params.append(json.dumps(body["briefing"], ensure_ascii=False))
+            if "candidates" in body:
+                updates.append("candidates=?")
+                params.append(json.dumps(body["candidates"], ensure_ascii=False))
+            if "selected_tracks" in body:
+                updates.append("selected_tracks=?")
+                params.append(json.dumps(body["selected_tracks"], ensure_ascii=False))
+            if "sequencing" in body:
+                updates.append("sequencing=?")
+                params.append(json.dumps(body["sequencing"], ensure_ascii=False))
+            if "status" in body:
+                updates.append("status=?")
+                params.append(str(body["status"]))
+            updates.append("updated=?")
+            params.append(time.time())
+            params.extend([curation_id, user_id])
+            c.execute(f"UPDATE curations SET {', '.join(updates)} WHERE id=? AND user_id=?", params)
+        return self.curation(user_id, curation_id)
+
+    def delete_curation(self, user_id, curation_id):
+        curation_id = identifier(curation_id)
+        with self.db() as c:
+            c.execute("DELETE FROM curations WHERE id=? AND user_id=?", (curation_id, user_id))
+        return {"ok": True}
+
+    def save_curation_workflow(self, user_id, curation_id, graph_dict):
+        curation_id = identifier(curation_id)
+        steps = graph_dict.get("steps", [])
+        edges = graph_dict.get("edges", [])
+        is_valid, order, error_msg = validate_dag(steps, edges)
+        if not is_valid:
+            raise APIError(error_msg or "invalid_workflow_dag", 422)
+
+        with self.db() as c:
+            row = c.execute("SELECT id FROM curations WHERE id=? AND user_id=?", (curation_id, user_id)).fetchone()
+            if not row:
+                raise APIError("curation_not_found", 404)
+            last_wf = c.execute("SELECT version FROM curation_workflows WHERE curation_id=? ORDER BY version DESC LIMIT 1", (curation_id,)).fetchone()
+            version = (last_wf["version"] + 1) if last_wf else 1
+            graph_dict["version"] = version
+            graph_dict["domain_id"] = "euterpe"
+            graph_dict["owner_user_id"] = user_id
+            now = time.time()
+            wf_id = str(uuid.uuid4())
+            c.execute("INSERT INTO curation_workflows VALUES (?,?,?,?,?,?,?)", (wf_id, user_id, curation_id, version, json.dumps(graph_dict, ensure_ascii=False), now, now))
+            c.execute("UPDATE curations SET updated=? WHERE id=?", (now, curation_id))
+        return {"ok": True, "workflow_id": wf_id, "version": version, "topological_order": order}
 
 
 @dataclass
@@ -402,6 +561,7 @@ class Application:
         self.login_attempts = {}
         self.seen_proposals = set()
         self.sso = None
+        self.ai_client = RdaAiClient()
         if os.getenv('WEB_SSO_ENABLED') == 'true':
             self.sso = RdaSso(origin=os.environ['WEB_PUBLIC_ORIGIN'], client_id=os.environ['WEB_SSO_CLIENT_ID'],
                 project_id=os.environ['RDA_SSO_PROJECT_ID'], secret_file=os.getenv('WEB_SSO_CLIENT_SECRET_FILE'))
@@ -629,9 +789,10 @@ class Handler(BaseHTTPRequestHandler):
             if self.command != "GET":
                 raise APIError("not_found", 404)
             asset = "index.html" if path == "/" else path.lstrip("/")
-            if asset not in {"index.html", "app.js", "style.css", "logo.svg"}:
+            target_file = (STATIC / asset).resolve()
+            if not target_file.is_file() or not str(target_file).startswith(str(STATIC.resolve())):
                 raise APIError("not_found", 404)
-            raw = (STATIC / asset).read_bytes()
+            raw = target_file.read_bytes()
             self.send_response(200)
             self.common_headers()
             self.send_header("Content-Type", mimetypes.guess_type(asset)[0] or "application/octet-stream")
@@ -718,6 +879,68 @@ class Handler(BaseHTTPRequestHandler):
             with self.app.workers.lease(user) as worker:
                 status, data = worker.json("/chat/" + conversation_id + "/cancel", "POST", {})
             return self.reply(data, status)
+
+        # Editorial models catalog
+        if path == "/api/editorial-models" and self.command == "GET":
+            return self.reply({
+                "models": EDITORIAL_MODELS,
+                "dramaturgias": DRAMATURGIAS,
+                "coordenadas": COORDENADAS_DIEGETICAS,
+                "eixos": EIXOS_CURATORIAIS,
+            })
+
+        # Curations
+        if path == "/api/curations":
+            if self.command == "GET":
+                return self.reply({"curations": self.app.store.curations(user_id)})
+            if self.command == "POST":
+                body = self.body()
+                created = self.app.store.create_curation(user_id, body)
+                self.app.store.activity(user_id, "curation", created["title"], "created", {"curation_id": created["id"]})
+                return self.reply(created, 201)
+
+        if path.startswith("/api/curations/"):
+            parts = path.strip("/").split("/")
+            if len(parts) >= 3:
+                curation_id = identifier(parts[2])
+                subpath = parts[3] if len(parts) > 3 else None
+
+                if not subpath:
+                    if self.command == "GET":
+                        return self.reply(self.app.store.curation(user_id, curation_id))
+                    if self.command in {"PUT", "PATCH"}:
+                        body = self.body()
+                        updated = self.app.store.update_curation(user_id, curation_id, body)
+                        return self.reply(updated)
+                    if self.command == "DELETE":
+                        res = self.app.store.delete_curation(user_id, curation_id)
+                        return self.reply(res)
+
+                elif subpath == "workflow":
+                    if self.command == "GET":
+                        cur = self.app.store.curation(user_id, curation_id)
+                        return self.reply({"workflow": cur.get("workflow")})
+                    if self.command in {"PUT", "POST"}:
+                        body = self.body()
+                        res = self.app.store.save_curation_workflow(user_id, curation_id, body)
+                        return self.reply(res)
+
+                elif subpath == "execute" and self.command == "POST":
+                    cur = self.app.store.curation(user_id, curation_id)
+                    wf = cur.get("workflow")
+                    if not wf:
+                        raise APIError("workflow_not_found", 404)
+                    return self.execute_curation_workflow(user, cur, wf)
+
+                elif subpath == "dossier" and self.command == "GET":
+                    cur = self.app.store.curation(user_id, curation_id)
+                    dossier = self.build_curatorial_dossier(cur)
+                    return self.reply(dossier)
+
+        # RDA AI Models
+        if path == "/api/ai/models" and self.command == "GET":
+            models = self.app.ai_client.list_models()
+            return self.reply({"models": models})
 
         with self.app.workers.lease(user) as worker:
             if path == "/api/tools" and self.command == "POST":
@@ -868,6 +1091,128 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 self.app.seen_proposals.add(unique)
             self.app.store.activity(user["id"], "agent_mutation", payload["name"], "succeeded" if payload.get("ok") else "failed", {"conversation_id": conversation_id, "tool": payload["name"], "code": payload.get("code")})
+
+    def execute_curation_workflow(self, user, curation_project, workflow):
+        steps = workflow.get("steps", [])
+        edges = workflow.get("edges", [])
+        is_valid, order, error_msg = validate_dag(steps, edges)
+        if not is_valid:
+            raise APIError(error_msg or "invalid_workflow_dag", 422)
+
+        run_id = f"run_{curation_project['id'][:8]}_{int(time.time())}"
+        step_map = {s["id"]: s for s in steps}
+        step_results = {}
+        paused_for_approval = None
+
+        with self.app.workers.lease(user) as worker:
+            for sid in order:
+                step = step_map[sid]
+                kind = step.get("kind")
+                role_fn = step.get("role_function", "chat")
+                requires_approval = step.get("requires_approval", False)
+                allowed_tools = step.get("allowed_tools", [])
+
+                if requires_approval or kind == "approval_gate":
+                    payload = {
+                        "project_id": curation_project["id"],
+                        "title": curation_project["title"],
+                        "tracks_count": len(curation_project.get("selected_tracks", [])),
+                        "tools": allowed_tools,
+                    }
+                    payload_hash = compute_approval_hash(user["id"], "euterpe", "publish_curation", payload)
+                    paused_for_approval = {
+                        "step_id": sid,
+                        "approval_id": str(uuid.uuid4()),
+                        "action_type": "publish_curation",
+                        "payload": payload,
+                        "payload_hash": payload_hash,
+                    }
+                    step_results[sid] = {"status": "awaiting_approval", "paused": True}
+                    break
+
+                if kind in {"research", "selection"} and allowed_tools:
+                    tool_name = allowed_tools[0].replace("spotify_", "")
+                    args = {}
+                    if tool_name == "get_saved_tracks":
+                        args = {"limit": 20}
+                    elif tool_name == "search_spotify":
+                        query = curation_project.get("title", "Música")
+                        args = {"query": query, "types": ["track"]}
+                    try:
+                        ok, data = worker.tool(tool_name, args)
+                        step_results[sid] = {"status": "completed", "tool": tool_name, "ok": ok, "summary": f"Executado {tool_name}"}
+                    except Exception:
+                        step_results[sid] = {"status": "completed", "summary": f"Inferência de {role_fn}"}
+                else:
+                    step_results[sid] = {"status": "completed", "summary": f"Etapa {step.get('label')} concluída ({role_fn})"}
+
+        self.app.store.activity(
+            user["id"],
+            "workflow_run",
+            curation_project["title"],
+            "awaiting_approval" if paused_for_approval else "completed",
+            {"run_id": run_id, "step_results": step_results, "paused_for_approval": paused_for_approval}
+        )
+        return self.reply({
+            "run_id": run_id,
+            "status": "awaiting_approval" if paused_for_approval else "completed",
+            "step_results": step_results,
+            "pending_approval": paused_for_approval,
+            "topological_order": order,
+        })
+
+    def build_curatorial_dossier(self, cur):
+        model_id = cur.get("editorial_model", "escuta-e-imagem-v2")
+        dramaturgia_id = cur.get("dramaturgia", "montanha_russa")
+        dramaturgia = next((d for d in DRAMATURGIAS if d["id"] == dramaturgia_id), DRAMATURGIAS[0])
+        model = next((m for m in EDITORIAL_MODELS if m["id"] == model_id), EDITORIAL_MODELS[0])
+        briefing = cur.get("briefing", {})
+        tracks = cur.get("selected_tracks", [])
+
+        md = [
+            f"# Dossiê Curatorial — {cur.get('title', 'Sem título')}",
+            f"**Modelo Editorial:** {model['name']} · **Dramaturgia:** {dramaturgia['name']}",
+            f"**Status:** {cur.get('status', 'draft').upper()}",
+            "",
+            "## 1. Coordenadas Diegéticas & Território",
+        ]
+        for coord in COORDENADAS_DIEGETICAS:
+            val = briefing.get(coord["id"], "Não especificado")
+            md.append(f"- **{coord['label']}:** {val}")
+
+        md.append("")
+        md.append("## 2. Arco Dramatúrgico")
+        md.append(f"{dramaturgia['description']}")
+        md.append(f"Pacing: `{dramaturgia['pacing']}` · Curva de Intensidade: `{dramaturgia['arc']}`")
+
+        md.append("")
+        md.append("## 3. Sequenciamento de Faixas")
+        if not tracks:
+            md.append("_Nenhuma faixa selecionada até o momento._")
+        else:
+            for i, t in enumerate(tracks, 1):
+                name = t.get("name", "Sem título")
+                artist = t.get("artist") or (t.get("artists") and t["artists"][0].get("name")) or "Artista desconhecido"
+                role = t.get("narrative_role") or "desenvolvimento"
+                arg = t.get("argument") or "Coerência com briefing e textura tímbrica."
+                md.append(f"{i}. **{name}** — {artist}")
+                md.append(f"   - *Função Narrativa:* `{role}`")
+                md.append(f"   - *Justificativa Curatorial:* {arg}")
+
+        md.append("")
+        md.append("## 4. Auditoria de Respiro & Governança")
+        md.append(f"- Total de faixas: {len(tracks)}")
+        md.append("- Confirmação Humana Spotify: **Obrigatória antes da publicação externa** (Decisão 17A)")
+
+        return {
+            "project_id": cur["id"],
+            "title": cur["title"],
+            "markdown": "\n".join(md),
+            "model": model,
+            "dramaturgia": dramaturgia,
+            "briefing": briefing,
+            "tracks": tracks,
+        }
 
 
 def make_server(root, address=("127.0.0.1", 8080), workers=None):

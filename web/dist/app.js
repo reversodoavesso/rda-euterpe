@@ -30,6 +30,14 @@ const state = {
   authMode: "login",
   sso: { enabled: false },
   ssoLinked: false,
+  curations: [],
+  activeCuration: null,
+  curationsTab: "projects",
+  editorialModels: null,
+  workflowSelectedStep: null,
+  workflowMode: "canvas",
+  workflowValidation: null,
+  workflowExecution: null,
 };
 const names = {
   get_playlists: "Consultar playlists",
@@ -88,8 +96,24 @@ const errors = {
     "O servidor está ocupado. Tente novamente em instantes.",
 };
 function h(tag, attrs = {}, ...children) {
+  const finalAttrs = { ...attrs };
+  if (tag === "input") {
+    const t = finalAttrs.type || "text";
+    if (t === "checkbox") {
+      finalAttrs.class = ["rda-checkbox-native", finalAttrs.class || ""].filter(Boolean).join(" ");
+    } else if (t === "radio") {
+      finalAttrs.class = ["rda-radio-native", finalAttrs.class || ""].filter(Boolean).join(" ");
+    } else {
+      finalAttrs.class = ["rda-input", "rda-input--md", finalAttrs.class || ""].filter(Boolean).join(" ");
+    }
+  } else if (tag === "select") {
+    finalAttrs.class = ["rda-select__field", "rda-select__field--md", finalAttrs.class || ""].filter(Boolean).join(" ");
+  } else if (tag === "textarea") {
+    finalAttrs.class = ["rda-textarea__field", "rda-textarea__field--md", finalAttrs.class || ""].filter(Boolean).join(" ");
+  }
+
   const el = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) {
+  for (const [key, value] of Object.entries(finalAttrs)) {
     if (value === null || value === undefined) continue;
     if (key.startsWith("on"))
       el.addEventListener(key.slice(2).toLowerCase(), value);
@@ -109,9 +133,48 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 function button(text, fn, cls = "", attrs = {}) {
+  const isSm = cls.includes("small") || cls.includes("sm") || cls.includes("icon-btn");
+  const sizeCls = isSm ? "rda-button--sm" : "rda-button--md";
+  let color = "secondary";
+  let style = "matte";
+  if (cls.includes("primary") || cls.includes("cta")) {
+    color = "primary";
+    style = "solid";
+  } else if (cls.includes("danger")) {
+    color = "danger";
+    style = "outlined";
+  } else if (cls.includes("ghost") || cls.includes("subtle")) {
+    color = "ghost";
+    style = "matte";
+  } else if (cls.includes("nav-btn")) {
+    color = "ghost";
+    style = "matte";
+  }
+  const finalCls = ["rda-button", sizeCls, cls].filter(Boolean).join(" ");
+  const mergedAttrs = {
+    type: "button",
+    "data-wrap": "true",
+    "data-color": attrs["data-color"] || color,
+    "data-style": attrs["data-style"] || style,
+    ...attrs,
+    class: finalCls,
+    onClick: () => safe(fn),
+  };
+  return h("button", mergedAttrs, text);
+}
+function badge(text, kind = "secondary", attrs = {}) {
+  const isSm = !attrs.size || attrs.size === "sm";
+  const sizeCls = isSm ? "rda-badge--sm" : "rda-badge--md";
+  const cls = ["badge", "rda-badge", sizeCls, attrs.class || ""].filter(Boolean).join(" ");
   return h(
-    "button",
-    { type: "button", class: cls, onClick: () => safe(fn), ...attrs },
+    "span",
+    {
+      "data-wrap": "true",
+      "data-color": kind,
+      "data-style": attrs.style || "glass",
+      ...attrs,
+      class: cls,
+    },
     text,
   );
 }
@@ -121,8 +184,13 @@ function safe(fn) {
 function toast(text, error = false) {
   const n = h(
     "div",
-    { class: "toast" + (error ? " error" : ""), role: "status" },
-    text,
+    {
+      class: "toast rda-toast rda-toast--md" + (error ? " error" : ""),
+      "data-color": error ? "danger" : "success",
+      "data-style": "elevated",
+      role: "status",
+    },
+    h("div", { class: "rda-toast__content" }, text),
   );
   $("#notifications").append(n);
   setTimeout(() => n.remove(), 6500);
@@ -195,28 +263,35 @@ function playlistId(p) {
 function brand() {
   return h(
     "div",
-    { class: "brand" },
-    h("img", { src: "/logo.svg", alt: "" }),
-    "euterpe",
+    { class: "brand rda-sidebar__header" },
+    h("img", { src: "/logo.svg", alt: "Euterpe Logo", class: "rda-logo rda-logo--sm brand-logo" }),
+    h("span", { class: "rda-typography rda-typography--lg rda-typography--bold brand-name" }, "euterpe"),
   );
 }
-function field(label, input) {
-  return h("label", {}, label, input);
+function field(label, input, help = "") {
+  return h(
+    "label",
+    { class: "field rda-form-field" },
+    h("span", { class: "rda-form-label" }, label),
+    input,
+    help ? h("small", { class: "rda-form-hint" }, help) : null,
+  );
 }
 function pill() {
+  const isAuth = state.status?.spotify?.authenticated;
   return button(
     h(
       "span",
-      { class: "row" },
+      { class: "row", style: "gap: 6px" },
       h("i", { class: "dot" }),
-      state.status?.spotify?.authenticated
-        ? "Spotify conectado"
-        : "Conectar Spotify",
+      isAuth ? "Spotify conectado" : "Conectar Spotify",
     ),
     pairSpotify,
-    "pill " + (state.status?.spotify?.authenticated ? "online" : ""),
+    "pill rda-button--sm " + (isAuth ? "online" : ""),
     {
-      "aria-label": state.status?.spotify?.authenticated
+      "data-color": isAuth ? "primary" : "ghost",
+      "data-style": "outlined",
+      "aria-label": isAuth
         ? "Ver conexão Spotify"
         : "Conectar conta Spotify",
     },
@@ -253,13 +328,20 @@ function authScreen() {
   });
   const submit = h(
     "button",
-    { type: "submit", class: "primary" },
+    {
+      type: "submit",
+      class: "primary rda-button rda-button--md",
+      "data-color": "primary",
+      "data-style": "solid",
+      "data-wrap": "true",
+    },
     register ? "Criar meu espaço" : "Entrar no meu espaço",
   );
-  const err = h("div", { class: "inline-error", role: "alert" });
+  const err = h("div", { class: "inline-error rda-form-message rda-form-message--error", role: "alert" });
   const form = h(
     "form",
     {
+      class: "auth-form-fields",
       onSubmit: async (e) => {
         e.preventDefault();
         submit.disabled = true;
@@ -300,11 +382,11 @@ function authScreen() {
         "div",
         {},
         h("div", { class: "record" }),
-        h("div", { class: "eyebrow" }, "Um espaço para a sua música"),
-        h("h1", {}, "Boas playlists começam com uma conversa."),
+        h("div", { class: "eyebrow rda-page-header__eyebrow" }, "Um espaço para a sua música"),
+        h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "Boas playlists começam com uma conversa."),
         h(
           "p",
-          {},
+          { class: "rda-typography rda-typography--base muted" },
           "Explore sua biblioteca, descubra músicas e dê forma às suas ideias com o Euterpe.",
         ),
       ),
@@ -315,15 +397,15 @@ function authScreen() {
       { class: "auth-panel" },
       h(
         "div",
-        { class: "auth-form" },
+        { class: "auth-form rda-card rda-card--p-xl", "data-color": "surface", "data-style": "matte" },
         h(
           "div",
-          { class: "eyebrow" },
+          { class: "eyebrow rda-page-header__eyebrow" },
           register ? "Seu próximo lado A" : "Bem-vindo de volta",
         ),
         h(
           "h2",
-          {},
+          { class: "rda-typography rda-typography--2xl rda-typography--semibold" },
           register ? "Crie seu espaço musical" : "Entre no seu ritmo",
         ),
         h(
@@ -380,6 +462,7 @@ async function signedIn(r) {
 function shell() {
   const navs = [
     ["chat", "✦", "Conversar"],
+    ["curations", "◈", "Curadorias"],
     ["library", "▦", "Biblioteca"],
     ["search", "⌕", "Explorar"],
     ["activity", "◷", "Atividade"],
@@ -387,69 +470,73 @@ function shell() {
   ];
   const sidebar = h(
     "aside",
-    { class: "sidebar", id: "sidebar" },
+    { class: "sidebar rda-app-shell__sidebar rda-sidebar rda-sidebar--left", id: "sidebar" },
     brand(),
     h(
       "nav",
-      { "aria-label": "Navegação principal" },
+      { class: "rda-sidebar__list", "aria-label": "Navegação principal" },
       navs.map(([id, icon, label]) =>
         button(
           [
-            h("span", { class: "nav-symbol", "aria-hidden": true }, icon),
-            label,
+            h("span", { class: "nav-symbol rda-sidebar__item-icon", "aria-hidden": true }, icon),
+            h("span", { class: "rda-sidebar__item-label" }, label),
           ],
           () => navigate(id),
-          "nav-btn" + (state.view === id ? " active" : ""),
-          { "aria-current": state.view === id ? "page" : null },
+          "nav-btn rda-sidebar__item" + (state.view === id ? " rda-sidebar__item--active active" : ""),
+          {
+            "aria-current": state.view === id ? "page" : null,
+            "data-color": state.view === id ? "primary" : "ghost",
+            "data-style": "matte",
+          },
         ),
       ),
     ),
     h(
       "div",
-      {},
+      { class: "rda-sidebar__group conversation-section" },
       h(
         "div",
-        { class: "row between" },
-        h("span", { class: "eyebrow" }, "Suas conversas"),
+        { class: "rda-sidebar__group-label row between" },
+        h("span", { class: "eyebrow rda-page-header__eyebrow" }, "Suas conversas"),
         button("+", newConversation, "ghost icon-btn", {
           "aria-label": "Nova conversa",
         }),
       ),
-    ),
-    h(
-      "div",
-      { class: "conversation-list" },
-      state.conversations.length
-        ? state.conversations.map((c) =>
-            h(
-              "div",
-              {
-                class:
-                  "conversation" +
-                  (c.id === state.conversation ? " active" : ""),
-              },
-              button(c.title, () => openConversation(c.id), "ghost"),
-              h(
-                "div",
-                { class: "conversation-tools" },
-                button("✎", () => renameConversation(c), "ghost", {
-                  "aria-label": "Renomear " + c.title,
-                }),
-                button("×", () => deleteConversation(c), "ghost", {
-                  "aria-label": "Excluir " + c.title,
-                }),
-              ),
-            ),
-          )
-        : h("p", { class: "small muted" }, "Sua próxima ideia começa aqui."),
-    ),
-    h(
-      "div",
-      { class: "account row" },
       h(
         "div",
-        { class: "avatar" },
-        state.user.display_name.slice(0, 1).toUpperCase(),
+        { class: "rda-sidebar__group-items conversation-list" },
+        state.conversations.length
+          ? state.conversations.map((c) =>
+              h(
+                "div",
+                {
+                  class:
+                    "conversation" +
+                    (c.id === state.conversation ? " active" : ""),
+                },
+                button(c.title, () => openConversation(c.id), "ghost"),
+                h(
+                  "div",
+                  { class: "conversation-tools" },
+                  button("✎", () => renameConversation(c), "ghost", {
+                    "aria-label": "Renomear " + c.title,
+                  }),
+                  button("×", () => deleteConversation(c), "ghost", {
+                    "aria-label": "Excluir " + c.title,
+                  }),
+                ),
+              ),
+            )
+          : h("p", { class: "small muted" }, "Sua próxima ideia começa aqui."),
+      ),
+    ),
+    h(
+      "div",
+      { class: "account rda-sidebar__footer row" },
+      h(
+        "div",
+        { class: "avatar rda-avatar rda-avatar--sm", "data-color": "primary", "data-style": "glass" },
+        h("span", { class: "rda-avatar__fallback" }, state.user.display_name.slice(0, 1).toUpperCase()),
       ),
       h(
         "div",
@@ -462,17 +549,18 @@ function shell() {
   );
   const labels = {
     chat: "Seu estúdio de playlists",
+    curations: "Curadorias e editor de fluxos",
     library: "Tudo o que você gosta",
     search: "Encontre seu próximo som",
     activity: "Cada escolha, registrada",
     settings: "Do seu jeito",
   };
   const main = h(
-    "main",
-    { class: "workspace" },
+    "div",
+    { class: "workspace rda-app-shell__main" },
     h(
       "header",
-      { class: "topbar row between" },
+      { class: "topbar rda-app-shell__header row between" },
       h(
         "div",
         { class: "row" },
@@ -482,7 +570,7 @@ function shell() {
           "ghost mobile-menu",
           { "aria-label": "Abrir navegação" },
         ),
-        h("span", { class: "eyebrow" }, labels[state.view]),
+        h("span", { class: "eyebrow rda-page-header__eyebrow" }, labels[state.view]),
       ),
       h(
         "div",
@@ -496,15 +584,22 @@ function shell() {
       ),
     ),
     h(
-      "section",
-      { class: "view", id: "view", "aria-label": labels[state.view] },
+      "main",
+      { class: "view rda-app-shell__content", id: "view", tabindex: "-1", "aria-label": labels[state.view] },
       view(),
     ),
+    h(
+      "footer",
+      { class: "topbar-footer rda-app-shell__footer row between small muted" },
+      h("span", {}, "Euterpe · Ecossistema RDA"),
+      h("span", {}, "Curadoria diegética & IA soberana"),
+    ),
   );
-  return h("div", { class: "shell" }, sidebar, main, review());
+  return h("div", { class: "shell rda-app-shell", "data-layout": "console" }, sidebar, main, review());
 }
 function view() {
   if (state.view === "chat") return chatView();
+  if (state.view === "curations") return curationsView();
   if (state.view === "library") return libraryView();
   if (state.view === "search") return searchView();
   if (state.view === "activity") return activityView();
@@ -519,6 +614,7 @@ async function navigate(v) {
     toast("A conversa continua em segundo plano.");
   state.view = v;
   render();
+  if (v === "curations") await loadCurations();
   if (v === "library" && !state.playlists) await loadLibrary();
   if (v === "activity") await loadActivity();
   if (v === "settings") await loadSettings();
@@ -563,6 +659,9 @@ function modal(content) {
   if (!d.open) d.showModal();
   return d;
 }
+function openModal(content) {
+  return modal(content);
+}
 function closeModal() {
   clearTimeout(pairingTimer);
   pairingGeneration++;
@@ -573,18 +672,22 @@ function closeModal() {
 function modalFrame(title, content, actions = []) {
   return h(
     "div",
-    {},
+    { class: "rda-dialog__container" },
     h(
-      "div",
-      { class: "modal-header" },
-      h("span", { class: "eyebrow" }, "Euterpe"),
+      "header",
+      { class: "modal-header rda-dialog__header" },
+      h(
+        "div",
+        {},
+        h("span", { class: "eyebrow rda-page-header__eyebrow" }, "EUTERPE"),
+        h("h2", { class: "rda-dialog__title" }, title),
+      ),
       button("×", closeModal, "ghost icon-btn", {
         "aria-label": "Fechar janela",
       }),
     ),
-    h("h2", {}, title),
-    content,
-    h("div", { class: "modal-actions" }, actions),
+    h("div", { class: "modal-body rda-dialog__body" }, content),
+    h("footer", { class: "modal-actions rda-dialog__footer" }, actions),
   );
 }
 function renameConversation(c) {
@@ -719,18 +822,18 @@ function chatView() {
     ),
     h(
       "div",
-      { class: "composer" },
+      { class: "composer rda-card rda-card--p-sm", "data-color": "surface", "data-style": "outlined" },
       text,
       h(
         "div",
         { class: "composer-footer" },
-        h("span", {}, "✦ Seu gosto é o ponto de partida"),
+        h("span", { class: "small muted" }, "✦ Seu gosto é o ponto de partida"),
         submit,
       ),
     ),
     h(
       "p",
-      { class: "composer-note" },
+      { class: "composer-note small muted" },
       "Alterações no Spotify passam pela sua aprovação. Shift + Enter para uma nova linha.",
     ),
   );
@@ -767,10 +870,10 @@ function welcome() {
       h("span", { class: "star" }, "✦"),
       "Seu gosto. Novas possibilidades.",
     ),
-    h("h1", {}, "O que vamos ouvir", h("br"), "a seguir?"),
+    h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "O que vamos ouvir", h("br"), "a seguir?"),
     h(
       "p",
-      {},
+      { class: "muted" },
       "Uma ideia, um momento ou aquela playlist que precisa de carinho. Conte para o Euterpe e a gente encontra o ritmo.",
     ),
     h(
@@ -790,7 +893,7 @@ function welcome() {
     ),
     h(
       "div",
-      { class: "welcome-note" },
+      { class: "welcome-note small muted" },
       "◉",
       state.status?.spotify?.authenticated
         ? "Sua biblioteca Spotify está pronta para explorar."
@@ -801,7 +904,11 @@ function welcome() {
 function messageNode(m) {
   return h(
     "article",
-    { class: "message " + m.role },
+    {
+      class: "message " + m.role + " rda-card rda-card--p-md",
+      "data-color": "surface",
+      "data-style": m.role === "user" ? "matte" : "outlined",
+    },
     h(
       "div",
       { class: "message-mark", "aria-hidden": true },
@@ -812,7 +919,7 @@ function messageNode(m) {
       { class: "message-body" },
       h(
         "div",
-        { class: "message-name" },
+        { class: "message-name rda-typography rda-typography--sm rda-typography--semibold" },
         m.role === "user" ? "Você" : "Euterpe",
       ),
       h("div", { class: "message-text" }, m.content),
@@ -1111,34 +1218,46 @@ function libraryView() {
   return h(
     "div",
     {},
-    h("div", { class: "eyebrow" }, "Sua coleção"),
-    h("h1", {}, "Música que fica."),
+    h("div", { class: "eyebrow rda-page-header__eyebrow" }, "Sua coleção"),
+    h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "Música que fica."),
     h(
       "p",
       { class: "muted small" },
       "Revisite suas playlists e encontre o próximo ponto de partida.",
     ),
     h(
-      "div",
-      { class: "tabs" },
-      button(
+      "nav",
+      { class: "tabs rda-segmented-control rda-segmented-control--sm", role: "tablist", "aria-label": "Abas da biblioteca" },
+      h(
+        "button",
+        {
+          type: "button",
+          role: "tab",
+          class: "rda-segmented-control__item" + (state.libraryTab === "playlists" ? " active" : ""),
+          "aria-pressed": state.libraryTab === "playlists" ? "true" : "false",
+          onClick: () => {
+            state.libraryTab = "playlists";
+            state.selected = null;
+            replaceView();
+          },
+        },
         "Playlists" + (state.playlists ? " · " + state.playlists.length : ""),
-        () => {
-          state.libraryTab = "playlists";
-          state.selected = null;
-          replaceView();
-        },
-        state.libraryTab === "playlists" ? "active" : "",
       ),
-      button(
-        "♡ Músicas curtidas",
-        async () => {
-          state.libraryTab = "liked";
-          state.selected = null;
-          if (!state.liked.length) await loadLiked();
-          replaceView();
+      h(
+        "button",
+        {
+          type: "button",
+          role: "tab",
+          class: "rda-segmented-control__item" + (state.libraryTab === "liked" ? " active" : ""),
+          "aria-pressed": state.libraryTab === "liked" ? "true" : "false",
+          onClick: async () => {
+            state.libraryTab = "liked";
+            state.selected = null;
+            if (!state.liked.length) await loadLiked();
+            replaceView();
+          },
         },
-        state.libraryTab === "liked" ? "active" : "",
+        "♡ Músicas curtidas",
       ),
     ),
     h(
@@ -1214,7 +1333,9 @@ function libraryContent() {
             "button",
             {
               type: "button",
-              class: "playlist-card",
+              class: "playlist-card rda-card rda-card--p-sm",
+              "data-color": "surface",
+              "data-style": "outlined",
               onClick: () => safe(() => openPlaylist(p)),
             },
             h("div", { class: "playlist-art", "aria-hidden": true }, "≋"),
@@ -1412,7 +1533,14 @@ function searchView() {
     input,
     h(
       "button",
-      { type: "submit", class: "primary", disabled: state.searchBusy },
+      {
+        type: "submit",
+        class: "primary rda-button rda-button--md",
+        "data-color": "primary",
+        "data-style": "solid",
+        "data-wrap": "true",
+        disabled: state.searchBusy,
+      },
       state.searchBusy ? "Buscando…" : "Buscar ↗",
     ),
   );
@@ -1426,8 +1554,8 @@ function searchView() {
   return h(
     "div",
     {},
-    h("div", { class: "eyebrow" }, "Dê espaço à descoberta"),
-    h("h1", {}, "Encontre o seu som."),
+    h("div", { class: "eyebrow rda-page-header__eyebrow" }, "Dê espaço à descoberta"),
+    h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "Encontre o seu som."),
     h(
       "p",
       { class: "small muted" },
@@ -1435,16 +1563,22 @@ function searchView() {
     ),
     form,
     h(
-      "div",
-      { class: "tabs" },
+      "nav",
+      { class: "tabs rda-segmented-control rda-segmented-control--sm", role: "tablist", "aria-label": "Categorias de busca" },
       tabs.map(([id, label]) =>
-        button(
-          label,
-          () => {
-            state.searchTab = id;
-            replaceView();
+        h(
+          "button",
+          {
+            type: "button",
+            role: "tab",
+            class: "rda-segmented-control__item" + (state.searchTab === id ? " active" : ""),
+            "aria-pressed": state.searchTab === id ? "true" : "false",
+            onClick: () => {
+              state.searchTab = id;
+              replaceView();
+            },
           },
-          state.searchTab === id ? "active" : "",
+          label,
         ),
       ),
     ),
@@ -1624,27 +1758,27 @@ function review() {
   const pending = state.proposals.length;
   return h(
     "aside",
-    { class: "review", "aria-label": "Revisão da playlist" },
+    { class: "review rda-sidebar rda-sidebar--right", "aria-label": "Revisão da playlist" },
     h(
       "div",
-      { class: "review-head row between" },
+      { class: "review-head rda-sidebar__header row between" },
       h(
         "div",
         {},
-        h("div", { class: "eyebrow" }, "Antes do play"),
-        h("h2", {}, "Sua seleção"),
+        h("div", { class: "eyebrow rda-page-header__eyebrow" }, "Antes do play"),
+        h("h2", { class: "rda-typography rda-typography--lg rda-typography--bold" }, "Sua seleção"),
       ),
       button(
         "×",
         () => $(".review").classList.remove("visible"),
-        "ghost mobile-review",
+        "ghost mobile-review icon-btn",
         { "aria-label": "Fechar revisão" },
       ),
     ),
     pending > 0 &&
       h(
         "div",
-        { class: "review-banner" },
+        { class: "review-banner rda-notice rda-notice--info", "data-color": "info" },
         "✦ " +
           pending +
           (pending > 1 ? " alterações" : " alteração") +
@@ -1658,7 +1792,7 @@ function review() {
     d
       ? h(
           "div",
-          { class: "review-body draft" },
+          { class: "review-body rda-sidebar__list draft" },
           h(
             "div",
             { class: "draft-fields" },
@@ -1700,7 +1834,7 @@ function review() {
           !d.tracks.length &&
             h(
               "div",
-              { class: "empty" },
+              { class: "empty rda-empty-state" },
               "Use a busca ou sua biblioteca para adicionar músicas.",
             ),
           d.tracks.length > 1 &&
@@ -1721,19 +1855,19 @@ function review() {
         )
       : h(
           "div",
-          { class: "review-empty" },
+          { class: "review-empty rda-empty-state" },
           h("div", { class: "record" }),
-          h("h3", {}, "Uma ideia ganha forma aqui."),
+          h("h3", { class: "rda-empty-state__title" }, "Uma ideia ganha forma aqui."),
           h(
             "p",
-            { class: "small" },
+            { class: "small muted rda-empty-state__description" },
             "Adicione músicas da biblioteca ou da busca. Reordene, refine e aprove quando estiver do seu jeito.",
           ),
           button("+ Começar uma seleção", newDraft, "ghost small"),
         ),
     h(
       "div",
-      { class: "review-footer" },
+      { class: "review-footer rda-sidebar__footer" },
       d && h("p", { class: "review-summary" }, draftSummary(d)),
       d &&
         button(
@@ -2180,33 +2314,42 @@ function activityView() {
   return h(
     "div",
     {},
-    h("div", { class: "eyebrow" }, "O caminho da sua coleção"),
-    h("h1", {}, "Cada mudança tem história."),
+    h("div", { class: "eyebrow rda-page-header__eyebrow" }, "O caminho da sua coleção"),
+    h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "Cada mudança tem história."),
     h(
       "p",
       { class: "small muted" },
       "Acompanhe as decisões e os resultados das alterações manuais e do agente.",
     ),
-    button("↻ Atualizar", loadActivity, "ghost small"),
+    h(
+      "div",
+      { style: "margin-bottom: var(--rda-spacing-4)" },
+      button("↻ Atualizar", loadActivity, "ghost small"),
+    ),
     state.activity.length
       ? state.activity.map((a) =>
           h(
             "article",
-            { class: "activity" },
+            {
+              class: "activity rda-card rda-card--p-md",
+              "data-color": "surface",
+              "data-style": "outlined",
+              style: "margin-bottom: var(--rda-spacing-3)",
+            },
             h(
               "div",
               { class: "row between" },
-              h("h3", {}, names[a.title] || a.title),
-              h(
-                "span",
-                { class: "badge " + a.status },
+              h("h3", { class: "rda-typography rda-typography--base rda-typography--semibold" }, names[a.title] || a.title),
+              badge(
                 labels[a.status] || a.status,
+                a.status === "succeeded" ? "success" : a.status === "failed" ? "danger" : "secondary",
+                { class: "badge " + a.status },
               ),
             ),
-            h("time", {}, new Date(a.created * 1000).toLocaleString("pt-BR")),
+            h("time", { class: "small muted" }, new Date(a.created * 1000).toLocaleString("pt-BR")),
             h(
               "p",
-              { class: "muted" },
+              { class: "muted small", style: "margin: var(--rda-spacing-2) 0" },
               a.kind === "decision"
                 ? "Decisão de aprovação. O resultado da operação é registrado separadamente."
                 : a.status === "succeeded"
@@ -2234,7 +2377,7 @@ function activityView() {
         )
       : h(
           "div",
-          { class: "empty" },
+          { class: "empty rda-empty-state" },
           "As alterações e suas aprovações aparecerão aqui.",
         ),
   );
@@ -2360,8 +2503,8 @@ function settingsView() {
   return h(
     "div",
     {},
-    h("div", { class: "eyebrow" }, "Afine sua experiência"),
-    h("h1", {}, "Um agente com o seu ritmo."),
+    h("div", { class: "eyebrow rda-page-header__eyebrow" }, "Afine sua experiência"),
+    h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "Um agente com o seu ritmo."),
     h(
       "p",
       { class: "small muted" },
@@ -2370,8 +2513,8 @@ function settingsView() {
     h(
       "div",
       { class: "settings-form" },
-      state.sso.enabled && h("section", { class: "settings-card stack" },
-        h("h2", {}, "Conta RDA"),
+      state.sso.enabled && h("section", { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
+        h("h2", { class: "rda-typography rda-typography--xl rda-typography--semibold" }, "Conta RDA"),
         h("p", { class: "small muted" }, state.ssoLinked
           ? "Sua conta está vinculada ao RDA. Seus dados e sua conexão Spotify continuam neste espaço."
           : "Vincule sua conta para entrar com RDA e manter os dados deste espaço. Depois da vinculação, o acesso será pelo RDA."),
@@ -2383,8 +2526,8 @@ function settingsView() {
         }, "primary")),
       h(
         "section",
-        { class: "settings-card stack" },
-        h("h2", {}, "Inteligência artificial"),
+        { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
+        h("h2", { class: "rda-typography rda-typography--xl rda-typography--semibold" }, "Inteligência artificial"),
         field("Provedor", provider),
         field("Modelo", model),
         list,
@@ -2397,7 +2540,7 @@ function settingsView() {
         ),
         h(
           "div",
-          { class: "row" },
+          { class: "row", style: "gap: 8px" },
           button(
             "Listar modelos",
             async () => {
@@ -2429,8 +2572,8 @@ function settingsView() {
       ),
       h(
         "section",
-        { class: "settings-card stack" },
-        h("h2", {}, "Seu gosto, suas regras"),
+        { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
+        h("h2", { class: "rda-typography rda-typography--xl rda-typography--semibold" }, "Seu gosto, suas regras"),
         field("Preferências para o agente", instructions),
         h(
           "div",
@@ -2440,7 +2583,7 @@ function settingsView() {
         ),
         h(
           "div",
-          { class: "notice" },
+          { class: "notice rda-notice rda-notice--info", "data-color": "info" },
           "Toda alteração de playlist exige sua aprovação. Essa regra também vale para o agente.",
         ),
       ),
@@ -2467,6 +2610,844 @@ function settingsView() {
           "p",
           { class: "small muted" },
           "Player, capas personalizadas e recomendações nativas ainda dependem da expansão do backend headless.",
+        ),
+      ),
+    ),
+  );
+}
+
+/* ==========================================================================
+   RDA Ecosystem: Curations & Visual Workflow Editor (F5A / M1)
+   ========================================================================== */
+
+async function loadCurations() {
+  try {
+    if (!state.editorialModels) {
+      state.editorialModels = await api("/editorial-models");
+    }
+    const res = await api("/curations");
+    state.curations = res.curations || [];
+    if (state.curations.length > 0 && !state.activeCuration) {
+      state.activeCuration = state.curations[0];
+    }
+  } catch (err) {
+    showError(err);
+  }
+  render();
+}
+
+async function openCuration(id) {
+  try {
+    const cur = await api("/curations/" + id);
+    state.activeCuration = cur;
+    state.curationsTab = "workflow";
+    state.workflowSelectedStep = cur.workflow?.steps?.[0] || null;
+    state.workflowExecution = null;
+    state.workflowValidation = null;
+  } catch (err) {
+    showError(err);
+  }
+  render();
+}
+
+function openNewCurationModal() {
+  const models = state.editorialModels?.models || [];
+  const dramaturgias = state.editorialModels?.dramaturgias || [];
+  let titleInput, modelSelect, dramaSelect;
+  const briefingInputs = {};
+
+  const modalContent = h(
+    "div",
+    { class: "modal-content stack" },
+    h("h2", { class: "rda-dialog__title" }, "Novo Projeto de Curadoria"),
+    h(
+      "p",
+      { class: "small muted rda-dialog__description" },
+      "Crie um projeto autoral privado com modelo editorial e fluxo visual de etapas.",
+    ),
+    h(
+      "div",
+      { class: "field-pair" },
+      field("Título do projeto", (titleInput = h("input", { type: "text", value: "Minha Curadoria", maxlength: 120 }))),
+      field(
+        "Modelo editorial",
+        (modelSelect = h(
+          "select",
+          {},
+          models.map((m) => h("option", { value: m.id }, m.name + " (" + m.badge + ")")),
+        )),
+      ),
+    ),
+    field(
+      "Arco dramatúrgico",
+      (dramaSelect = h(
+        "select",
+        {},
+        dramaturgias.map((d) => h("option", { value: d.id }, d.name + " — " + d.description.slice(0, 50) + "...")),
+      )),
+    ),
+    h("h3", { class: "rda-typography rda-typography--sm rda-typography--semibold", style: "margin-top:10px" }, "Coordenadas Diegéticas Principais"),
+    field(
+      "Território / Geografia Cultural",
+      (briefingInputs["territorio"] = h("input", {
+        type: "text",
+        placeholder: "Ex: Sertão cósmico, Berlim oriental",
+      })),
+    ),
+    field(
+      "Estação / Clima / Luz",
+      (briefingInputs["luz"] = h("input", {
+        type: "text",
+        placeholder: "Ex: Garoa de inverno, Hora azul",
+      })),
+    ),
+    h(
+      "div",
+      { class: "modal-actions rda-dialog__footer" },
+      button("Cancelar", closeModal, "ghost"),
+      button("Criar Projeto", async () => {
+        const title = titleInput.value.trim() || "Nova Curadoria";
+        const editorial_model = modelSelect.value;
+        const dramaturgia = dramaSelect.value;
+        const briefing = {
+          territorio: briefingInputs["territorio"].value.trim(),
+          luz: briefingInputs["luz"].value.trim(),
+        };
+        try {
+          const created = await api("/curations", "POST", {
+            title,
+            editorial_model,
+            dramaturgia,
+            briefing,
+          });
+          closeModal();
+          toast("Projeto criado com sucesso.");
+          await loadCurations();
+          await openCuration(created.id);
+        } catch (err) {
+          showError(err);
+        }
+      }, "primary"),
+    ),
+  );
+  openModal(modalContent);
+}
+
+function curationsView() {
+  const tabs = [
+    ["projects", "Projetos (" + state.curations.length + ")"],
+    ["workflow", "Editor de Fluxos" + (state.activeCuration ? " (" + state.activeCuration.title + ")" : "")],
+    ["dossier", "Dossiê Curatorial"],
+    ["models", "Modelos & Dramaturgias"],
+  ];
+
+  return h(
+    "div",
+    { class: "curations-view" },
+    h(
+      "div",
+      { class: "row between", style: "margin-bottom: var(--rda-spacing-4); flex-wrap: wrap; gap: var(--rda-spacing-3)" },
+      h(
+        "nav",
+        { class: "rda-segmented-control rda-segmented-control--sm curation-tabs", role: "tablist", "aria-label": "Abas de curadoria" },
+        tabs.map(([id, label]) =>
+          h(
+            "button",
+            {
+              type: "button",
+              role: "tab",
+              class: "rda-segmented-control__item curation-tab-btn" + (state.curationsTab === id ? " active" : ""),
+              "aria-pressed": state.curationsTab === id ? "true" : "false",
+              onClick: () => {
+                state.curationsTab = id;
+                render();
+              },
+            },
+            label,
+          ),
+        ),
+      ),
+      button("+ Novo Projeto", openNewCurationModal, "primary small"),
+    ),
+    state.curationsTab === "projects" && curationsProjectsSubView(),
+    state.curationsTab === "workflow" && workflowEditorSubView(),
+    state.curationsTab === "dossier" && dossierSubView(),
+    state.curationsTab === "models" && editorialModelsSubView(),
+  );
+}
+
+function curationsProjectsSubView() {
+  if (!state.curations || state.curations.length === 0) {
+    return h(
+      "div",
+      { class: "empty-state rda-empty-state" },
+      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, "◈"),
+      h("h3", { class: "rda-empty-state__title" }, "Nenhum projeto de curadoria ainda"),
+      h(
+        "p",
+        { class: "small muted rda-empty-state__description" },
+        "Inicie um novo projeto usando modelos autorais como Escuta & Imagem v2.0 com editor visual de fluxos.",
+      ),
+      button("Criar Primeiro Projeto", openNewCurationModal, "primary"),
+    );
+  }
+
+  return h(
+    "div",
+    { class: "curations-grid" },
+    state.curations.map((cur) => {
+      const dramaturgia = (state.editorialModels?.dramaturgias || []).find((d) => d.id === cur.dramaturgia);
+      const isSelected = state.activeCuration?.id === cur.id;
+      return h(
+        "article",
+        {
+          class: "curation-card rda-card rda-card--p-md" + (isSelected ? " selected" : ""),
+          "data-color": "surface",
+          "data-style": isSelected ? "elevated" : "outlined",
+        },
+        h(
+          "div",
+          { class: "curation-card-header row between" },
+          h(
+            "div",
+            {},
+            badge(cur.editorial_model || "Escuta & Imagem", "primary", { class: "curation-badge" }),
+            h("h3", { class: "rda-typography rda-typography--lg rda-typography--semibold", style: "margin:6px 0 2px 0" }, cur.title),
+          ),
+          badge(
+            cur.status === "awaiting_approval" ? "Aguardando Aprovação" : cur.status === "completed" ? "Concluído" : "Rascunho",
+            cur.status === "awaiting_approval" ? "warning" : cur.status === "completed" ? "success" : "secondary",
+            { class: "curation-badge status-" + cur.status },
+          ),
+        ),
+        h(
+          "div",
+          { class: "small", style: "color:var(--rda-content-secondary); margin-top: 6px" },
+          "Dramaturgia: ",
+          h("strong", {}, dramaturgia?.name || cur.dramaturgia || "Livre"),
+        ),
+        cur.briefing?.territorio &&
+          h(
+            "div",
+            { class: "curation-briefing-preview rda-card rda-card--p-sm", "data-color": "surface", "data-style": "matte" },
+            h("span", {}, "Território: " + cur.briefing.territorio),
+            cur.briefing.luz && h("span", {}, "Luz: " + cur.briefing.luz),
+          ),
+        h(
+          "div",
+          { class: "row between", style: "margin-top:auto; padding-top: 12px" },
+          h("span", { class: "small muted" }, (cur.selected_tracks?.length || 0) + " faixas"),
+          h(
+            "div",
+            { class: "row", style: "gap:6px" },
+            button("Editor Visual", () => openCuration(cur.id), "primary small"),
+            button("Dossiê", () => {
+              state.activeCuration = cur;
+              state.curationsTab = "dossier";
+              render();
+            }, "ghost small"),
+            button("×", async () => {
+              if (confirm("Deseja excluir o projeto " + cur.title + "?")) {
+                await api("/curations/" + cur.id, "DELETE");
+                if (state.activeCuration?.id === cur.id) state.activeCuration = null;
+                await loadCurations();
+              }
+            }, "ghost icon-btn", { "aria-label": "Excluir " + cur.title }),
+          ),
+        ),
+      );
+    }),
+  );
+}
+
+function workflowEditorSubView() {
+  if (!state.activeCuration) {
+    return h(
+      "div",
+      { class: "empty-state rda-empty-state" },
+      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, "◈"),
+      h("h3", { class: "rda-empty-state__title" }, "Nenhum projeto selecionado"),
+      h("p", { class: "small muted rda-empty-state__description" }, "Selecione ou crie um projeto para abrir o Editor Visual de Fluxos."),
+      button("Ir para Projetos", () => {
+        state.curationsTab = "projects";
+        render();
+      }, "primary"),
+    );
+  }
+
+  const cur = state.activeCuration;
+  const wf = cur.workflow || { steps: [], edges: [] };
+  const steps = wf.steps || [];
+  const edges = wf.edges || [];
+
+  return h(
+    "div",
+    { class: "workflow-container" },
+    h(
+      "div",
+      { class: "workflow-toolbar rda-card rda-card--p-sm", "data-color": "surface", "data-style": "matte" },
+      h(
+        "div",
+        { class: "row", style: "gap:8px" },
+        h("strong", { class: "rda-typography rda-typography--sm rda-typography--bold" }, cur.title),
+        badge("v" + (wf.version || 1), "primary", { class: "curation-badge" }),
+        h("span", { class: "small muted" }, "Perfil: " + (wf.execution_profile || "equilibrado")),
+      ),
+      h(
+        "div",
+        { class: "row", style: "gap:6px; flex-wrap: wrap" },
+        button("+ Adicionar Etapa", addWorkflowStepModal, "ghost small"),
+        button("Validar DAG", validateWorkflowDag, "ghost small"),
+        button("Salvar Rascunho", saveWorkflow, "ghost small"),
+        button("▶ Executar Fluxo", executeWorkflow, "primary small"),
+        button(
+          state.workflowMode === "canvas" ? "Modo Lista Acessível" : "Modo Canvas Visual",
+          () => {
+            state.workflowMode = state.workflowMode === "canvas" ? "list" : "canvas";
+            render();
+          },
+          "ghost small",
+        ),
+      ),
+    ),
+    state.workflowValidation &&
+      h(
+        "div",
+        {
+          class: "approval-gate-banner rda-notice " + (state.workflowValidation.valid ? "rda-notice--success" : "rda-notice--danger"),
+          "data-color": state.workflowValidation.valid ? "success" : "danger",
+        },
+        h(
+          "h4",
+          { class: "rda-notice__title" },
+          state.workflowValidation.valid ? "✓ Grafo Acíclico Válido (DAG)" : "⚠ Erro de Validação no Grafo",
+        ),
+        h("div", { class: "small rda-notice__description" }, state.workflowValidation.message),
+      ),
+    state.workflowExecution?.pending_approval && approvalGateBanner(state.workflowExecution.pending_approval),
+    state.workflowMode === "canvas" ? renderWorkflowCanvas(steps, edges) : renderWorkflowAccessibleList(steps, edges),
+  );
+}
+
+function renderWorkflowCanvas(steps, edges) {
+  const stepMap = new Map(steps.map((s) => [s.id, s]));
+
+  // SVG Edge Paths connecting out port to in port
+  const edgePaths = edges
+    .map((e) => {
+      const src = stepMap.get(e.source);
+      const tgt = stepMap.get(e.target);
+      if (!src || !tgt) return null;
+      const x1 = (src.position?.x || 100) + 210;
+      const y1 = (src.position?.y || 140) + 48;
+      const x2 = tgt.position?.x || 300;
+      const y2 = (tgt.position?.y || 140) + 48;
+      const dx = Math.max(50, Math.abs(x2 - x1) * 0.5);
+      const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      return h("path", {
+        d,
+        stroke: "#ccf378",
+        "stroke-width": "2.5",
+        "stroke-opacity": "0.75",
+        fill: "none",
+      });
+    })
+    .filter(Boolean);
+
+  const canvasSvg = h(
+    "svg",
+    {
+      class: "workflow-canvas-svg",
+      viewBox: "0 0 1600 800",
+      xmlns: "http://www.w3.org/2000/svg",
+    },
+    edgePaths,
+  );
+
+  const nodeElements = steps.map((s) => {
+    const isSelected = state.workflowSelectedStep?.id === s.id;
+    const isRunning = state.workflowExecution?.step_results?.[s.id]?.status === "running";
+    const isPaused = state.workflowExecution?.step_results?.[s.id]?.status === "awaiting_approval";
+    const isDone = state.workflowExecution?.step_results?.[s.id]?.status === "completed";
+
+    const nodeEl = h(
+      "div",
+      {
+        class:
+          "workflow-node" +
+          (isSelected ? " selected" : "") +
+          (isRunning ? " running" : "") +
+          (isPaused ? " approval" : ""),
+        style: `left:${s.position?.x || 100}px;top:${s.position?.y || 140}px;`,
+        onClick: () => {
+          state.workflowSelectedStep = s;
+          render();
+        },
+      },
+      h(
+        "div",
+        { class: "workflow-node-header" },
+        h("span", { class: "workflow-node-kind" }, s.kind),
+        isDone
+          ? h("span", { style: "color:#ccf378;font-size:11px" }, "✓")
+          : isPaused
+          ? h("span", { style: "color:#fbbf24;font-size:11px" }, "⏸")
+          : null,
+      ),
+      h("div", { class: "workflow-node-label" }, s.label),
+      h("div", { class: "workflow-node-model" }, s.model_alias || "rda/chat-default"),
+      h(
+        "div",
+        { class: "workflow-node-ports" },
+        h("span", {}, h("span", { class: "port-dot" }), " in"),
+        h("span", {}, "out ", h("span", { class: "port-dot" })),
+      ),
+    );
+
+    // Node Drag Handler
+    let isDragging = false;
+    let startX, startY, origX, origY;
+    nodeEl.addEventListener("mousedown", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      origX = s.position?.x || 100;
+      origY = s.position?.y || 140;
+
+      const onMouseMove = (moveEvent) => {
+        if (!isDragging) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        s.position = { x: Math.max(20, origX + dx), y: Math.max(20, origY + dy) };
+        nodeEl.style.left = s.position.x + "px";
+        nodeEl.style.top = s.position.y + "px";
+      };
+
+      const onMouseUp = () => {
+        if (isDragging) {
+          isDragging = false;
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+          render();
+        }
+      };
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    });
+
+    return nodeEl;
+  });
+
+  const nodeLayer = h("div", { class: "workflow-node-layer" }, nodeElements);
+  const viewport = h("div", { class: "workflow-viewport" }, canvasSvg, nodeLayer);
+
+  return h("div", { class: "workflow-workspace" }, viewport, renderWorkflowInspector());
+}
+
+function renderWorkflowInspector() {
+  const step = state.workflowSelectedStep;
+  if (!step) {
+    return h(
+      "div",
+      { class: "workflow-inspector rda-card rda-card--p-md", "data-color": "surface", "data-style": "matte" },
+      h("h3", { class: "rda-typography rda-typography--base rda-typography--semibold" }, "Propriedades da Etapa"),
+      h("p", { class: "small muted" }, "Clique em qualquer nó do canvas para editar seu papel, modelo LLM e permissões."),
+    );
+  }
+
+  const roleFunctions = ["briefing", "research", "selection", "sequencing", "review", "synthesis"];
+  const kinds = ["briefing", "research", "selection", "sequencing", "review", "approval_gate"];
+  const modelAliases = ["rda/chat-default", "rda/fast", "rda/reasoning", "rda/vision"];
+
+  return h(
+    "div",
+    { class: "workflow-inspector rda-card rda-card--p-md", "data-color": "surface", "data-style": "matte" },
+    h("h3", { class: "rda-typography rda-typography--base rda-typography--semibold" }, "Editar: " + step.label),
+    field(
+      "Rótulo da etapa",
+      h("input", {
+        type: "text",
+        value: step.label,
+        onInput: (e) => {
+          step.label = e.target.value;
+          render();
+        },
+      }),
+    ),
+    field(
+      "Tipo de etapa",
+      h(
+        "select",
+        {
+          onChange: (e) => {
+            step.kind = e.target.value;
+            render();
+          },
+        },
+        kinds.map((k) => h("option", { value: k, selected: step.kind === k }, k)),
+      ),
+    ),
+    field(
+      "Função de IA (Role)",
+      h(
+        "select",
+        {
+          onChange: (e) => {
+            step.role_function = e.target.value;
+            render();
+          },
+        },
+        roleFunctions.map((r) => h("option", { value: r, selected: step.role_function === r }, r)),
+      ),
+    ),
+    field(
+      "Modelo LLM atribuído",
+      h(
+        "select",
+        {
+          onChange: (e) => {
+            step.model_alias = e.target.value;
+            render();
+          },
+        },
+        modelAliases.map((m) => h("option", { value: m, selected: step.model_alias === m }, m)),
+      ),
+    ),
+    h(
+      "label",
+      { class: "rda-checkbox-field check-field row", style: "gap:8px;font-weight:normal;cursor:pointer;margin-top:4px" },
+      h("input", {
+        type: "checkbox",
+        class: "rda-checkbox-native",
+        checked: Boolean(step.requires_approval),
+        onChange: (e) => {
+          step.requires_approval = e.target.checked;
+          render();
+        },
+      }),
+      h("span", { class: "rda-checkbox__label small" }, "Exigir Confirmação Humana (Decisão 17A)"),
+    ),
+    field(
+      "Instruções específicas",
+      h("textarea", {
+        value: step.instructions || "",
+        placeholder: "Diretrizes específicas desta etapa...",
+        rows: 3,
+        onInput: (e) => {
+          step.instructions = e.target.value;
+        },
+      }),
+    ),
+    h(
+      "div",
+      { style: "margin-top:auto;padding-top:10px" },
+      button("Remover Etapa", () => {
+        const wf = state.activeCuration.workflow;
+        wf.steps = wf.steps.filter((s) => s.id !== step.id);
+        wf.edges = wf.edges.filter((e) => e.source !== step.id && e.target !== step.id);
+        state.workflowSelectedStep = wf.steps[0] || null;
+        render();
+      }, "ghost small danger"),
+    ),
+  );
+}
+
+function renderWorkflowAccessibleList(steps, edges) {
+  return h(
+    "div",
+    { class: "workflow-list-container" },
+    h("h3", { class: "rda-typography rda-typography--lg rda-typography--semibold" }, "Etapas do Fluxo (Modo Acessível)"),
+    h(
+      "p",
+      { class: "small muted" },
+      "Visualização linear totalmente operável por teclado para leitores de tela e dispositivos de toque.",
+    ),
+    steps.map((s, idx) =>
+      h(
+        "div",
+        {
+          class: "workflow-list-step rda-card rda-card--p-sm",
+          "data-color": "surface",
+          "data-style": "outlined",
+        },
+        h(
+          "div",
+          {},
+          h("strong", {}, idx + 1 + ". " + s.label),
+          h("div", { class: "small muted" }, s.kind + " · Papel: " + s.role_function + " · Modelo: " + (s.model_alias || "padrão")),
+        ),
+        h(
+          "div",
+          { class: "row", style: "gap:4px" },
+          button("↑", () => moveWorkflowStep(idx, -1), "ghost small", {
+            "aria-label": "Mover etapa para cima",
+            disabled: idx === 0,
+          }),
+          button("↓", () => moveWorkflowStep(idx, 1), "ghost small", {
+            "aria-label": "Mover etapa para baixo",
+            disabled: idx === steps.length - 1,
+          }),
+          button("Configurar", () => {
+            state.workflowSelectedStep = s;
+            state.workflowMode = "canvas";
+            render();
+          }, "ghost small"),
+        ),
+      ),
+    ),
+  );
+}
+
+function moveWorkflowStep(idx, delta) {
+  const steps = state.activeCuration.workflow.steps;
+  const target = idx + delta;
+  if (target < 0 || target >= steps.length) return;
+  const temp = steps[idx];
+  steps[idx] = steps[target];
+  steps[target] = temp;
+  render();
+}
+
+function approvalGateBanner(pending) {
+  return h(
+    "div",
+    { class: "approval-gate-banner rda-notice rda-notice--warning", "data-color": "warning" },
+    h("h4", { class: "rda-notice__title" }, "⏸ Confirmação Humana Obrigatória (Decisão 17A)"),
+    h(
+      "div",
+      { class: "small rda-notice__description" },
+      "O fluxo pausou no portão de aprovação antes de executar alterações no Spotify.",
+    ),
+    h("div", { class: "small" }, "Ação proposta: ", h("strong", {}, pending.action_type || "Publicação Curatorial")),
+    h("div", { class: "approval-hash-code rda-kbd rda-kbd--md" }, "Hash Canônico Único: " + pending.payload_hash),
+    h(
+      "div",
+      { class: "row", style: "margin-top:6px;gap:8px" },
+      button("Aprovar e Publicar no Spotify", async () => {
+        try {
+          await api("/curations/" + state.activeCuration.id + "/execute", "POST", {
+            approval_id: pending.approval_id,
+            approved: true,
+            payload_hash: pending.payload_hash,
+          });
+          toast("Aprovação registrada com sucesso.");
+          state.workflowExecution.pending_approval = null;
+          await loadCurations();
+        } catch (err) {
+          showError(err);
+        }
+      }, "primary small"),
+      button("Recusar / Modificar", () => {
+        state.workflowExecution.pending_approval = null;
+        toast("Execução cancelada.");
+        render();
+      }, "ghost small"),
+    ),
+  );
+}
+
+function addWorkflowStepModal() {
+  let labelInput, kindSelect, roleSelect;
+  const modalContent = h(
+    "div",
+    { class: "modal-content stack" },
+    h("h2", { class: "rda-dialog__title" }, "Adicionar Nova Etapa"),
+    field("Nome da etapa", (labelInput = h("input", { type: "text", value: "Nova Etapa" }))),
+    field(
+      "Tipo da etapa",
+      (kindSelect = h(
+        "select",
+        {},
+        ["briefing", "research", "selection", "sequencing", "review", "approval_gate"].map((k) =>
+          h("option", { value: k }, k),
+        ),
+      )),
+    ),
+    field(
+      "Função do Modelo",
+      (roleSelect = h(
+        "select",
+        {},
+        ["briefing", "research", "selection", "sequencing", "review", "synthesis"].map((r) =>
+          h("option", { value: r }, r),
+        ),
+      )),
+    ),
+    h(
+      "div",
+      { class: "modal-actions rda-dialog__footer" },
+      button("Cancelar", closeModal, "ghost"),
+      button("Adicionar", () => {
+        const wf = state.activeCuration.workflow;
+        const sid = "step_" + Date.now().toString(36);
+        const lastStep = wf.steps[wf.steps.length - 1];
+        const newX = lastStep ? (lastStep.position?.x || 100) + 240 : 100;
+        const newY = lastStep ? lastStep.position?.y || 140 : 140;
+
+        const newStep = {
+          id: sid,
+          kind: kindSelect.value,
+          label: labelInput.value.trim() || "Etapa",
+          role_function: roleSelect.value,
+          model_alias: "rda/chat-default",
+          instructions: "",
+          allowed_tools: [],
+          requires_approval: kindSelect.value === "approval_gate",
+          position: { x: newX, y: newY },
+        };
+        wf.steps.push(newStep);
+        if (lastStep) {
+          wf.edges.push({ id: "e_" + Date.now().toString(36), source: lastStep.id, target: sid });
+        }
+        closeModal();
+        state.workflowSelectedStep = newStep;
+        render();
+      }, "primary"),
+    ),
+  );
+  openModal(modalContent);
+}
+
+async function validateWorkflowDag() {
+  const cur = state.activeCuration;
+  if (!cur || !cur.workflow) return;
+  try {
+    const res = await api("/curations/" + cur.id + "/workflow", "PUT", cur.workflow);
+    state.workflowValidation = {
+      valid: true,
+      message: "Grafo acíclico válido. Ordem de execução: " + res.topological_order.join(" → "),
+    };
+  } catch (err) {
+    state.workflowValidation = {
+      valid: false,
+      message: err.message || "Ciclo ou conexão inválida detectada no grafo.",
+    };
+  }
+  render();
+}
+
+async function saveWorkflow() {
+  const cur = state.activeCuration;
+  if (!cur || !cur.workflow) return;
+  try {
+    const res = await api("/curations/" + cur.id + "/workflow", "PUT", cur.workflow);
+    cur.workflow.version = res.version;
+    toast("Fluxo salvo (versão " + res.version + ").");
+    state.workflowValidation = {
+      valid: true,
+      message: "Fluxo salvo com sucesso. Topologia: " + res.topological_order.join(" → "),
+    };
+    render();
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function executeWorkflow() {
+  const cur = state.activeCuration;
+  if (!cur) return;
+  try {
+    toast("Iniciando execução do fluxo...");
+    const res = await api("/curations/" + cur.id + "/execute", "POST", {});
+    state.workflowExecution = res;
+    if (res.status === "awaiting_approval") {
+      toast("Fluxo pausado no portão de aprovação humana.");
+    } else {
+      toast("Fluxo executado com sucesso.");
+    }
+    render();
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function dossierSubView() {
+  if (!state.activeCuration) {
+    return h(
+      "div",
+      { class: "empty-state rda-empty-state" },
+      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, "◈"),
+      h("h3", { class: "rda-empty-state__title" }, "Nenhum projeto selecionado"),
+      h("p", { class: "small muted rda-empty-state__description" }, "Selecione um projeto para visualizar o dossiê curatorial."),
+    );
+  }
+
+  const cur = state.activeCuration;
+  return h(
+    "div",
+    { class: "dossier-container" },
+    h(
+      "div",
+      { class: "row between", style: "margin-bottom:16px" },
+      h("h2", { class: "rda-typography rda-typography--xl rda-typography--bold", style: "margin:0" }, "Dossiê Curatorial — " + cur.title),
+      button("Copiar Markdown", async () => {
+        try {
+          const d = await api("/curations/" + cur.id + "/dossier");
+          navigator.clipboard.writeText(d.markdown);
+          toast("Dossiê copiado para a área de transferência.");
+        } catch (err) {
+          showError(err);
+        }
+      }, "primary small"),
+    ),
+    h(
+      "div",
+      {
+        class: "dossier-markdown rda-card rda-card--p-lg",
+        "data-color": "surface",
+        "data-style": "matte",
+        id: "dossier-content",
+      },
+      "Carregando dossiê curatorial...",
+    ),
+  );
+}
+
+// Auto-fetch dossier when opened
+safe(async () => {
+  if (state.view === "curations" && state.curationsTab === "dossier" && state.activeCuration) {
+    try {
+      const d = await api("/curations/" + state.activeCuration.id + "/dossier");
+      const el = $("#dossier-content");
+      if (el) el.textContent = d.markdown;
+    } catch {}
+  }
+});
+
+function editorialModelsSubView() {
+  const drams = state.editorialModels?.dramaturgias || [];
+  return h(
+    "div",
+    { style: "display:flex;flex-direction:column;gap:14px" },
+    h("h3", { class: "rda-typography rda-typography--xl rda-typography--bold" }, "Catálogo de Metodologias & 12 Dramaturgias (Escuta & Imagem v2.0)"),
+    h(
+      "p",
+      { class: "small muted" },
+      "Cada dramaturgia define uma curva de intensidade narrativa e pacing sonoro único.",
+    ),
+    h(
+      "div",
+      { class: "dramaturgia-gallery" },
+      drams.map((d) =>
+        h(
+          "div",
+          {
+            class: "dramaturgia-card rda-card rda-card--p-md",
+            "data-color": "surface",
+            "data-style": "matte",
+          },
+          h("strong", { class: "rda-typography rda-typography--base rda-typography--bold", style: "color:var(--rda-action-primary-bg)" }, d.name),
+          h("div", { class: "small muted" }, d.description),
+          h(
+            "div",
+            { class: "dramaturgia-pacing-bar" },
+            d.arc.map((val) => h("span", { style: `height:${Math.round(val * 100)}%` })),
+          ),
+          button("Criar Projeto com este Modelo", () => {
+            openNewCurationModal();
+          }, "ghost small"),
         ),
       ),
     ),
