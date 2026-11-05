@@ -170,7 +170,7 @@ pub fn parse_completion(body: &Value) -> Completion {
             .get("completion_tokens")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
-        out.usage = Some((input, output));
+        if usage["prompt_tokens"].is_u64()&&usage["completion_tokens"].is_u64(){out.usage = Some((input, output));}
     }
     out
 }
@@ -257,7 +257,7 @@ impl LlmAdapter for OpenAiCompat {
         let mut pending: Vec<SseEvent> = Vec::new();
         let mut acc = ToolCallAccumulator::default();
         while let Some(chunk) = bytes.next().await {
-            let chunk = chunk.map_err(|e| anyhow::anyhow!("openai_compat_stream:{e}"))?;
+            let chunk = chunk.map_err(|e| anyhow::anyhow!("openai_compat_stream_{}",if e.is_timeout(){"timeout"}else if e.is_decode(){"decode_error"}else{"interrupted"}))?;
             pending.extend(decoder.push(&String::from_utf8_lossy(&chunk)));
             for event in pending.drain(..) {
                 if event.is_done() {
@@ -270,6 +270,10 @@ impl LlmAdapter for OpenAiCompat {
                 let Some(body) = SseDecoder::json_of(&event) else {
                     continue;
                 };
+                if body.get("error").is_some() {
+                    let code = body.pointer("/error/code").and_then(Value::as_str).unwrap_or("provider_error");
+                    anyhow::bail!("provider_stream_error:{code}");
+                }
                 if let Some(delta) = body.pointer("/choices/0/delta") {
                     if let Some(text) = delta.get("content").and_then(|v| v.as_str()) {
                         if !text.is_empty() {
@@ -299,7 +303,7 @@ impl LlmAdapter for OpenAiCompat {
                         .get("completion_tokens")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0) as u32;
-                    let _ = tx.send(LlmEvent::Usage { input, output }).await;
+                    if usage["prompt_tokens"].is_u64()&&usage["completion_tokens"].is_u64(){let _ = tx.send(LlmEvent::Usage { input, output }).await;}
                 }
             }
         }
@@ -411,7 +415,11 @@ impl LlmAdapter for OpenAiCompat {
 
 /// Traduz o erro cru em um código estável (`/providers/test` e debug).
 pub fn classify_error(raw: &str) -> String {
-    if raw.contains("_http_401") || raw.contains("_http_403") {
+    if raw.contains("context_budget_exceeded") {
+        "context_budget_exceeded".to_string()
+    } else if raw.contains("quota_exhausted_") {
+        "quota_exhausted".to_string()
+    } else if raw.contains("_http_401") || raw.contains("_http_403") {
         "unauthorized".to_string()
     } else if raw.contains("_http_404") {
         "not_found".to_string()
@@ -421,6 +429,8 @@ pub fn classify_error(raw: &str) -> String {
         "provider_error".to_string()
     } else if raw.contains("timeout") || raw.contains("timed out") {
         "timeout".to_string()
+    } else if raw.contains("_stream_")||raw.contains("_stream:") {
+        "stream_interrupted".to_string()
     } else if raw.contains("connect") || raw.contains("dns") || raw.contains("builder") {
         "unreachable".to_string()
     } else {

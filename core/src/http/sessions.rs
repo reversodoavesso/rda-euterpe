@@ -28,6 +28,7 @@ pub async fn erase(
     if uuid::Uuid::parse_str(&id).is_err() {
         return Err(axum::http::StatusCode::BAD_REQUEST);
     }
+    crate::tools::workbench::erase_session(&state.store,&id).map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
     state
         .store
         .with(|c| {

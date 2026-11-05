@@ -2,6 +2,7 @@
 
 pub mod adapters;
 pub mod canonical;
+pub mod context;
 pub mod r#loop;
 pub mod prompts;
 pub mod sse;

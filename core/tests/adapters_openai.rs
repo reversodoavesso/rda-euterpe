@@ -32,6 +32,16 @@ fn ask() -> ChatRequest {
     ChatRequest::new("gpt-x", vec![Msg::user("oi")])
 }
 
+#[tokio::test]
+async fn sse_error_payload_is_not_silently_accepted_as_success() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST")).respond_with(ResponseTemplate::new(200)
+        .set_body_string(sse(json!({"error":{"code":"quota_exhausted_app_tokens"}})) + "data: [DONE]\n\n"))
+        .mount(&server).await;
+    let error = collect(&adapter(&server), ask()).await.unwrap_err().to_string();
+    assert!(error.contains("quota_exhausted_app_tokens"));
+}
+
 fn sse(value: Value) -> String {
     format!("data: {value}\n\n")
 }

@@ -80,6 +80,18 @@ pub struct EraseRequest {
 pub async fn erase(State(state): State<AppState>, Json(body): Json<EraseRequest>) -> Response {
     let scope = body.scope.trim().to_ascii_lowercase();
     let mut deleted = json!({});
+    if scope=="history" || scope=="all" {
+        let ids:Vec<String>=state.store.with(|c|{
+            let mut stmt=c.prepare("SELECT id FROM workspace_sessions WHERE active=1")?;
+            let rows=stmt.query_map([],|r|r.get(0))?;rows.collect()
+        }).unwrap_or_default();
+        for id in ids {
+            if (scope=="all" || body.session_id.as_deref().is_none_or(|s|s==id))
+                && crate::tools::workbench::erase_session(&state.store,&id).is_err() {
+                    return (StatusCode::INTERNAL_SERVER_ERROR,Json(json!({"ok":false,"error":"workspace_erase_failed"}))).into_response();
+            }
+        }
+    }
 
     let del_rows = |sql: &str, params: &[&dyn rusqlite::ToSql]| -> i64 {
         state

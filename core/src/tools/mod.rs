@@ -2,5 +2,6 @@
 
 pub mod catalog;
 pub mod server;
+pub mod workbench;
 
 pub use catalog::{Annotations, Side, ToolDef};

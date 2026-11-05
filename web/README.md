@@ -150,6 +150,54 @@ instalação, restaure esse volume e suas permissões no mesmo caminho do compos
   incluída na imagem em `/usr/share/doc/euterpe-headless/LICENSE`; os fontes modificados
   estão em `headless-lab/sidecar/`, com a revisão original indicada acima.
 
+## MCP remoto e tokens pessoais
+
+Em **Ajustes → Acesso remoto MCP**, informe um nome, permissões e validade (1–90 dias;
+30 por padrão). **Gerar token** exibe o segredo uma única vez. **Listar tokens** mostra
+metadados e permite revogar cada token imediatamente para novas requisições. São
+permitidos até 20 tokens ativos por conta. Só o hash SHA-256 fica no banco de dados;
+o token não é salvo no navegador. Vincular uma conta local ao SSO revoga seus tokens
+locais anteriores. Logout da interface não revoga tokens pessoais; use **Revogar**.
+
+Configure um cliente compatível com Streamable HTTP e cabeçalhos personalizados:
+
+```json
+{
+  "mcpServers": {
+    "euterpe": {
+      "type": "http",
+      "url": "https://SEU_DOMINIO/mcp",
+      "headers": { "Authorization": "Bearer TOKEN_GERADO" }
+    }
+  }
+}
+```
+
+O formato da configuração depende do cliente. Use a origem de sua instalação e HTTPS
+para acesso remoto; depois de publicar esta versão no ambiente RDA, o endpoint será
+`https://euterpe.reversodoavesso.com/mcp`. Esta implementação usa tokens pessoais,
+sem fluxo OAuth para clientes MCP. Clientes que aceitam somente OAuth precisam de
+uma integração adicional.
+
+O endpoint é stateless, responde JSON a POST e aceita notificações com HTTP 202.
+GET/DELETE retornam 405; não há stream SSE proativo ou identificador de sessão MCP.
+O cliente envia `Accept: application/json, text/event-stream` e, após inicializar,
+`MCP-Protocol-Version: 2025-06-18` (também aceita `2025-03-26`). A origem é validada
+quando informada. O proxy deve encaminhar `Authorization` e `/mcp` ao gateway e permitir
+requisições longas durante a aprovação. Nenhuma credencial do worker é exposta.
+
+Tokens `read` permitem as seis ferramentas de leitura de `READ_TOOLS`. Tokens `write`
+acrescentam as sete ferramentas de `WRITE_TOOLS`, incluindo desfazer. Os nomes MCP
+têm prefixo `spotify_`. Recursos e prompts do daemon também estão disponíveis.
+As ferramentas de workspace, operações, configurações, pareamento e gestão de tokens
+não são expostas ao cliente remoto. Tokens não autenticam as APIs da interface.
+
+Cada requisição usa o worker do titular do token. Escritas recebem uma exigência de
+confirmação no daemon, inclusive se uma configuração antiga estiver em `allow`;
+`deny` continua bloqueando. Aprove a proposta na interface Euterpe. O MCP não oferece
+um método remoto de aprovação. Revogar um token impede novas chamadas, mas não
+desfaz chamadas já iniciadas ou escritas aprovadas.
+
 ## Validação
 
 ```powershell
@@ -174,3 +222,14 @@ APIs reais do Spotify e toca somente playlists descartáveis com um identificado
 A parte de IA usa um provedor simulado local: valida streaming, chamadas de ferramentas,
 aprovação, cancelamento e persistência sem consumir uma API paga. A limpeza verifica a
 contagem original da biblioteca. O relatório público não inclui chaves, cookies ou códigos.
+
+
+## Auditoria de conversas
+
+A aba **Auditoria** e o botão **Auditar conversa** no chat abrem o histórico de uma conversa do usuário autenticado. A tela reúne mensagens, modelo selecionado, chamadas e resultados de ferramentas, solicitações e decisões de aprovação, erros, cancelamentos, duração e ID das execuções. Os filtros permitem inspecionar falhas ou ferramentas; **Atualizar** busca o estado atual, inclusive durante uma resposta.
+
+O gateway persiste novos eventos na tabela `chat_audit` do `accounts.sqlite`. A exclusão da conversa também exclui esses registros. O endpoint autenticado `GET /api/conversations/<id>/audit` combina esses eventos com os diagnósticos já persistidos pelo agente. Se o worker estiver indisponível, mensagens e eventos do gateway continuam acessíveis. Conversas anteriores podem ter cobertura parcial; solicitações sem evento de encerramento podem indicar reinício abrupto do serviço.
+
+Os detalhes do agente usam uma lista explícita de campos permitidos. Chaves, cabeçalhos, logs brutos e conteúdo de raciocínio não são expostos pela auditoria. A tela não estima tokens ou custo: esses dados não são fornecidos pelo contrato atual do agente.
+
+Falhas de IA e de ferramentas também deixam um aviso na própria mensagem, com acesso à auditoria. O campo `messages.error_code` é migrado automaticamente e preserva o aviso após recarregar a conversa. Respostas vazias, interrupções e bloqueios de cota não removem a mensagem do agente silenciosamente. O evento `tools.available` registra o catálogo filtrado para o backend de cada execução.

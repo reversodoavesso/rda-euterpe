@@ -32,6 +32,17 @@ pub struct AuthStatus {
 }
 
 impl Headless {
+    pub async fn supported_tools(&self) -> Vec<String> {
+        let response = self.client.get(self.base.join("health").expect("validated base URL"))
+            .timeout(Duration::from_secs(5)).send().await;
+        match response {
+            Ok(r) if r.status().is_success() => r.json::<Value>().await.ok()
+                .and_then(|v| v.get("supported_tools").and_then(Value::as_array).cloned())
+                .unwrap_or_default().iter().filter_map(|v| v.as_str().map(str::to_owned)).collect(),
+            _ => Vec::new(),
+        }
+    }
+
     pub async fn auth(&self, action: &str) -> Result<(u16, AuthStatus), AuthUnavailable> {
         let (method, path) = match action {
             "status" => (reqwest::Method::GET, "auth"),

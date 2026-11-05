@@ -45,6 +45,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(cfg: config::Config) -> anyhow::Result<Self> {
         let store = Arc::new(store::Store::open(&cfg.db_path)?);
+        tools::workbench::recover(&store)?;
         let settings = Arc::new(store::settings::SettingsCache::load(&store)?);
         let bridge = Arc::new(bridge::Bridge::from_config(&cfg)?);
         let upstream = Arc::new(upstream::Upstream::new(&cfg));

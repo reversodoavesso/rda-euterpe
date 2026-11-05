@@ -104,6 +104,13 @@ impl Bridge {
         self.headless.is_some()
     }
 
+    pub async fn supported_client_tools(&self) -> Option<Vec<String>> {
+        match &self.headless {
+            Some(backend) => Some(backend.supported_tools().await),
+            None => None,
+        }
+    }
+
     pub async fn headless_auth(
         &self,
         action: &str,
@@ -283,12 +290,19 @@ impl Bridge {
                     // O snapshot vai por um id derivado do id original, como no Node
                     // (`snap_<id>`), e **não** dispara outro gate (é um get_*).
                     let snap_id = format!("snap_{call_id}");
-                    let snap_args = serde_json::json!({ "playlist_id": playlist_id });
+                    let guarded=self.is_headless()&&args.get("expected_revision").and_then(serde_json::Value::as_str).is_some_and(|s|!s.is_empty());
+                    let snap_args = if guarded{serde_json::json!({"playlist_id":playlist_id,"response_format":"manifest"})}else{serde_json::json!({ "playlist_id": playlist_id })};
                     if let Some(store) = opts.store {
-                        match self
+                        let mut snapshot=self
                             .raw_call(cfg, &snap_id, "get_playlist_tracks", snap_args, None)
-                            .await
-                        {
+                            .await;
+                        if guarded&&snapshot.ok {
+                            let data=snapshot.data.take().unwrap_or_default();
+                            if data["revision"]!=args["expected_revision"] {return ToolResult::err("playlist_version_conflict");}
+                            if data["complete"]!=true||!data["uris"].is_array(){return ToolResult::err("snapshot_unavailable");}
+                            snapshot.data=Some(serde_json::Value::Array(data["uris"].as_array().unwrap().iter().map(|u|serde_json::json!({"uri":u})).collect()));
+                        }
+                        match snapshot {
                             ToolResult { ok: true, data, .. } => {
                                 if self.is_headless()
                                     && !data.as_ref().is_some_and(|d| {
@@ -406,6 +420,9 @@ impl Bridge {
             locale: opts.locale.to_string(),
             session_id: opts.session_id.to_string(),
         };
+        if crate::tools::catalog::is_mutating(name)&&opts.mutation==MutationPolicy::Deny {
+            return ToolResult::err("mutation_denied");
+        }
         crate::tools::server::run_server_tool(name, &args, &ctx).await
     }
 

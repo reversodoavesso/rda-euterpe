@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const EnvSchema = z.object({
+  RDA_AI_URL: z.string().url().optional(),
+  RDA_AI_API_KEY: z.string().optional(),
+  RDA_AI_MODEL: z.string().default('rda/chat-default'),
+  RDA_AI_CURATION_MODEL: z.string().default('rda/reasoning'),
   DEEPSEEK_API_KEY: z.string().optional(),
   LLM_BASE_URL: z.string().default("https://api.deepseek.com"),
   LLM_CHAT_MODEL: z.string().default("deepseek-v4-flash"),
@@ -36,6 +40,7 @@ const EnvSchema = z.object({
 });
 
 const parsed = EnvSchema.parse(process.env);
+if (parsed.RDA_AI_URL && !parsed.RDA_AI_API_KEY) throw new Error('RDA AI credential required');
 
 function loadSecret(): string {
   const fromEnv = parsed.WS_SECRET;
@@ -71,10 +76,10 @@ export interface AppConfig {
 }
 
 export const config: AppConfig = {
-  deepseekApiKey: parsed.DEEPSEEK_API_KEY,
-  llmBaseUrl: parsed.LLM_BASE_URL,
-  chatModel: parsed.LLM_CHAT_MODEL,
-  curationModel: parsed.LLM_CURATION_MODEL,
+  deepseekApiKey: parsed.RDA_AI_URL ? parsed.RDA_AI_API_KEY : parsed.DEEPSEEK_API_KEY,
+  llmBaseUrl: parsed.RDA_AI_URL ? parsed.RDA_AI_URL.replace(/\/$/, '') + '/v1' : parsed.LLM_BASE_URL,
+  chatModel: parsed.RDA_AI_URL ? parsed.RDA_AI_MODEL : parsed.LLM_CHAT_MODEL,
+  curationModel: parsed.RDA_AI_URL ? parsed.RDA_AI_CURATION_MODEL : parsed.LLM_CURATION_MODEL,
   host: parsed.HOST,
   port: parsed.PORT,
   searxngUrl: parsed.SEARXNG_URL,

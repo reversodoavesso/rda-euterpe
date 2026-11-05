@@ -24,6 +24,7 @@ use super::prompts;
 pub struct LoopOutcome {
     pub text: String,
     pub degraded: bool,
+    pub needs_delivery: bool,
 }
 
 /// Dependências de uma execução de chat.
@@ -132,7 +133,11 @@ async fn ask(
         result?;
         Ok(completion)
     } else {
-        adapter.complete(req).await
+        let completion = adapter.complete(req).await?;
+        if deps.stream_deltas {
+            stream_text_chunks(deps, completion.text.as_deref().unwrap_or("")).await;
+        }
+        Ok(completion)
     }
 }
 
@@ -148,19 +153,28 @@ pub async fn run_agent_loop(
             return LoopOutcome {
                 text: crate::i18n::t(&deps.locale, "fallback.noApiKeyRust", &[]),
                 degraded: true,
+                needs_delivery: true,
             }
         }
     };
 
     let t_thinking = crate::i18n::t(&deps.locale, "status.thinking", &[]);
-    let all_tools = catalog::openai_schemas();
+    let supported = deps.bridge.supported_client_tools().await;
+    let all_tools = catalog::available_schemas(supported.as_deref(), deps.eff.web_search != crate::config::WebSearchBackend::Off);
+    crate::logging::log_session(&deps.cfg.sessions_dir, &deps.session_id, "tools.available", Some(serde_json::json!({
+        "names": all_tools.iter().filter_map(|t| t.pointer("/function/name").and_then(serde_json::Value::as_str)).collect::<Vec<_>>(),
+        "backend": if supported.is_some() { "headless" } else { "desktop" },
+    })));
 
     let mut steps: u32 = 0;
     let mut final_text = String::new();
     let mut degraded = false;
+    let mut needs_delivery = true;
     let mut rate_limited: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut consecutive_rate_limited: u32 = 0;
     let mut force_answer = false;
+    let mut operation_polls=0;
+    let mut pending_work=false;
 
     loop {
         if deps.is_cancelled() {
@@ -178,24 +192,39 @@ pub async fn run_agent_loop(
         } else {
             all_tools.clone()
         };
-        let completion = match ask(deps, &adapter, model, &messages, tools).await {
+        let started=std::time::Instant::now();
+        let prepared=super::context::prepare(deps.store,&deps.session_id,&mut messages,&tools);
+        if let Ok(metrics)=&prepared { crate::logging::log_session(&deps.cfg.sessions_dir,&deps.session_id,"context.metrics",Some(metrics.clone())); }
+        let response=match prepared {Ok(_)=>ask(deps,&adapter,model,&messages,tools).await,Err(e)=>Err(e)};
+        let completion = match response {
             Ok(c) => c,
             Err(err) => {
                 if deps.is_cancelled() {
                     break;
                 }
                 let detail = err.to_string();
+                let code = super::adapters::openai_compat::classify_error(&detail);
                 crate::logging::log_session(
                     &deps.cfg.sessions_dir,
                     &deps.session_id,
                     "llm.error",
-                    Some(serde_json::json!({ "step": steps, "error": detail })),
+                    Some(serde_json::json!({ "step": steps, "error": detail, "code": code })),
                 );
-                final_text = crate::i18n::t(&deps.locale, "fallback.llmError", &[]);
+                deps.status("error", &code);
+                final_text = if code == "quota_exhausted" {
+                    if deps.locale.starts_with("pt") {
+                        "A cota de IA do Euterpe está esgotada. Não consegui concluir esta solicitação. Revise o limite no painel de IA antes de tentar novamente.".to_string()
+                    } else {
+                        "Euterpe's AI quota is exhausted. I could not complete this request. Review the AI quota before trying again.".to_string()
+                    }
+                } else { crate::i18n::t(&deps.locale, "fallback.llmError", &[]) };
                 degraded = true;
                 break;
             }
         };
+        crate::logging::log_session(&deps.cfg.sessions_dir,&deps.session_id,"llm.response",Some(serde_json::json!({
+            "step":steps,"duration_ms":started.elapsed().as_millis(),"input_tokens":completion.usage.map(|u|u.0),"output_tokens":completion.usage.map(|u|u.1)
+        })));
 
         if let Some(reasoning) = completion.reasoning.as_deref().filter(|r| !r.is_empty()) {
             crate::logging::log_session(
@@ -248,7 +277,7 @@ pub async fn run_agent_loop(
 
                 let started = std::time::Instant::now();
                 let result = if force_answer || rate_limited.contains(&call.name) {
-                    crate::protocol::ToolResult::err("rate_limited")
+                    crate::protocol::ToolResult::err(if pending_work{"operation_pending"}else{"rate_limited"})
                 } else {
                     dispatch(deps, call).await
                 };
@@ -266,13 +295,18 @@ pub async fn run_agent_loop(
                 } else {
                     0
                 };
+                let inline=if result.ok {
+                    result.data.as_ref().map(|v|super::context::bounded_result(deps.store,&deps.session_id,&call.name,&call.parsed_args(),v))
+                        .transpose().unwrap_or_else(|_|Some(serde_json::json!({"error":"tool_result_archiving_failed","complete":false})))
+                }else{result.data.clone()};
                 let content = prompts::tool_result_content(
                     result.ok,
-                    result.data.as_ref(),
+                    inline.as_ref(),
                     result.code.as_deref(),
                     deps.eff.debug,
                 );
                 let elapsed = started.elapsed().as_millis();
+                deps.send(ServerMsg::ToolOutcome { id: call.id.clone(), name: call.name.clone(), ok: result.ok, code: result.code.clone() });
                 crate::logging::log_tool_call(
                     &deps.cfg.sessions_dir,
                     &deps.session_id,
@@ -292,10 +326,19 @@ pub async fn run_agent_loop(
                         "code": result.code,
                         "size": size,
                         "duration_ms": elapsed,
+                        "inline_bytes":content.len(),
+                        "estimated_inline_tokens":content.len().div_ceil(3),
+                        "offloaded":inline.as_ref().is_some_and(|v|v["context_offloaded"]==true),
                         "preview": content.chars().take(400).collect::<String>(),
                     })),
                 );
                 messages.push(Msg::tool(call.id.clone(), content));
+                if call.name=="operation_status" {
+                    operation_polls+=1;
+                    if operation_polls>=2&&result.data.as_ref().is_some_and(|v|["running","queued","awaiting_approval","verifying"].contains(&v["status"].as_str().unwrap_or(""))) {
+                        pending_work=true;force_answer=true;
+                    }
+                }
 
                 if consecutive_rate_limited >= 2 && !force_answer {
                     force_answer = true;
@@ -305,12 +348,13 @@ pub async fn run_agent_loop(
                 }
             }
             if force_answer {
-                messages.push(Msg::system(prompts::force_answer_msg()));
+                messages.push(Msg::system(if pending_work{"Persistent work is continuing outside the chat. Explain the actual progress and operation reference, ask the user to review a pending proposal when applicable, and finish this response. Do not claim completion and do not poll again."}else{prompts::force_answer_msg()}));
             }
             continue;
         }
 
         final_text = completion.text.unwrap_or_default();
+        needs_delivery = !deps.stream_deltas;
         crate::logging::log_session(
             &deps.cfg.sessions_dir,
             &deps.session_id,
@@ -320,7 +364,11 @@ pub async fn run_agent_loop(
         break;
     }
 
-    if final_text.trim().is_empty() && !degraded {
+    if final_text.trim().is_empty() {
+        needs_delivery = true;
+        if !deps.is_cancelled() {
+            deps.status("error", if steps >= deps.eff.max_tool_steps { "step_limit_reached" } else { "empty_response" });
+        }
         final_text = if steps >= deps.eff.max_tool_steps {
             crate::i18n::t(&deps.locale, "fallback.stepLimit", &[])
         } else {
@@ -332,12 +380,20 @@ pub async fn run_agent_loop(
     LoopOutcome {
         text: prompts::trim_final(&final_text, prompts::max_final_length()),
         degraded,
+        needs_delivery,
     }
 }
 
 /// Executa a tool pedida pelo modelo (client-side ou server-side).
 async fn dispatch(deps: &ChatDeps<'_>, call: &ToolCall) -> crate::protocol::ToolResult {
     let args = call.parsed_args();
+    if catalog::is_mutating(&call.name)&&serde_json::to_vec(&args).is_ok_and(|v|v.len()>super::context::limits().1){
+        return crate::protocol::ToolResult::err("selection_reference_required");
+    }
+    if call.name=="get_playlist_tracks"&&deps.bridge.is_headless(){
+        let opts=deps.config_for(&call.id);
+        return deps.bridge.run_server_tool(deps.cfg,"playlist_dataset_create",args,opts).await;
+    }
     if catalog::is_client_tool(&call.name) {
         let opts = deps.config_for(&call.id);
         deps.bridge
@@ -374,9 +430,12 @@ pub async fn handle_chat(deps: &ChatDeps<'_>, text: &str) {
     }
 
     let mut messages: Vec<Msg> = vec![Msg::system(prompts::with_user_instructions(
-        prompts::system_prompt(Some(&deps.locale), deps.eff.debug),
+        format!("{}\n\n{}",prompts::system_prompt(Some(&deps.locale), deps.eff.debug),super::context::instruction()),
         &deps.eff.instructions,
     ))];
+    if crate::tools::workbench::ensure_session(deps.store,&deps.session_id).is_ok(){
+        messages.push(Msg::system(crate::tools::workbench::context_state(deps.store,&deps.session_id).to_string()));
+    }
     if deps.eff.chat_history_turns > 0 {
         let history = deps
             .store
@@ -429,7 +488,7 @@ pub async fn handle_chat(deps: &ChatDeps<'_>, text: &str) {
             Vec::new()
         };
 
-    if !deps.stream_deltas {
+    if outcome.needs_delivery {
         stream_text_chunks(deps, &outcome.text).await;
     }
     deps.store

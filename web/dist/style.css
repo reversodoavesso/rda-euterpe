@@ -89,6 +89,9 @@ body {
   height: 32px;
   object-fit: contain;
 }
+.brand img {
+  filter: invert(1);
+}
 .brand-name {
   color: var(--rda-content-primary);
 }
@@ -304,8 +307,7 @@ body {
   display: grid;
   place-items: center;
 }
-.record:before {
-  content: "✦";
+.record-mark {
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -633,6 +635,55 @@ body {
 }
 
 /* Auth Page */
+.startup-page {
+  min-height: 100dvh;
+  padding: var(--rda-spacing-6);
+  display: flex;
+  flex-direction: column;
+  background: var(--rda-surface-primary);
+}
+.startup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rda-spacing-4);
+}
+.startup-card {
+  width: 100%;
+  max-width: 480px;
+  margin: auto;
+  padding: var(--rda-spacing-8) 0;
+  display: grid;
+  gap: var(--rda-spacing-4);
+}
+.startup-card h1 {
+  font-family: var(--rda-font-family-display);
+  font-size: var(--rda-font-size-2xl);
+  line-height: 1.25;
+}
+.startup-symbol {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--rda-spacing-3);
+  background: var(--rda-surface-secondary);
+  border-radius: var(--rda-border-radius-xl);
+  color: var(--rda-content-brand);
+}
+.startup-symbol.failed { color: var(--rda-status-error); }
+.startup-symbol:not(.failed) rda-icon,
+.startup-steps [data-state="active"] rda-icon { animation: startup-spin 1.2s linear infinite; }
+.startup-steps { display: grid; gap: var(--rda-spacing-4); padding: var(--rda-spacing-4) 0; }
+.startup-steps li { display: flex; align-items: center; gap: var(--rda-spacing-3); color: var(--rda-content-tertiary); }
+.startup-steps [data-state="complete"] { color: var(--rda-content-primary); }
+.startup-steps [data-state="active"] { color: var(--rda-content-brand); }
+.startup-card .primary { min-height: 44px; background: var(--rda-action-primary-bg); color: var(--rda-action-primary-fg); border-radius: var(--rda-border-radius-md); }
+@keyframes startup-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .startup-symbol rda-icon,
+  .startup-steps [data-state="active"] rda-icon { animation: none; }
+}
 .auth-page {
   min-height: 100dvh;
   display: grid;
@@ -657,6 +708,30 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--rda-spacing-3);
+  padding: var(--rda-spacing-6);
+}
+.auth-form .small {
+  font-size: var(--rda-font-size-sm);
+  line-height: 1.5;
+}
+.auth-form .primary {
+  min-height: 44px;
+  padding: var(--rda-spacing-3) var(--rda-spacing-4);
+  background: var(--rda-action-primary-bg);
+  color: var(--rda-action-primary-fg);
+  border: 1px solid transparent;
+  border-radius: var(--rda-border-radius-md);
+  font-weight: var(--rda-font-weight-semibold);
+}
+.auth-story h1 {
+  font-family: var(--rda-font-family-display);
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+  line-height: 1.15;
+  margin: var(--rda-spacing-3) 0;
+}
+.auth-story p {
+  font-size: var(--rda-font-size-base);
+  line-height: 1.6;
 }
 .auth-form-fields {
   display: grid;
@@ -1037,3 +1112,22 @@ dialog.rda-dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+/* Conversation audit */
+.audit-view { max-width: 1100px; margin: 0 auto; }
+.audit-controls { flex-wrap: wrap; }
+.audit-controls select { flex: 1; min-width: 0; }
+.audit-summary { flex-wrap: wrap; }
+.audit-timeline { list-style: none; padding: 0; display: grid; gap: 12px; }
+.audit-event { border-left: 2px solid var(--rda-content-brand); min-width: 0; }
+.audit-event pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; font-family: var(--rda-font-family-mono); }
+.audit-id, .audit-message { overflow-wrap: anywhere; }
+.audit-message { white-space: pre-wrap; }
+.audit-event summary { cursor: pointer; margin-top: 8px; }
+.workbench-view { max-width: 1100px; margin: 0 auto; min-width: 0; }
+.workbench-actions { flex-wrap: wrap; }
+.workbench-actions select { min-width: 0; flex: 1; }
+.workbench-items, .workbench-json { overflow-wrap: anywhere; }
+.workbench-json { white-space: pre-wrap; max-height: 360px; overflow: auto; font-family: var(--rda-font-family-mono); }
+.workbench-view progress { width: 100%; accent-color: var(--rda-content-brand); }
+.chat-error { margin-top: var(--rda-spacing-3); padding: var(--rda-spacing-3); border: 1px solid var(--rda-status-error); border-radius: var(--rda-border-radius-md); }

@@ -152,14 +152,14 @@ pub fn server_tools() -> impl Iterator<Item = &'static ToolDef> {
 }
 
 pub fn find(name: &str) -> Option<&'static ToolDef> {
-    all().iter().find(|t| t.name == name)
+    all().iter().chain(super::workbench::definitions()).find(|t| t.name == name)
 }
 
 /// Busca pelo nome MCP (`spotify_<name>`), aceitando também o nome cru.
 pub fn find_mcp(mcp_name: &str) -> Option<&'static ToolDef> {
     let raw = mcp_name.strip_prefix("spotify_").unwrap_or(mcp_name);
     all()
-        .iter()
+        .iter().chain(super::workbench::definitions())
         .find(|t| t.name == raw || t.mcp_name() == mcp_name)
 }
 
@@ -170,7 +170,7 @@ pub fn mutating() -> &'static [String] {
 }
 
 pub fn is_mutating(name: &str) -> bool {
-    raw().mutating.iter().any(|n| n == name)
+    name == "selection_apply" || raw().mutating.iter().any(|n| n == name)
 }
 
 /// Esquemas no formato OpenAI (`allToolSchemas`).
@@ -178,9 +178,31 @@ pub fn openai_schemas() -> Vec<Value> {
     all().iter().map(|t| t.openai_schema()).collect()
 }
 
+/// Advertise only tools whose required backend capabilities are present.
+pub fn available_schemas(supported: Option<&[String]>, web_enabled: bool) -> Vec<Value> {
+    all().iter().chain(super::workbench::definitions()).filter(|t| {
+        if t.name == "web_search" && !web_enabled { return false; }
+        let Some(supported) = supported else { return true; };
+        let has = |name: &str| supported.iter().any(|n| n == name);
+        if t.side == Side::Client { return has(&t.name); }
+        let required: &[&str] = match t.name.as_str() {
+            "weekly_report" => &["get_listening_recents", "get_saved_tracks"],
+            "enrich_tracks" => &["get_several_tracks", "get_several_artists"],
+            "find_orphans" | "analyze_overlap" => &["get_playlist_tracks"],
+            "backup_library" => &["get_playlists", "get_playlist_tracks"],
+            "restore_library" => &["create_playlist"],
+            "undo_last_mutation" => &["replace_playlist_tracks"],
+            "playlist_inspect" | "playlist_dataset_create" | "playlist_workflow_start" => &["get_playlist_tracks"],
+            "selection_apply" => &["get_playlist_tracks","replace_playlist_tracks"],
+            _ => &[],
+        };
+        required.iter().all(|name| has(name))
+    }).map(ToolDef::openai_schema).collect()
+}
+
 /// `tools/list` do MCP.
 pub fn mcp_list() -> Vec<Value> {
-    all().iter().map(|t| t.mcp_schema()).collect()
+    all().iter().chain(super::workbench::definitions()).map(|t| t.mcp_schema()).collect()
 }
 
 /// Regras de anotação (§Fase 3): read-only é regra de nome, mutação vem do
@@ -224,6 +246,19 @@ pub fn is_server_tool(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn headless_catalog_excludes_missing_capabilities_and_disabled_search() {
+        let supported = vec!["get_playlists".into(), "get_playlist_tracks".into()];
+        let tools = available_schemas(Some(&supported), false);
+        let names: Vec<_> = tools.iter().map(|t| t["function"]["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"get_playlists"));
+        assert!(names.contains(&"analyze_overlap"));
+        for unavailable in ["get_player_state", "get_top_tracks", "weekly_report", "web_search", "enrich_tracks", "create_playlist"] {
+            assert!(!names.contains(&unavailable), "advertised unavailable tool {unavailable}");
+        }
+        assert!(available_schemas(Some(&supported), true).iter().any(|t| t["function"]["name"] == "web_search"));
+    }
 
     #[test]
     fn counts_match_the_frozen_contract_c6() {

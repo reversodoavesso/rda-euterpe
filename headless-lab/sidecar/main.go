@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,17 +50,19 @@ type result struct {
 	Code string `json:"code,omitempty"`
 }
 type arguments struct {
-	PlaylistID  string            `json:"playlist_id"`
-	PlaylistIDs []string          `json:"playlist_ids"`
-	Name        *string           `json:"name"`
-	Description *string           `json:"description"`
-	Tracks      []json.RawMessage `json:"tracks"`
-	URIs        []string          `json:"uris"`
-	Limit       int               `json:"limit"`
-	Offset      int               `json:"offset"`
-	Q           string            `json:"q"`
-	Types       string            `json:"types"`
-	IDs         []string          `json:"ids"`
+	PlaylistID       string            `json:"playlist_id"`
+	PlaylistIDs      []string          `json:"playlist_ids"`
+	Name             *string           `json:"name"`
+	Description      *string           `json:"description"`
+	Tracks           []json.RawMessage `json:"tracks"`
+	URIs             []string          `json:"uris"`
+	Limit            int               `json:"limit"`
+	Offset           int               `json:"offset"`
+	Q                string            `json:"q"`
+	Types            string            `json:"types"`
+	IDs              []string          `json:"ids"`
+	ResponseFormat   string            `json:"response_format"`
+	ExpectedRevision string            `json:"expected_revision"`
 }
 type requester interface {
 	Request(context.Context, string, string, url.Values, http.Header, []byte) (*http.Response, error)
@@ -67,10 +70,16 @@ type requester interface {
 	ExtendedMetadata(context.Context, *ext.BatchedEntityRequest) (*ext.BatchedExtensionResponse, error)
 }
 type backend struct {
-	sp       requester
-	username string
-	mutation sync.Mutex
-	searcher func(context.Context, string, int) (map[string]any, error)
+	sp         requester
+	username   string
+	mutation   sync.Mutex
+	searcher   func(context.Context, string, int) (map[string]any, error)
+	snapshotMu sync.Mutex
+	snapshots  map[string]cachedPlaylist
+}
+type cachedPlaylist struct {
+	list    *pb.SelectedListContent
+	created time.Time
 }
 
 func failure(code string) error { return errors.New(code) }
@@ -390,12 +399,68 @@ func (b *backend) execute(ctx context.Context, name string, a arguments) (any, e
 	if err != nil {
 		return nil, err
 	}
-	list, err := b.read(ctx, playlistPath(id))
+	var list *pb.SelectedListContent
+	if name == "get_playlist_tracks" && a.ResponseFormat == "page" && a.ExpectedRevision != "" {
+		b.snapshotMu.Lock()
+		if entry, ok := b.snapshots[id+"|"+a.ExpectedRevision]; ok && time.Since(entry.created) < 5*time.Minute {
+			list = entry.list
+		}
+		b.snapshotMu.Unlock()
+	}
+	if list == nil {
+		list, err = b.read(ctx, playlistPath(id))
+	}
 	if err != nil {
 		return nil, err
 	}
 	if name == "get_playlist_tracks" {
+		if a.ResponseFormat == "manifest" {
+			b.snapshotMu.Lock()
+			if b.snapshots == nil {
+				b.snapshots = make(map[string]cachedPlaylist)
+			}
+			for key, entry := range b.snapshots {
+				if time.Since(entry.created) >= 5*time.Minute {
+					delete(b.snapshots, key)
+				}
+			}
+			if len(b.snapshots) >= 8 {
+				b.snapshots = make(map[string]cachedPlaylist)
+			}
+			b.snapshots[id+"|"+base64.RawURLEncoding.EncodeToString(list.Revision)] = cachedPlaylist{list: list, created: time.Now()}
+			b.snapshotMu.Unlock()
+			uris := make([]string, len(list.Contents.Items))
+			for i, item := range list.Contents.Items {
+				uris[i] = item.GetUri()
+			}
+			return map[string]any{"revision": base64.RawURLEncoding.EncodeToString(list.Revision), "total": len(uris), "uris": uris, "complete": true}, nil
+		}
+		if a.ResponseFormat == "page" {
+			if a.Offset < 0 || a.Offset > len(list.Contents.Items) {
+				return nil, failure("invalid_offset")
+			}
+			limit := a.Limit
+			if limit <= 0 || limit > 100 {
+				limit = 50
+			}
+			end := a.Offset + limit
+			if end > len(list.Contents.Items) {
+				end = len(list.Contents.Items)
+			}
+			tracks, err := b.tracks(ctx, list.Contents.Items[a.Offset:end])
+			if err != nil {
+				return nil, err
+			}
+			var next any
+			if end < len(list.Contents.Items) {
+				next = end
+			}
+			return map[string]any{"items": tracks, "offset": a.Offset, "next_offset": next, "total": len(list.Contents.Items), "revision": base64.RawURLEncoding.EncodeToString(list.Revision), "complete": end == len(list.Contents.Items)}, nil
+		}
 		return b.tracks(ctx, list.Contents.Items)
+	}
+	if a.ExpectedRevision != "" && a.ExpectedRevision != base64.RawURLEncoding.EncodeToString(list.Revision) {
+		return nil, failure("playlist_version_conflict")
 	}
 	var ops []*pb.Op
 	var data any

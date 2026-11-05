@@ -31,6 +31,7 @@ pub async fn generate(
     messages.push(Msg::user(user_text));
     messages.push(Msg::assistant_text(final_text));
 
+    if super::context::prepare(deps.store,&deps.session_id,&mut messages,&[]).is_err(){return Vec::new();}
     let mut req = ChatRequest::new(model.to_string(), messages);
     req.max_tokens = Some(SUGGESTIONS_MAX_TOKENS);
     req.temperature = Some(0.7);

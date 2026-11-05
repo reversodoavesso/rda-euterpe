@@ -96,6 +96,13 @@ impl ProviderConfig {
     pub fn preset(id: &str) -> Option<Self> {
         let (name, kind, base_url, default_model, curation_model): (&str, Wire, &str, &str, &str) =
             match id {
+                "rda" => (
+                    "RDA AI",
+                    Wire::OpenaiCompat,
+                    "https://auth.reversodoavesso.com/api/llm/v1",
+                    "rda/chat-default",
+                    "rda/reasoning",
+                ),
                 "deepseek" => (
                     "DeepSeek",
                     Wire::OpenaiCompat,
@@ -202,6 +209,7 @@ impl ProviderConfig {
     /// Ids de presets conhecidos (ordem estável para a UI).
     pub fn preset_ids() -> &'static [&'static str] {
         &[
+            "rda",
             "deepseek",
             "openai",
             "anthropic",
@@ -374,7 +382,17 @@ impl Config {
             let _ = crate::secrets::set_provider_key("deepseek", &key);
         }
 
-        let active_provider = pick("EUTERPE_PROVIDER")
+        let shared_ai = pick("RDA_AI_URL");
+        if let Some(url) = shared_ai.as_ref() {
+            let mut provider = ProviderConfig::preset("rda").unwrap();
+            let base = url.trim_end_matches('/');
+            provider.base_url = if base.ends_with("/v1") { base.to_string() } else { format!("{base}/v1") };
+            provider.default_model = Some(pick("RDA_AI_MODEL").unwrap_or_else(|| "rda/chat-default".into()));
+            provider.curation_model = Some(pick("RDA_AI_CURATION_MODEL").unwrap_or_else(|| "rda/reasoning".into()));
+            providers.retain(|p| p.id != "rda");
+            providers.push(provider);
+        }
+        let active_provider = shared_ai.as_ref().map(|_| "rda".to_string()).or_else(|| pick("EUTERPE_PROVIDER"))
             .or_else(|| {
                 file.get("activeProvider")
                     .and_then(|v| v.as_str())
@@ -412,8 +430,8 @@ impl Config {
             db_path: paths::db_path(),
             providers,
             active_provider,
-            active_model: pick("LLM_CHAT_MODEL").unwrap_or(default_model),
-            curation_model: pick("LLM_CURATION_MODEL").unwrap_or(default_curation),
+            active_model: if shared_ai.is_some() { default_model } else { pick("LLM_CHAT_MODEL").unwrap_or(default_model) },
+            curation_model: if shared_ai.is_some() { default_curation } else { pick("LLM_CURATION_MODEL").unwrap_or(default_curation) },
             mutation_policy,
             web_search,
             searxng_url: pick("SEARXNG_URL").unwrap_or_else(|| "http://127.0.0.1:8888".to_string()),
@@ -674,6 +692,19 @@ mod tests {
             MutationPolicy::Allow,
             "D3: allow por padrão"
         );
+    }
+
+    #[test]
+    fn shared_provider_uses_hub_aliases_and_overrides_legacy_environment() {
+        let c = Config::from_sources(&serde_json::Value::Null, &env(&[
+            ("RDA_AI_URL", "http://ai-gateway:4010"),
+            ("LLM_CHAT_MODEL", "legacy-model"),
+            ("EUTERPE_PROVIDER", "deepseek"),
+        ])).unwrap();
+        assert_eq!(c.active_provider, "rda");
+        assert_eq!(c.active_model, "rda/chat-default");
+        assert_eq!(c.curation_model, "rda/reasoning");
+        assert_eq!(c.provider("rda").unwrap().base_url, "http://ai-gateway:4010/v1");
     }
 
     #[test]

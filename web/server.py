@@ -7,6 +7,7 @@ No Docker socket and no third-party Python packages are required.
 from __future__ import annotations
 
 import atexit
+import base64
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import hashlib
@@ -84,8 +85,15 @@ class Store:
                     daemon_key TEXT NOT NULL, spotify_key TEXT NOT NULL, created REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS tickets(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS mcp_tokens(id TEXT PRIMARY KEY, hash TEXT UNIQUE NOT NULL,
+                    user_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL, scope TEXT NOT NULL,
+                    created REAL NOT NULL, expires REAL NOT NULL, last_used REAL);
+                CREATE INDEX IF NOT EXISTS mcp_tokens_owner ON mcp_tokens(user_id);
                 CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, interrupted INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS chat_audit(id INTEGER PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    run_id TEXT NOT NULL, event TEXT NOT NULL, payload TEXT NOT NULL, created REAL NOT NULL);
+                CREATE INDEX IF NOT EXISTS chat_audit_conversation ON chat_audit(conversation_id,id);
                 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), tool TEXT NOT NULL, args TEXT NOT NULL, status TEXT NOT NULL, result TEXT, created REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, created REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -110,6 +118,8 @@ class Store:
             """)
             c.execute("INSERT OR IGNORE INTO meta VALUES ('csrf_key',?)", (secrets.token_hex(32),))
             self.csrf_key = bytes.fromhex(c.execute("SELECT value FROM meta WHERE key='csrf_key'").fetchone()[0])
+            if "error_code" not in {row[1] for row in c.execute("PRAGMA table_info(messages)")}:
+                c.execute("ALTER TABLE messages ADD COLUMN error_code TEXT")
         os.chmod(self.path, 0o600)
 
     @contextmanager
@@ -122,6 +132,47 @@ class Store:
                 yield c
         finally:
             c.close()
+
+    def issue_mcp_token(self, user_id, body):
+        name = body.get('name', '')
+        days = body.get('expiresInDays', 30)
+        scope = body.get('scope', 'read')
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+            raise APIError('invalid_token_name')
+        if type(days) is not int or not 1 <= days <= 90 or scope not in ('read', 'write'):
+            raise APIError('invalid_token_options')
+        raw = 'eut_mcp_' + secrets.token_urlsafe(32)
+        token_id, now = str(uuid.uuid4()), time.time()
+        expires = now + days * 86400
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            count = c.execute('SELECT count(*) FROM mcp_tokens WHERE user_id=? AND expires>?', (user_id, now)).fetchone()[0]
+            if count >= 20:
+                raise APIError('token_limit', 409)
+            c.execute('INSERT INTO mcp_tokens VALUES (?,?,?,?,?,?,?,NULL)',
+                      (token_id, digest(raw), user_id, name.strip(), scope, now, expires))
+        return {'id': token_id, 'token': raw, 'name': name.strip(), 'scope': scope, 'expires': expires}
+
+    def mcp_tokens(self, user_id):
+        with self.db() as c:
+            return [dict(row) for row in c.execute(
+                'SELECT id,name,scope,created,expires,last_used FROM mcp_tokens WHERE user_id=? ORDER BY created DESC', (user_id,))]
+
+    def revoke_mcp_token(self, user_id, token_id):
+        with self.db() as c:
+            if not c.execute('DELETE FROM mcp_tokens WHERE id=? AND user_id=?', (token_id, user_id)).rowcount:
+                raise APIError('token_not_found', 404)
+
+    def authenticate_mcp(self, authorization):
+        scheme, _, raw = (authorization or '').partition(' ')
+        if scheme.lower() != 'bearer' or not raw.startswith('eut_mcp_') or len(raw) > 128:
+            raise APIError('invalid_token', 401)
+        with self.db() as c:
+            row = c.execute('SELECT id,user_id,scope FROM mcp_tokens WHERE hash=? AND expires>?', (digest(raw), time.time())).fetchone()
+            if row is None:
+                raise APIError('invalid_token', 401)
+            c.execute('UPDATE mcp_tokens SET last_used=? WHERE id=?', (time.time(), row['id']))
+        return self.user(row['user_id']), row['scope']
 
     def user(self, user_id):
         with self.db() as c:
@@ -186,6 +237,7 @@ class Store:
                     secrets.token_bytes(16), secrets.token_bytes(64), secrets.token_urlsafe(36), secrets.token_urlsafe(36), time.time()))
             c.execute('INSERT INTO sso_bindings VALUES (?,?,?,?,?)', (profile['issuer'], profile['sub'], profile['id'], user_id, time.time()))
             c.execute('DELETE FROM sessions WHERE user_id=?', (user_id,))
+            c.execute('DELETE FROM mcp_tokens WHERE user_id=?', (user_id,))
         return self.user(user_id)
 
     def sso_binding(self, user_id):
@@ -241,12 +293,17 @@ class Store:
             row = c.execute("SELECT * FROM conversations WHERE id=? AND user_id=?", (conversation_id, user_id)).fetchone()
             if not row:
                 raise APIError("conversation_not_found", 404)
-            messages = [dict(m) for m in c.execute("SELECT role,content,interrupted,created FROM messages WHERE conversation_id=? ORDER BY id", (conversation_id,))]
+            messages = [dict(m) for m in c.execute("SELECT role,content,interrupted,created,error_code FROM messages WHERE conversation_id=? ORDER BY id", (conversation_id,))]
         return {**dict(row), "messages": messages}
 
-    def message(self, conversation_id, role, content, interrupted=False):
+    def audit_event(self, conversation_id, run_id, event, payload):
         with self.db() as c:
-            c.execute("INSERT INTO messages(conversation_id,role,content,interrupted,created) VALUES (?,?,?,?,?)", (conversation_id, role, content, int(interrupted), time.time()))
+            c.execute("INSERT INTO chat_audit(conversation_id,run_id,event,payload,created) VALUES (?,?,?,?,?)",
+                      (conversation_id, run_id, event, json.dumps(payload, ensure_ascii=False), time.time()))
+
+    def message(self, conversation_id, role, content, interrupted=False, error_code=None):
+        with self.db() as c:
+            c.execute("INSERT INTO messages(conversation_id,role,content,interrupted,created,error_code) VALUES (?,?,?,?,?,?)", (conversation_id, role, content, int(interrupted), time.time(), error_code))
             c.execute("UPDATE conversations SET updated=? WHERE id=?", (time.time(), conversation_id))
 
     def activity(self, user_id, kind, title, status, data=None):
@@ -418,7 +475,15 @@ class Worker:
     def json(self, path, method="GET", body=None):
         try:
             with self.request(path, method, body) as response:
-                return response.status, json.load(response)
+                try:
+                    value = json.load(response)
+                except ValueError:
+                    # Axum can reject a request with an empty/text 4xx body.
+                    # Preserve that rejection without exposing the raw response.
+                    if 400 <= response.status < 500:
+                        return response.status, {"error": "agent_request_rejected"}
+                    raise
+                return response.status, value
         except (OSError, ValueError, TimeoutError):
             raise APIError("agent_unavailable", 502) from None
 
@@ -429,6 +494,91 @@ class Worker:
         result = reply["result"]
         data = json.loads(result["content"][0]["text"])
         return not result.get("isError", False), data
+
+    def spotify_health(self):
+        with OPENER.open(f"http://127.0.0.1:{self.spotify_port}/health", timeout=5) as response:
+            return json.load(response)
+
+
+class PlatformWorker(Worker):
+    def __init__(self, user, headers, base):
+        super().__init__(user, Path('/unused'), 0, 0)
+        self.headers, self.endpoint = headers, base
+
+    def request(self, path, method="GET", body=None, timeout=150):
+        raw = json.dumps(body, ensure_ascii=False).encode() if body is not None else None
+        req = urllib.request.Request(self.endpoint + '/api/runtime/v1/proxy', data=raw, method=method,
+            headers={**self.headers, 'X-RDA-Runtime-Path': path, 'Content-Type': 'application/json'})
+        try:
+            return OPENER.open(req, timeout=timeout)
+        except urllib.error.HTTPError as error:
+            return error
+
+    def spotify_health(self):
+        status, value = self.json('/runtime/spotify-health')
+        if status != 200:
+            raise APIError('spotify_unavailable', 503)
+        return value
+
+
+class PlatformWorkers:
+    """The authenticated application delegates ownership; no Docker credentials in this gateway."""
+    def __init__(self, store):
+        self.store = store
+        self.base = os.environ['RDA_RUNTIME_URL'].rstrip('/')
+        parsed = urllib.parse.urlparse(self.base)
+        if parsed.scheme not in {'https', 'http'} or parsed.username or parsed.password or parsed.path not in {'', '/'}:
+            raise ValueError('invalid_runtime_url')
+        if parsed.scheme == 'http' and parsed.hostname not in {'127.0.0.1', 'localhost', 'rda-runtime', 'host.docker.internal'}:
+            raise ValueError('runtime_requires_tls')
+        self.key = Path(os.environ['RDA_RUNTIME_KEY_FILE']).read_text().strip()
+        if len(self.key) < 32:
+            raise ValueError('invalid_runtime_service_key')
+        self.legacy = None
+        self.legacy_lock = threading.RLock()
+
+    @contextmanager
+    def local_lease(self, user):
+        if os.getenv('RDA_RUNTIME_LEGACY_FALLBACK') != 'true':
+            raise APIError('link_rda_before_compute_migration', 409)
+        with self.legacy_lock:
+            if self.legacy is None:
+                self.legacy = Workers(self.store)
+        with self.legacy.lease(user) as worker:
+            yield worker
+
+    @contextmanager
+    def lease(self, user):
+        binding = self.store.sso_binding(user['id'])
+        if not binding:
+            with self.local_lease(user) as worker:
+                yield worker
+            return
+        ready_file = os.getenv('RDA_RUNTIME_READY_USERS_FILE')
+        if ready_file:
+            ready = json.loads(Path(ready_file).read_text())
+            local = self.store.root / 'users' / identifier(user['id'])
+            has_data = any((local / name).is_dir() and any((local / name).iterdir()) for name in ['daemon', 'spotify'])
+            if has_data and user['id'] not in ready:
+                with self.local_lease(user) as worker:
+                    yield worker
+                return
+        identity = {'issuer': binding['issuer'], 'id': binding['platform_user_id'], 'role': 'member'}
+        owner = base64.urlsafe_b64encode(json.dumps(identity).encode()).decode().rstrip('=')
+        headers = {'X-RDA-Application': 'euterpe', 'X-RDA-Runtime-Key': self.key, 'X-RDA-Runtime-Owner': owner,
+                   'X-RDA-Runtime-Connection': 'spotify', 'Content-Type': 'application/json'}
+        request = urllib.request.Request(self.base + '/api/runtime/v1/instance', method='POST', headers=headers,
+            data=json.dumps({'inputs': {'DAEMON_KEY': user['daemon_key'], 'SPOTIFY_KEY': user['spotify_key']}}).encode())
+        try:
+            with OPENER.open(request, timeout=100) as response:
+                json.load(response)
+        except (OSError, ValueError):
+            raise APIError('compute_unavailable', 503) from None
+        yield PlatformWorker(user, headers, self.base)
+
+    def close(self):
+        if self.legacy is not None:
+            self.legacy.close()
 
 
 class Workers:
@@ -555,7 +705,7 @@ class Application:
         self.store = Store(root)
         with self.store.db() as c:
             c.execute("UPDATE jobs SET status='interrupted',result=? WHERE status IN ('pending','running')", (json.dumps({"code": "operation_interrupted_verify_state"}),))
-        self.workers = workers or Workers(self.store)
+        self.workers = workers or (PlatformWorkers(self.store) if os.getenv('RDA_RUNTIME_URL') else Workers(self.store))
         self.lock = threading.RLock()
         self.chat_locks = {}
         self.login_attempts = {}
@@ -624,6 +774,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
+        if os.getenv('WEB_REQUIRE_HTTPS') == 'true':
+            self.send_header('Strict-Transport-Security', 'max-age=31536000')
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
     def cookie(self, token, clear=False):
@@ -639,6 +791,8 @@ class Handler(BaseHTTPRequestHandler):
         self.common_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
+        if status == 401 and urllib.parse.urlsplit(self.path).path == '/mcp':
+            self.send_header('WWW-Authenticate', 'Bearer realm="euterpe-mcp"')
         if cookie:
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
@@ -682,6 +836,68 @@ class Handler(BaseHTTPRequestHandler):
                 raise APIError("csrf_rejected", 403)
         return user, token
 
+    def remote_mcp(self):
+        self.origin()
+        user, scope = self.app.store.authenticate_mcp(self.headers.get('Authorization'))
+        if self.command != 'POST':
+            self.send_response(405)
+            self.common_headers()
+            self.send_header('Allow', 'POST')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        version = self.headers.get('MCP-Protocol-Version', '2025-03-26')
+        if version not in {'2025-03-26', '2025-06-18'}:
+            raise APIError('unsupported_protocol_version')
+        accept = self.headers.get('Accept', '')
+        if 'application/json' not in accept or 'text/event-stream' not in accept:
+            raise APIError('mcp_accept_required', 406)
+        body = self.body()
+        request_id = body.get('id')
+        def error(code, message):
+            return self.reply({'jsonrpc': '2.0', 'id': request_id, 'error': {'code': code, 'message': message}})
+        method, params = body.get('method'), body.get('params', {})
+        if body.get('jsonrpc') != '2.0' or not isinstance(method, str) or not isinstance(params, dict):
+            return error(-32600, 'Invalid Request')
+        if 'id' not in body:
+            if method not in {'notifications/initialized', 'notifications/cancelled'}:
+                raise APIError('unsupported_notification')
+            self.send_response(202)
+            self.common_headers()
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        if type(request_id) not in (str, int):
+            return error(-32600, 'Invalid request id')
+        allowed_methods = {'initialize', 'ping', 'tools/list', 'tools/call', 'resources/list',
+                           'resources/read', 'resources/templates/list', 'prompts/list', 'prompts/get'}
+        if method not in allowed_methods:
+            return error(-32601, 'Method not found')
+        if method == 'initialize':
+            requested = params.get('protocolVersion')
+            negotiated = requested if requested in ('2025-03-26', '2025-06-18') else '2025-06-18'
+            return self.reply({'jsonrpc': '2.0', 'id': request_id, 'result': {
+                'protocolVersion': negotiated, 'serverInfo': {'name': 'euterpe-remote', 'version': '1.0.0'},
+                'capabilities': {'tools': {'listChanged': False}, 'resources': {'subscribe': False, 'listChanged': False}, 'prompts': {'listChanged': False}},
+                'instructions': 'Acesso Spotify pessoal. Leia antes de escrever. Escritas exigem aprovação nas propostas da interface Euterpe; nunca repita uma escrita de resultado incerto.'}})
+        if method == 'ping':
+            return self.reply({'jsonrpc': '2.0', 'id': request_id, 'result': {}})
+        allowed_tools = {'spotify_' + name for name in READ_TOOLS | (WRITE_TOOLS if scope == 'write' else set())}
+        if method == 'tools/call':
+            if not isinstance(params.get('name'), str) or params['name'] not in allowed_tools:
+                return error(-32602, 'Tool unavailable for this token')
+            if not isinstance(params.get('arguments', {}), dict):
+                return error(-32602, 'Invalid arguments')
+            # This flag can only strengthen the daemon policy, never bypass it.
+            body = {**body, 'params': {**params, '_requireConfirmation': True}}
+        with self.app.workers.lease(user) as worker:
+            status, reply = worker.json('/mcp', 'POST', body)
+        if status != 200 or not isinstance(reply, dict):
+            raise APIError('agent_unavailable', 502)
+        if method == 'tools/list' and isinstance(reply.get('result'), dict):
+            reply['result']['tools'] = [tool for tool in reply['result'].get('tools', []) if tool.get('name') in allowed_tools]
+        return self.reply(reply)
+
     def do_GET(self):
         self.handle_route()
 
@@ -718,6 +934,16 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.unquote(parsed.path)
         if ".." in path or "\\" in path or "\x00" in path:
             raise APIError("invalid_path")
+        if os.getenv('WEB_REQUIRE_HTTPS') == 'true' and self.headers.get('X-Forwarded-Proto', '').split(',')[0].strip() == 'http':
+            origin = os.getenv('WEB_PUBLIC_ORIGIN', '').rstrip('/')
+            if not origin.startswith('https://'):
+                raise APIError('https_origin_required', 503)
+            self.send_response(308)
+            self.common_headers()
+            self.send_header('Location', origin + '/' + parsed.path.lstrip('/') + ('?' + parsed.query if parsed.query else ''))
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
         if self.command == "GET" and path.startswith("/access/"):
             token = self.app.store.consume_ticket(path.split("/")[-1])
             self.send_response(303)
@@ -729,8 +955,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/health" and self.command == "GET":
             return self.reply({"ok": True, "app": "euterpe-web"})
+        if path == '/mcp':
+            return self.remote_mcp()
         if path == '/api/account/sso/config' and self.command == 'GET':
-            return self.reply({'enabled': bool(self.app.sso), 'loginUrl': '/api/account/sso/login'})
+            return self.reply({'enabled': bool(self.app.sso), 'loginUrl': '/api/account/sso/login', 'localLoginEnabled': os.getenv('WEB_LOCAL_LOGIN_ENABLED', 'true') != 'false'})
         if path in {'/api/account/sso/login', '/api/account/sso/link'}:
             if not self.app.sso:
                 raise APIError('sso_not_configured', 503)
@@ -773,6 +1001,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Location', '/'); self.send_header('Content-Length', '0'); self.end_headers(); return
         if path in {"/api/account/login", "/api/account/register"} and self.command == "POST":
             self.origin()
+            if path.endswith('/login') and os.getenv('WEB_LOCAL_LOGIN_ENABLED', 'true') == 'false':
+                raise APIError('use_rda_sso_login', 403)
             self.app.login_limit(self.client_address[0])
             body = self.body()
             if path.endswith("register"):
@@ -802,6 +1032,14 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         user, token = self.authenticated()
+        if path == '/api/mcp/tokens':
+            if self.command == 'GET':
+                return self.reply({'tokens': self.app.store.mcp_tokens(user['id']), 'endpoint': '/mcp'})
+            if self.command == 'POST':
+                return self.reply(self.app.store.issue_mcp_token(user['id'], self.body()), 201)
+        if path.startswith('/api/mcp/tokens/') and self.command == 'DELETE':
+            self.app.store.revoke_mcp_token(user['id'], identifier(path.rsplit('/', 1)[-1]))
+            return self.reply({'ok': True})
         user_id = user["id"]
         if path == "/api/me" and self.command == "GET":
             return self.reply({"user": self.public_user(user), "csrf": self.app.store.csrf(token), 'ssoLinked': bool(self.app.store.sso_binding(user_id))})
@@ -823,6 +1061,58 @@ class Handler(BaseHTTPRequestHandler):
                 with self.app.store.db() as c:
                     c.execute("INSERT INTO conversations VALUES (?,?,?,?,?)", (conversation_id, user_id, title, now, now))
                 return self.reply({"id": conversation_id, "title": title, "messages": []}, 201)
+        if path.startswith("/api/conversations/") and path.endswith("/workbench") and self.command in {"GET","POST"}:
+            conversation_id = identifier(path.split("/")[-2])
+            self.app.store.conversation(user_id, conversation_id)
+            body = self.body() if self.command == "POST" else None
+            with self.app.workers.lease(user) as worker:
+                status, data = worker.json("/workbench/" + conversation_id, self.command, body)
+            return self.reply(data, status)
+        if path.startswith("/api/conversations/") and path.endswith("/audit") and self.command == "GET":
+            conversation_id = identifier(path.split("/")[-2])
+            conversation = self.app.store.conversation(user_id, conversation_id)
+            with self.app.store.db() as c:
+                events = [dict(row) for row in c.execute(
+                    "SELECT id,run_id,event,payload,created FROM chat_audit WHERE conversation_id=? ORDER BY id", (conversation_id,))]
+            for event in events:
+                event["payload"] = json.loads(event["payload"])
+                event["source"] = "gateway"
+            # Only diagnostic fields are exposed: never raw logs, reasoning, headers or credentials.
+            allowed = {
+                "session.start": {"model"}, "session.end": {"final_length"},
+                "llm.turn": {"step", "tool_calls"}, "llm.final": {"step", "length"},
+                "llm.error": {"step", "code"}, "tools.available": {"names", "backend"},
+                "tool.result": {"name", "ok", "code", "size", "duration_ms"},
+                "context.metrics": {"before_bytes","after_bytes","estimated_input_tokens","max_input_tokens","tool_budget_tokens","archived_references"},
+                "llm.response": {"step","duration_ms","input_tokens","output_tokens"},
+                "operation.progress": {"operation_id","kind","status","stage","items_processed","total_items","error","updated","spotify_ms","llm_ms","input_tokens","output_tokens"},
+            }
+            allowed["tool.result"].update({"inline_bytes","estimated_inline_tokens","offloaded"})
+            available = False
+            try:
+                with self.app.workers.lease(user) as worker:
+                    status, logs = worker.json("/sessions/" + conversation_id)
+                available = status == 200 and isinstance(logs, list)
+                if available:
+                    from datetime import datetime
+                    for entry in logs:
+                        if not isinstance(entry, dict) or entry.get("event") not in allowed:
+                            continue
+                        try:
+                            created = datetime.fromisoformat(entry["ts"].replace("Z", "+00:00")).timestamp()
+                        except (KeyError, ValueError, TypeError):
+                            continue
+                        payload = entry.get("payload") or {}
+                        if not isinstance(payload, dict):
+                            continue
+                        events.append({"event": entry["event"], "created": created, "source": "agent",
+                                       "payload": {k: v for k, v in payload.items() if k in allowed[entry["event"]]}})
+            except Exception:
+                pass  # Gateway audit and messages remain available when a worker is unavailable.
+            events.sort(key=lambda e: e["created"])
+            with self.app.lock:
+                running = self.app.chat_locks.get(conversation_id, threading.Lock()).locked()
+            return self.reply({"conversation": conversation, "events": events, "running": running, "agent_logs_available": available})
         if path.startswith("/api/conversations/"):
             conversation_id = identifier(path.rsplit("/", 1)[-1])
             conversation = self.app.store.conversation(user_id, conversation_id)
@@ -878,6 +1168,10 @@ class Handler(BaseHTTPRequestHandler):
             self.app.store.conversation(user_id, conversation_id)
             with self.app.workers.lease(user) as worker:
                 status, data = worker.json("/chat/" + conversation_id + "/cancel", "POST", {})
+            with self.app.store.db() as c:
+                run = c.execute("SELECT run_id FROM chat_audit WHERE conversation_id=? AND event='request.started' ORDER BY id DESC LIMIT 1", (conversation_id,)).fetchone()
+            if run:
+                self.app.store.audit_event(conversation_id, run["run_id"], "cancel.requested", {"cancelled": bool(data.get("cancelled")), "status": status})
             return self.reply(data, status)
 
         # Editorial models catalog
@@ -951,8 +1245,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply({"ok": ok, "data": data}, 200 if ok else 422)
             if path == "/api/status" and self.command == "GET":
                 status, spotify = worker.json("/spotify/auth")
-                with OPENER.open(f"http://127.0.0.1:{worker.spotify_port}/health", timeout=5) as response:
-                    tools = json.load(response).get("supported_tools", [])
+                tools = worker.spotify_health().get("supported_tools", [])
                 return self.reply({"spotify": spotify, "tools": tools, "ready": status == 200})
             if path == "/api/proposals" and self.command == "GET":
                 status, data = worker.json("/proposals")
@@ -968,6 +1261,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError("proposal_expired", 404)
                 status, data = worker.json("/proposals/" + proposal_id, "POST", {"decision": decision})
                 if status == 200:
+                    with self.app.store.db() as c:
+                        audit = c.execute("SELECT a.conversation_id,a.run_id FROM chat_audit a JOIN conversations c ON c.id=a.conversation_id WHERE c.user_id=? AND a.event='proposal' AND json_extract(a.payload,'$.proposalId')=? ORDER BY a.id DESC LIMIT 1", (user_id, proposal_id)).fetchone()
+                    if audit:
+                        self.app.store.audit_event(audit["conversation_id"], audit["run_id"], "proposal.decision", {"proposalId": proposal_id, "decision": decision})
                     self.app.store.activity(user_id, "decision", proposal["name"], "approved" if decision == "approve" else "rejected", {"tool": proposal["name"], "arguments": proposal["args"]})
                 return self.reply(data, status)
             spotify_routes = {("/api/spotify/auth", "GET"): ("/spotify/auth", "GET"), ("/api/spotify/auth/start", "POST"): ("/spotify/auth/start", "POST"), ("/api/spotify/auth", "DELETE"): ("/spotify/auth", "DELETE")}
@@ -1017,7 +1314,12 @@ class Handler(BaseHTTPRequestHandler):
         if not lock.acquire(blocking=False):
             raise APIError("conversation_is_running", 409)
         assistant, complete, started = "", False, False
+        run_id, audit_started = str(uuid.uuid4()), time.monotonic()
+        outcome = "interrupted"
+        response_error = None
+        tool_failed = False
         try:
+            self.app.store.audit_event(conversation_id, run_id, "request.started", {"input_chars": len(text)})
             with self.app.workers.lease(user) as worker:
                 upstream = worker.request("/chat", "POST", {"text": text, "sessionId": conversation_id, "locale": "pt-br"})
                 if upstream.status != 200:
@@ -1046,11 +1348,27 @@ class Handler(BaseHTTPRequestHandler):
                         elif not line:
                             if lines:
                                 data = json.loads("\n".join(lines))
+                                if event in {"status", "tool", "tool-result", "proposal", "error"}:
+                                    keys = {"status", "id", "name", "proposalId", "kind", "code", "ok"}
+                                    self.app.store.audit_event(conversation_id, run_id, event,
+                                                              {k: v for k, v in data.items() if k in keys})
+                                if event == "error":
+                                    outcome = "failed"
+                                    response_error = data.get("code") or "provider_error"
+                                if event == "tool-result" and data.get("ok") is False:
+                                    tool_failed = True
                                 if event == "stream":
                                     assistant += data.get("delta", "")
                                 if event == "done":
-                                    if assistant:
-                                        self.app.store.message(conversation_id, "assistant", assistant)
+                                    if not assistant.strip():
+                                        outcome = "failed"
+                                        response_error = response_error or "empty_response"
+                                        self.app.store.audit_event(conversation_id, run_id, "error", {"code": response_error})
+                                        assistant = "Não recebi uma resposta do agente. Consulte a auditoria desta conversa para verificar a falha."
+                                        self.wfile.write(f'event: error\ndata: {json.dumps({"code": response_error})}\n\nevent: stream\ndata: {json.dumps({"delta": assistant}, ensure_ascii=False)}\n\n'.encode())
+                                    elif outcome != "failed":
+                                        outcome = "completed"
+                                    self.app.store.message(conversation_id, "assistant", assistant, error_code=response_error or ("tool_failed" if tool_failed else None))
                                     complete = True
                                 packet = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode()
                                 self.wfile.write(packet)
@@ -1063,8 +1381,10 @@ class Handler(BaseHTTPRequestHandler):
                         self.record_agent_activity(user, worker, conversation_id)
         except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
             if not started:
+                outcome = "failed"
                 raise APIError("chat_unavailable", 502) from None
         except Exception:
+            outcome = "failed"
             if not started:
                 raise
             try:
@@ -1073,9 +1393,16 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
         finally:
-            if assistant and not complete:
-                self.app.store.message(conversation_id, "assistant", assistant, interrupted=True)
-            lock.release()
+            try:
+                if not complete:
+                    fallback = "A solicitação foi interrompida antes de ser concluída. Confira a auditoria antes de repetir alterações no Spotify."
+                    self.app.store.message(conversation_id, "assistant", assistant or fallback, interrupted=True, error_code=response_error or "chat_interrupted")
+                self.app.store.audit_event(conversation_id, run_id, "request.finished", {
+                    "outcome": outcome, "duration_ms": round((time.monotonic() - audit_started) * 1000),
+                    "response_chars": len(assistant),
+                })
+            finally:
+                lock.release()
 
     def record_agent_activity(self, user, worker, conversation_id):
         status, events = worker.json("/sessions/" + conversation_id)

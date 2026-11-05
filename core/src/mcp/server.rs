@@ -63,7 +63,7 @@ pub async fn call_tool(state: &AppState, params: &Value) -> Result<Value, Error>
     let locale = crate::i18n::normalize_locale(None).to_string();
     let call_id = format!("mcp_{}", uuid::Uuid::new_v4());
     let mutating = crate::tools::catalog::is_mutating(&def.name);
-    let policy = if mutating {
+    let mut policy = if mutating {
         gate::effective_policy(
             eff.mutation_policy,
             &def.name,
@@ -72,8 +72,11 @@ pub async fn call_tool(state: &AppState, params: &Value) -> Result<Value, Error>
     } else {
         crate::config::MutationPolicy::Allow
     };
+    if mutating && params["_requireConfirmation"] == true && policy == crate::config::MutationPolicy::Allow {
+        policy = crate::config::MutationPolicy::Confirm;
+    }
 
-    if !state.bridge.has_backend() {
+    if !state.bridge.has_backend() && !crate::tools::workbench::definitions().iter().any(|t|t.name==def.name) {
         return Ok(error_content("client_offline".to_string(), None));
     }
 
@@ -90,7 +93,7 @@ pub async fn call_tool(state: &AppState, params: &Value) -> Result<Value, Error>
             .await
     };
 
-    let result = if mutating {
+    let result = if mutating && def.name!="selection_apply" {
         gate::annotate(result, &state.store, &args, &def.name)
     } else {
         result

@@ -1,0 +1,14 @@
+# Apply after offline migration of linked users. Paths and keys are private operator inputs.
+services:
+  web:
+    environment:
+      RDA_RUNTIME_URL: ${RDA_RUNTIME_URL:-http://rda-runtime:3008}
+      RDA_RUNTIME_KEY_FILE: /run/secrets/euterpe-runtime.key
+    volumes:
+      - ${RDA_RUNTIME_KEY_PATH:?Set the Euterpe service key path}:/run/secrets/euterpe-runtime.key:ro
+    extra_hosts: [host.docker.internal:host-gateway]
+    networks: [default, runtime-control]
+networks:
+  runtime-control:
+    external: true
+    name: rda-runtime-control

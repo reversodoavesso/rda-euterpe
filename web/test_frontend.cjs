@@ -7,6 +7,62 @@ const { JSDOM } = require('jsdom');
 const source = fs.readFileSync(__dirname + '/dist/app.js', 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('public SSO-only mode hides local credentials and uses DS icon elements', async()=>{
+  const p=await page();
+  try {
+    p.run('state.user=null;state.sso={enabled:true,localLoginEnabled:false};render()');
+    assert.equal(p.dom.window.document.querySelector('input[name="password"]'),null);
+    assert(p.dom.window.document.querySelector('rda-icon[name="sparkles"]'));
+    assert(!p.dom.window.document.querySelector('#app').textContent.includes('✦'));
+    assert.match(p.dom.window.document.querySelector('#app').textContent,/Entrar com RDA/);
+    p.run('state.user={id:"me",username:"synthetic",display_name:"Synthetic"};state.messages=[{role:"user",content:"Conteúdo ✦ ✓ 🙂"}];state.status={spotify:{authenticated:true}};render()');
+    assert.equal(p.dom.window.document.querySelector('.message-text').textContent,'Conteúdo ✦ ✓ 🙂');
+  } finally {p.dom.window.close();}
+});
+
+test('login keeps the interface hidden while compute prepares, then opens the workspace', async()=>{
+  const p=await page();let finish;
+  try {
+    const fallback=p.dom.window.fetch;
+    p.dom.window.fetch=async(url,options)=>url==='/api/status'?new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({ready:true,spotify:{authenticated:false},tools:[]})});}):fallback(url,options);
+    const preparing=p.run('signedIn({user:{id:"alice",username:"alice",display_name:"Alice"},csrf:"csrf",ssoLinked:true})');
+    await tick();
+    assert(p.dom.window.document.querySelector('.startup-page[aria-busy="true"]'));
+    assert.match(p.dom.window.document.querySelector('#app').textContent,/Preparando seu espaço musical/);
+    assert.equal(p.dom.window.document.querySelector('#message-input'),null);
+    finish();await preparing;await tick();
+    assert.equal(p.dom.window.document.querySelector('.startup-page'),null);
+    assert(p.dom.window.document.querySelector('#message-input'));
+  } finally {p.dom.window.close();}
+});
+
+test('failed preparation offers retry and never exposes a workspace before compute is ready', async()=>{
+  const p=await page();let available=false;
+  try {
+    const fallback=p.dom.window.fetch;
+    p.dom.window.fetch=async(url,options)=>url==='/api/status'?{ok:available,status:available?200:503,json:async()=>available?{ready:true,spotify:{authenticated:false}}:{error:'compute_unavailable'}}:fallback(url,options);
+    await p.run('signedIn({user:{id:"alice",username:"alice",display_name:"Alice"},csrf:"csrf"})');
+    assert.equal(p.dom.window.document.querySelector('#message-input'),null);
+    assert(p.dom.window.document.querySelector('[role="alert"]'));
+    const retry=[...p.dom.window.document.querySelectorAll('button')].find(b=>b.textContent==='Tentar novamente');
+    assert(retry);available=true;retry.click();await tick();
+    assert(p.dom.window.document.querySelector('#message-input'));
+  } finally {p.dom.window.close();}
+});
+
+test('logout during preparation prevents a late compute response from reopening the account', async()=>{
+  const p=await page();let finish;
+  try {
+    const fallback=p.dom.window.fetch;
+    p.dom.window.fetch=async(url,options)=>url==='/api/status'?new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({ready:true,spotify:{authenticated:false}})});}):fallback(url,options);
+    const preparing=p.run('signedIn({user:{id:"alice",username:"alice",display_name:"Alice"},csrf:"csrf"})');
+    await tick();await p.run('logout()');finish();await preparing;
+    assert.equal(p.run('state.user'),null);
+    assert.equal(p.dom.window.document.querySelector('#message-input'),null);
+    assert(p.dom.window.document.querySelector('.auth-page'));
+  } finally {p.dom.window.close();}
+});
+
 test('RDA login replaces registration and existing accounts have an explicit linking action', async()=>{
   const p=await page();
   try {
@@ -45,7 +101,7 @@ test('review has no stray zero and all sections are available', async()=>{
   try {
     const review=p.dom.window.document.querySelector('.review');
     assert(!Array.from(review.childNodes).some(n=>n.nodeType===3&&n.textContent==='0'));
-    assert.equal(p.dom.window.document.querySelectorAll('nav button').length,6);
+    assert.equal(p.dom.window.document.querySelectorAll('nav button').length,8);
   }finally{p.dom.window.close();}
 });
 
@@ -259,4 +315,140 @@ test('RDA Design System canonical classes, tokens, and data attributes are genui
   } finally {
     p.dom.window.close();
   }
+});
+
+
+test('audit shows timeline, filters failures and renders messages as text', async () => {
+  const p = await page();
+  try {
+    p.run(`state.conversations=[{id:"c1",title:"Minha conversa"}];state.auditConversation="c1";state.view="audit";
+      state.audit={conversation:{id:"c1",messages:[{role:"user",content:"<img src=x onerror=alert(1)>",created:1}]},agent_logs_available:false,running:false,events:[
+        {event:"request.started",source:"gateway",run_id:"run1",created:1,payload:{}},
+        {event:"tool.result",source:"agent",created:2,payload:{name:"search_spotify",ok:false,code:"rate_limited"}},
+        {event:"request.finished",source:"gateway",run_id:"run1",created:3,payload:{outcome:"completed",duration_ms:120}}
+      ]};render()`);
+    const doc=p.dom.window.document;
+    assert.equal(doc.querySelectorAll('.audit-event').length,3);
+    assert.match(doc.querySelector('#view').textContent,/Diagnóstico do agente indisponível/);
+    assert.equal(doc.querySelector('.audit-message').textContent,'<img src=x onerror=alert(1)>');
+    assert.equal(doc.querySelector('.audit-message img'),null);
+    const filter=doc.querySelector('[aria-label="Filtrar eventos"]');filter.value='errors';filter.dispatchEvent(new p.dom.window.Event('change'));
+    assert.equal(doc.querySelectorAll('.audit-event').length,1);
+    assert.match(doc.querySelector('.audit-event').textContent,/rate_limited/);
+  } finally {p.dom.window.close();}
+});
+
+test('late audit response cannot restore data after logout', async () => {
+  const p=await page();let finish;
+  try {
+    const original=p.dom.window.fetch;
+    p.dom.window.fetch=async(url,options)=>url==='/api/conversations/c1/audit'?new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({conversation:{id:'c1',messages:[]},events:[]})});}):original(url,options);
+    const loading=p.run('loadAudit("c1")');await tick();
+    await p.run('logout()');finish();await loading;
+    assert.equal(p.run('state.audit'),null);
+  } finally {p.dom.window.close();}
+});
+
+test('chat keeps a persistent quota alert and fallback instead of silently removing the response', async () => {
+  const p=await page();
+  try {
+    const original=p.dom.window.fetch;
+    p.dom.window.fetch=async(url,options)=>{
+      if(url!=='/api/chat')return original(url,options);
+      return {ok:true,body:new ReadableStream({start(c){
+        c.enqueue(new TextEncoder().encode('event: error\ndata: {"code":"quota_exhausted"}\n\nevent: stream\ndata: {"delta":"A cota de IA foi atingida."}\n\nevent: done\ndata: {}\n\n'));c.close();
+      }})};
+    };
+    p.run('state.conversation="test"');await p.run('sendMessage("Teste")');
+    assert.equal(p.run('state.messages[1].error_code'),'quota_exhausted');
+    assert.match(p.dom.window.document.querySelector('.chat-error').textContent,/cota de IA/);
+    p.run('render()');
+    assert(p.dom.window.document.querySelector('.chat-error button'));
+    assert.match(p.dom.window.document.querySelector('.message.assistant .message-text').textContent,/cota de IA/);
+  }finally{p.dom.window.close();}
+});
+
+test('empty done and abruptly closed streams always leave a visible response', async () => {
+  for(const sse of ['event: done\ndata: {}\n\n','']) {
+    const p=await page();
+    try {
+      const original=p.dom.window.fetch;
+      p.dom.window.fetch=async(url,options)=>url!=='/api/chat'?original(url,options):{ok:true,body:new ReadableStream({start(c){c.enqueue(new TextEncoder().encode(sse));c.close();}})};
+      p.run('state.conversation="test"');await p.run('sendMessage("Teste")');
+      assert(p.dom.window.document.querySelector('.message.assistant .chat-error'));
+      assert(p.run('state.messages[1].content.length')>0);
+    }finally{p.dom.window.close();}
+  }
+});
+
+test('operations view exposes coverage, resume and uncertain-write reconciliation without approving', async () => {
+  const p=await page();
+  try {
+    p.run('state.view="operations";state.workbenchConversation="c1";state.conversations=[{id:"c1",title:"Conversa"}];state.workbench={state:{references:[]},operations:[{operation_id:"read",kind:"dataset",status:"paused",can_resume:true,items_processed:50,total_items:1050},{operation_id:"write",kind:"apply",status:"uncertain",can_resume:false}]};render()');
+    const doc=p.dom.window.document;
+    assert.match(doc.querySelector('#view').textContent,/50 de 1050 itens/);
+    assert([...doc.querySelectorAll('button')].some(b=>b.textContent==='Retomar do checkpoint'));
+    assert([...doc.querySelectorAll('button')].some(b=>b.textContent==='Conferir estado no Spotify'));
+    assert(!p.requests.some(r=>r.url.includes('/proposals/')&&r.method==='POST'));
+    p.run('state.workbenchPage={items:[{name:"Faixa de teste"}],items_returned:1,items_processed:1050,total_items:1050,has_more:true,next_cursor:"next"};render()');
+    assert.match(doc.querySelector('#view').textContent,/Esta página não representa a análise/);
+  } finally {p.dom.window.close();}
+});
+
+test('MCP settings generate a token once, hide it, list and revoke without storing the secret', async () => {
+  const p = await page();
+  try {
+    const calls = [];
+    p.dom.window.fetch = async (url, options = {}) => {
+      calls.push({url, method: options.method || 'GET', body: options.body});
+      return {ok:true, status:200, json:async()=>options.method === 'POST'
+        ? {token:'eut_mcp_test_secret'} : {tokens:[{id:'token-id',name:'My client',scope:'read',expires:1900000000}]}};
+    };
+    p.run('document.querySelector("#view").replaceChildren(mcpSettingsView())');
+    const doc = p.dom.window.document;
+    doc.querySelector('[aria-label="Nome do token"]').value = 'My client';
+    [...doc.querySelectorAll('button')].find(b=>b.textContent==='Gerar token').click();
+    await tick(); await tick();
+    assert.equal(doc.querySelector('[aria-label="Token gerado"]').value, 'eut_mcp_test_secret');
+    assert.equal(JSON.parse(calls[0].body).scope, 'read');
+    assert.equal(JSON.parse(calls[0].body).expiresInDays, 30);
+    assert.equal(p.dom.window.localStorage.length, 0);
+    [...doc.querySelectorAll('button')].find(b=>b.textContent==='Ocultar token').click();
+    await tick();
+    assert.equal(doc.querySelector('[aria-label="Token gerado"]'), null);
+    [...doc.querySelectorAll('button')].find(b=>b.textContent==='Revogar').click();
+    await tick();
+    assert(calls.some(c=>c.url==='/api/mcp/tokens/token-id' && c.method==='DELETE'));
+  } finally { p.dom.window.close(); }
+});
+
+test('MCP token validity defaults when empty and explains out-of-range values', async () => {
+  const p = await page();
+  try {
+    const calls = [];
+    p.dom.window.fetch = async (url, options = {}) => {
+      calls.push({url, method: options.method || 'GET', body: options.body});
+      return {ok:true, status:200, json:async()=>options.method === 'POST' ? {token:'test'} : {tokens:[]}};
+    };
+    p.run('document.querySelector("#view").replaceChildren(mcpSettingsView())');
+    const doc = p.dom.window.document;
+    doc.querySelector('[aria-label="Nome do token"]').value = 'Test';
+    const days = doc.querySelector('[aria-label="Validade em dias"]');
+    const generate = [...doc.querySelectorAll('button')].find(b=>b.textContent==='Gerar token');
+    days.value = '365'; generate.click(); await tick();
+    assert.equal(calls.length, 0);
+    assert.match(doc.querySelector('#notifications').textContent, /entre 1 e 90 dias/);
+    days.value = ''; generate.click(); await tick(); await tick();
+    assert.equal(JSON.parse(calls[0].body).expiresInDays, 30);
+  } finally {p.dom.window.close();}
+});
+
+test('workspace responses arriving after logout cannot restore private references', async () => {
+  const p=await page();let finish;
+  try {
+    const original=p.dom.window.fetch;
+    p.dom.window.fetch=async(url,options)=>url==='/api/conversations/c1/workbench'?new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({state:{references:[{id:"private",kind:"dataset"}]},operations:[]})});}):original(url,options);
+    const loading=p.run('loadWorkbench("c1")');await tick();await p.run('logout()');finish();await loading.catch(()=>{});
+    assert.equal(p.run('state.workbench'),null);
+  } finally {p.dom.window.close();}
 });

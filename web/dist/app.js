@@ -25,11 +25,25 @@ const state = {
   status: null,
   settings: null,
   providers: [],
+  audit: null,
+  auditConversation: "",
+  auditFilter: "all",
+  auditLoading: false,
+  auditGeneration: 0,
   activity: [],
+  workbench: null,
+  workbenchConversation: "",
+  workbenchGeneration: 0,
+  workbenchDataset: "",
+  workbenchPage: null,
+  workbenchPreview: null,
   polling: false,
   authMode: "login",
   sso: { enabled: false },
   ssoLinked: false,
+  startup: null,
+  startupAbort: null,
+  startupGeneration: 0,
   curations: [],
   activeCuration: null,
   curationsTab: "projects",
@@ -55,11 +69,41 @@ const names = {
   undo_last_mutation: "Desfazer última alteração",
 };
 const errors = {
+  context_budget_exceeded: "A solicitação excedeu o orçamento de contexto. Use uma seleção menor ou uma operação em lotes.",
+  invalid_analysis_response: "O modelo devolveu uma avaliação inválida. O checkpoint anterior foi preservado.",
+  invalid_analysis_evidence: "A avaliação citou dados ausentes ou não trouxe evidências válidas. O checkpoint foi preservado.",
+  analysis_profile_changed: "O perfil do modelo mudou durante a análise. Inicie uma nova análise para manter critérios comparáveis.",
+  artist_metadata_required_for_diversity: "Faltam artistas em algumas faixas; não é possível garantir esse limite de diversidade.",
+  versioned_dataset_required: "Atualize a leitura da playlist antes de aplicar esta seleção.",
+  selection_review_required: "Conclua a revisão curatorial desta seleção antes de solicitar a aplicação.",
+  invalid_review_response: "A revisão do modelo veio em formato inválido. A seleção foi preservada para uma nova tentativa.",
+  unsupported_track_type_for_write: "A playlist contém tipos de faixa que o backend não consegue restaurar com segurança. A análise continua disponível.",
+  selection_exceeds_spotify_write_limit: "A seleção excede o limite de escrita reversível do backend.",
+  playlist_id_required: "Informe o ID da playlist que será consultada.",
+  stream_interrupted: "A conexão de resposta da IA foi interrompida. Os resultados já processados estão na auditoria e nas operações.",
+  playlist_version_conflict: "A playlist mudou desde a leitura. Atualize os dados e gere uma nova prévia antes de aprovar.",
+  incomplete_dataset: "A leitura está incompleta. Aguarde a operação terminar antes de calcular ou alterar a playlist.",
+  workspace_reference_unavailable: "A referência não está disponível nesta conversa. Atualize os dados da operação.",
+  not_applied_fresh_preview_required: "A alteração não foi aplicada. Gere uma nova prévia para solicitar outra aprovação.",
+  write_verification_mismatch: "O resultado do Spotify difere da seleção. Confira o estado antes de repetir a alteração.",
+  step_limit_reached: "O agente atingiu o limite de etapas antes de concluir. Consulte a auditoria e simplifique a solicitação.",
+  quota_exhausted: "A cota de IA do Euterpe foi atingida. Revise o limite no painel de IA antes de tentar novamente.",
+  empty_response: "O agente encerrou a solicitação sem entregar uma resposta. Consulte a auditoria da conversa.",
+  provider_error: "O serviço de IA falhou. Consulte a auditoria antes de tentar novamente.",
+  provider_test_failed: "Não foi possível concluir a chamada ao serviço de IA.",
+  rate_limited: "O serviço de IA limitou as chamadas. Aguarde antes de tentar novamente.",
+  unauthorized: "O serviço de IA recusou a credencial ou a permissão do Euterpe.",
+  timeout: "O serviço de IA excedeu o tempo de resposta.",
+  chat_interrupted: "A resposta foi interrompida. Confira a auditoria antes de repetir alterações no Spotify.",
+  tool_failed: "Uma ou mais ferramentas falharam. Confira os resultados na auditoria desta conversa.",
   rda_sso_required: "Esta conta já usa RDA. Entre pelo botão Entrar com RDA.",
   sso_login_failed: "Não foi possível entrar com RDA. Inicie o login novamente.",
   sso_identity_already_linked: "Esta identidade RDA já está vinculada a outra conta Euterpe.",
   local_account_already_linked: "Esta conta Euterpe já está vinculada ao RDA.",
   local_account_proof_expired: "Sua sessão local expirou. Entre novamente antes de vincular.",
+  invalid_token_name: "Informe um nome para o token, com até 80 caracteres.",
+  invalid_token_options: "Escolha uma permissão e uma validade inteira entre 1 e 90 dias.",
+  token_limit: "Você atingiu o limite de 20 tokens ativos. Revogue um token antes de gerar outro.",
   login_required: "Entre para acessar seu espaço.",
   invalid_credentials: "Usuário ou senha incorretos.",
   invalid_username:
@@ -131,6 +175,9 @@ function h(tag, attrs = {}, ...children) {
       );
   }
   return el;
+}
+function icon(name, size = "1em") {
+  return h("rda-icon", { name, size, "aria-hidden": "true" });
 }
 function button(text, fn, cls = "", attrs = {}) {
   const isSm = cls.includes("small") || cls.includes("sm") || cls.includes("icon-btn");
@@ -299,7 +346,28 @@ function pill() {
 }
 function render() {
   const app = $("#app");
-  app.replaceChildren(state.user ? shell() : authScreen());
+  app.replaceChildren(!state.user ? authScreen() : state.startup ? startupScreen() : shell());
+}
+function startupScreen() {
+  const failed = state.startup.status === "error";
+  const opening = state.startup.step === "workspace";
+  const steps = [
+    ["Sua conta foi confirmada", "complete"],
+    ["Preparando o ambiente de computação", opening ? "complete" : failed ? "pending" : "active"],
+    ["Abrindo seu espaço musical", opening && !failed ? "active" : "pending"],
+  ];
+  return h("main", { class: "startup-page", "aria-busy": String(!failed), "aria-labelledby": "startup-title" },
+    h("header", { class: "startup-header" }, brand(), button("Sair", logout, "ghost")),
+    h("section", { class: "startup-card" },
+      h("div", { class: "startup-symbol" + (failed ? " failed" : ""), "aria-hidden": "true" }, icon(failed ? "alert-triangle" : "loader-2", "40px")),
+      h("div", { class: "eyebrow" }, "Seu ambiente Euterpe"),
+      h("h1", { id: "startup-title" }, failed ? "Não foi possível abrir seu espaço" : "Preparando seu espaço musical"),
+      h("p", { class: "muted", role: failed ? "alert" : "status", "aria-live": "polite" },
+        failed ? state.startup.message : opening ? "O ambiente está pronto. Estamos carregando suas conversas." : "Estamos verificando e iniciando seu ambiente de computação. Na primeira abertura, isso pode levar alguns instantes."),
+      h("ol", { class: "startup-steps", "aria-label": "Preparação do ambiente" }, steps.map(([label, status]) =>
+        h("li", { "data-state": status, "aria-current": status === "active" ? "step" : null }, icon(status === "complete" ? "circle-check" : status === "active" ? "loader-2" : "clock", "18px"), h("span", {}, label)))),
+      failed && button("Tentar novamente", prepareWorkspace, "primary"),
+      !failed && h("p", { class: "small muted" }, "Você pode aguardar aqui. A interface abrirá assim que o ambiente estiver disponível.")));
 }
 function authScreen() {
   const register = !state.sso.enabled && state.authMode === "register";
@@ -381,7 +449,7 @@ function authScreen() {
       h(
         "div",
         {},
-        h("div", { class: "record" }),
+        h("div", { class: "record", "aria-hidden": "true" }, h("span", { class: "record-mark" }, icon("sparkles", "20px"))),
         h("div", { class: "eyebrow rda-page-header__eyebrow" }, "Um espaço para a sua música"),
         h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "Boas playlists começam com uma conversa."),
         h(
@@ -416,9 +484,9 @@ function authScreen() {
         state.sso.enabled && button("Entrar com RDA", () => {
           window.location.assign("/api/account/sso/login");
         }, "primary"),
-        state.sso.enabled && h("p", { class: "small muted" },
+        state.sso.enabled && state.sso.localLoginEnabled !== false && h("p", { class: "small muted" },
           "Já possui uma conta local? Entre abaixo e vincule sua conta RDA em Ajustes para manter suas conversas e conexão Spotify."),
-        form,
+        state.sso.localLoginEnabled !== false && form,
         !state.sso.enabled && h(
           "div",
           { class: "auth-switch" },
@@ -442,13 +510,57 @@ function authScreen() {
   );
 }
 async function signedIn(r) {
+  resetWorkbench();
+  state.controller?.abort();
+  state.jobs.clear();
+  Object.assign(state, {
+    conversation: null, conversations: [], messages: [], draft: null,
+    playlists: null, liked: [], selected: null, proposals: [], status: null,
+    settings: null, providers: [], activity: [], audit: null, auditConversation: "", auditLoading: false, auditGeneration: state.auditGeneration + 1, search: null, query: "",
+    streaming: false, controller: null, curations: [], activeCuration: null,
+    workflowSelectedStep: null, workflowValidation: null, workflowExecution: null,
+  });
   state.user = r.user;
   state.ssoLinked = Boolean(r.ssoLinked);
   state.csrf = r.csrf;
   state.view = "chat";
+  await prepareWorkspace();
+}
+async function prepareWorkspace() {
+  const account = state.user?.id;
+  if (!account) return;
+  state.startupAbort?.abort();
+  const generation = ++state.startupGeneration;
+  const controller = new AbortController();
+  state.startupAbort = controller;
+  state.startup = { status: "starting", step: "compute" };
   render();
-  await loadConversations();
-  safe(refreshStatus);
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  const current = () => generation === state.startupGeneration && state.user?.id === account;
+  try {
+    const status = await api("/status", "GET", undefined, { signal: controller.signal });
+    if (!current()) return;
+    if (!status.ready) throw Error("compute_not_ready");
+    state.status = status;
+    state.startup = { status: "starting", step: "workspace" };
+    render();
+    const data = await api("/conversations", "GET", undefined, { signal: controller.signal });
+    if (!current()) return;
+    state.conversations = data.conversations || [];
+    state.startup = null;
+    render();
+    resumeWorkspace();
+  } catch (error) {
+    if (!current()) return;
+    const capacity = ["server_capacity_busy", "runtime_capacity", "runtime_storage_capacity", errors.server_capacity_busy].includes(error.message);
+    state.startup = { status: "error", step: state.startup?.step || "compute", message: capacity ? "O servidor está ocupado. Tente novamente em instantes." : error.name === "AbortError" ? "Seu ambiente está levando mais tempo do que o esperado. Tente novamente." : "Não conseguimos preparar seu ambiente agora. Aguarde um momento e tente novamente." };
+    render();
+  } finally {
+    clearTimeout(timeout);
+    if (current()) state.startupAbort = null;
+  }
+}
+function resumeWorkspace() {
   safe(poll);
   safe(async () => {
     const { jobs } = await api("/jobs");
@@ -461,12 +573,14 @@ async function signedIn(r) {
 }
 function shell() {
   const navs = [
-    ["chat", "✦", "Conversar"],
-    ["curations", "◈", "Curadorias"],
-    ["library", "▦", "Biblioteca"],
-    ["search", "⌕", "Explorar"],
-    ["activity", "◷", "Atividade"],
-    ["settings", "⚙", "Ajustes"],
+    ["chat", icon("sparkles"), "Conversar"],
+    ["curations", icon("layers"), "Curadorias"],
+    ["library", icon("layout-grid"), "Biblioteca"],
+    ["search", icon("search"), "Explorar"],
+    ["activity", icon("clock"), "Atividade"],
+    ["audit", icon("activity"), "Auditoria"],
+    ["operations", icon("layers"), "Operações"],
+    ["settings", icon("settings"), "Ajustes"],
   ];
   const sidebar = h(
     "aside",
@@ -498,7 +612,7 @@ function shell() {
         "div",
         { class: "rda-sidebar__group-label row between" },
         h("span", { class: "eyebrow rda-page-header__eyebrow" }, "Suas conversas"),
-        button("+", newConversation, "ghost icon-btn", {
+        button(icon("plus"), newConversation, "ghost icon-btn", {
           "aria-label": "Nova conversa",
         }),
       ),
@@ -521,7 +635,7 @@ function shell() {
                   button("✎", () => renameConversation(c), "ghost", {
                     "aria-label": "Renomear " + c.title,
                   }),
-                  button("×", () => deleteConversation(c), "ghost", {
+                  button(icon("x"), () => deleteConversation(c), "ghost", {
                     "aria-label": "Excluir " + c.title,
                   }),
                 ),
@@ -553,6 +667,8 @@ function shell() {
     library: "Tudo o que você gosta",
     search: "Encontre seu próximo som",
     activity: "Cada escolha, registrada",
+    audit: "Auditoria e diagnóstico de conversas",
+    operations: "Dados, seleções e operações",
     settings: "Do seu jeito",
   };
   const main = h(
@@ -565,7 +681,7 @@ function shell() {
         "div",
         { class: "row" },
         button(
-          "☰",
+          icon("menu"),
           () => $("#sidebar").classList.toggle("visible"),
           "ghost mobile-menu",
           { "aria-label": "Abrir navegação" },
@@ -603,6 +719,8 @@ function view() {
   if (state.view === "library") return libraryView();
   if (state.view === "search") return searchView();
   if (state.view === "activity") return activityView();
+  if (state.view === "audit") return auditView();
+  if (state.view === "operations") return operationsView();
   return settingsView();
 }
 function replaceView() {
@@ -617,6 +735,8 @@ async function navigate(v) {
   if (v === "curations") await loadCurations();
   if (v === "library" && !state.playlists) await loadLibrary();
   if (v === "activity") await loadActivity();
+  if (v === "audit") await loadAudit(state.conversation || state.auditConversation || state.conversations[0]?.id);
+  if (v === "operations") await loadWorkbench(state.conversation || state.workbenchConversation || state.conversations[0]?.id);
   if (v === "settings") await loadSettings();
 }
 async function loadConversations() {
@@ -682,7 +802,7 @@ function modalFrame(title, content, actions = []) {
         h("span", { class: "eyebrow rda-page-header__eyebrow" }, "EUTERPE"),
         h("h2", { class: "rda-dialog__title" }, title),
       ),
-      button("×", closeModal, "ghost icon-btn", {
+      button(icon("x"), closeModal, "ghost icon-btn", {
         "aria-label": "Fechar janela",
       }),
     ),
@@ -741,6 +861,7 @@ function deleteConversation(c) {
   );
 }
 async function logout() {
+  resetWorkbench();
   if (state.controller && state.conversation) {
     try {
       await api("/chat/cancel", "POST", {
@@ -751,7 +872,18 @@ async function logout() {
     }
   }
   state.controller?.abort();
-  await api("/account/logout", "POST", {});
+  state.startupAbort?.abort();
+  state.startupGeneration++;
+  state.startupAbort = null;
+  try {
+    await api("/account/logout", "POST", {});
+  } catch (error) {
+    if (state.startup && state.user) {
+      state.startup = { status: "error", message: "A preparação foi interrompida. Tente novamente ou saia da sua conta." };
+      render();
+    }
+    throw error;
+  }
   Object.assign(state, {
     user: null,
     csrf: "",
@@ -767,10 +899,12 @@ async function logout() {
     settings: null,
     providers: [],
     activity: [],
+    audit: null, auditConversation: "", auditLoading: false, auditGeneration: state.auditGeneration + 1,
     search: null,
     searchBusy: false,
     streaming: false,
     controller: null,
+    startup: null,
     view: "chat",
     query: "",
     searchTab: "tracks",
@@ -802,7 +936,7 @@ function chatView() {
     },
   });
   const submit = button(
-    state.streaming ? "Parar resposta" : "Enviar ↗",
+    state.streaming ? "Parar resposta" : ["Enviar ", icon("external-link")],
     () => (state.streaming ? stopChat() : sendMessage(text.value)),
     "primary",
     {
@@ -814,6 +948,7 @@ function chatView() {
   return h(
     "div",
     { class: "chat-view" },
+    state.conversation && h("div", { class: "row" }, button([icon("activity"), " Auditar conversa"], () => navigate("audit"), "ghost small")),
     messages,
     h(
       "div",
@@ -827,7 +962,7 @@ function chatView() {
       h(
         "div",
         { class: "composer-footer" },
-        h("span", { class: "small muted" }, "✦ Seu gosto é o ponto de partida"),
+        h("span", { class: "small muted" }, [icon("sparkles"), " Seu gosto é o ponto de partida"]),
         submit,
       ),
     ),
@@ -841,22 +976,22 @@ function chatView() {
 function welcome() {
   const ideas = [
     [
-      "✧",
+      icon("sparkles"),
       "Organizar uma playlist",
       "Quero organizar uma playlist da minha biblioteca e remover músicas repetidas.",
     ],
     [
-      "↗",
+      icon("external-link"),
       "Descobrir novos caminhos",
       "Busque músicas de MPB para uma tarde tranquila. Primeiro me mostre as opções.",
     ],
     [
-      "♡",
+      icon("heart"),
       "Partir das minhas curtidas",
       "Consulte minhas músicas curtidas e sugira uma seleção de 20 faixas para trabalhar.",
     ],
     [
-      "≋",
+      icon("music"),
       "Criar o clima certo",
       "Vamos montar uma playlist para uma viagem de fim de semana. Pergunte sobre meu gosto antes de começar.",
     ],
@@ -867,7 +1002,7 @@ function welcome() {
     h(
       "div",
       { class: "greeting" },
-      h("span", { class: "star" }, "✦"),
+      h("span", { class: "star" }, icon("sparkles")),
       "Seu gosto. Novas possibilidades.",
     ),
     h("h1", { class: "rda-typography rda-typography--3xl rda-typography--bold" }, "O que vamos ouvir", h("br"), "a seguir?"),
@@ -894,7 +1029,7 @@ function welcome() {
     h(
       "div",
       { class: "welcome-note small muted" },
-      "◉",
+      icon("music"),
       state.status?.spotify?.authenticated
         ? "Sua biblioteca Spotify está pronta para explorar."
         : "Conecte o Spotify para explorar sua biblioteca.",
@@ -912,7 +1047,7 @@ function messageNode(m) {
     h(
       "div",
       { class: "message-mark", "aria-hidden": true },
-      m.role === "user" ? "○" : "✦",
+      m.role === "user" ? icon("user") : icon("sparkles"),
     ),
     h(
       "div",
@@ -923,6 +1058,9 @@ function messageNode(m) {
         m.role === "user" ? "Você" : "Euterpe",
       ),
       h("div", { class: "message-text" }, m.content),
+      m.error_code && h("div", { class: "notice error chat-error", role: "alert" },
+        h("p", {}, errors[m.error_code] || errors.provider_error),
+        button([icon("activity"), " Ver auditoria"], () => navigate("audit"), "small ghost")),
       m.interrupted &&
         h("p", { class: "small muted" }, "Resposta interrompida."),
     ),
@@ -997,6 +1135,7 @@ async function sendMessage(text) {
           if (last) last.textContent = responseMessage.content;
           scrollChat();
         } else if (event === "status") {
+          if (data.status === "error") responseMessage.error_code = errors[data.detail] ? data.detail : "provider_error";
           const node = $("#chat-status");
           if (node)
             node.textContent = data.detail || "O Euterpe está trabalhando…";
@@ -1007,15 +1146,15 @@ async function sendMessage(text) {
               "↳ " +
               (names[data.name.replace(/^spotify_/, "")] ||
                 "Consultando informações…");
+        } else if (event === "tool-result") {
+          if (data.ok === false && !responseMessage.error_code) responseMessage.error_code = "tool_failed";
         } else if (event === "proposal") {
           await refreshProposals();
           const node = $("#chat-status");
           if (node)
-            node.textContent = "Uma alteração está aguardando sua revisão →";
+            node.textContent = "Uma alteração está aguardando sua revisão.";
         } else if (event === "error") {
-          throw Error(
-            errors[data.code] || data.detail || "A resposta foi interrompida.",
-          );
+          responseMessage.error_code = errors[data.code] ? data.code : "provider_error";
         } else if (event === "done") {
           complete = true;
         }
@@ -1023,11 +1162,16 @@ async function sendMessage(text) {
       if (part.done) break;
     }
   } catch (err) {
+    responseMessage.error_code = err.name === "AbortError" ? "chat_interrupted" : "provider_error";
+    if (!responseMessage.content) responseMessage.content = err.name === "AbortError" ? errors.chat_interrupted : (err.message || errors.provider_error);
     if (err.name !== "AbortError") showError(err);
   } finally {
     if (state.user?.id !== account) return;
     if (!complete) responseMessage.interrupted = true;
-    if (!responseMessage.content) state.messages.pop();
+    if (!responseMessage.content.trim()) {
+      responseMessage.error_code = responseMessage.error_code || (complete ? "empty_response" : "chat_interrupted");
+      responseMessage.content = errors[responseMessage.error_code] || errors.provider_error;
+    }
     state.streaming = false;
     state.controller = null;
     replaceView();
@@ -1070,7 +1214,7 @@ async function pairSpotify() {
           h(
             "div",
             { class: "notice success" },
-            "✓ Biblioteca, busca e edição de playlists disponíveis.",
+            [icon("check"), " Biblioteca, busca e edição de playlists disponíveis."],
           ),
           h(
             "p",
@@ -1126,10 +1270,10 @@ function pairingModal(status) {
             target: "_blank",
             rel: "noopener noreferrer",
           },
-          "Abrir autorização no Spotify ↗",
+          ["Abrir autorização no Spotify ", icon("external-link")],
         ),
       ),
-    connected && h("div", { class: "notice success" }, "✓ Conta conectada."),
+    connected && h("div", { class: "notice success" }, [icon("check"), " Conta conectada."]),
     status.error &&
       h(
         "div",
@@ -1257,7 +1401,7 @@ function libraryView() {
             replaceView();
           },
         },
-        "♡ Músicas curtidas",
+        [icon("heart"), " Músicas curtidas"],
       ),
     ),
     h(
@@ -1279,7 +1423,7 @@ function libraryView() {
         },
       }),
       button(
-        "↻",
+        icon("refresh-cw"),
         async () => {
           if (state.libraryTab === "liked") {
             state.liked = [];
@@ -1289,7 +1433,7 @@ function libraryView() {
         "ghost",
         { "aria-label": "Atualizar biblioteca" },
       ),
-      button("+ Nova playlist", () => newDraft(), "primary small"),
+      button([icon("plus"), " Nova playlist"], () => newDraft(), "primary small"),
     ),
     h("div", { id: "library-content" }, libraryContent()),
   );
@@ -1338,7 +1482,7 @@ function libraryContent() {
               "data-style": "outlined",
               onClick: () => safe(() => openPlaylist(p)),
             },
-            h("div", { class: "playlist-art", "aria-hidden": true }, "≋"),
+            h("div", { class: "playlist-art", "aria-hidden": true }, icon("music")),
             h(
               "div",
               { class: "playlist-info" },
@@ -1385,7 +1529,7 @@ function selectedPlaylist() {
     "div",
     {},
     button(
-      "← Todas as playlists",
+      [icon("arrow-left"), " Todas as playlists"],
       () => {
         state.selected = null;
         replaceView();
@@ -1409,7 +1553,7 @@ function selectedPlaylist() {
             target: "_blank",
             rel: "noopener noreferrer",
           },
-          "Abrir no Spotify ↗",
+          ["Abrir no Spotify ", icon("external-link")],
         ),
       ),
     ),
@@ -1458,16 +1602,16 @@ function trackRow(raw, index, { draft = false } = {}) {
       { class: "track-actions" },
       draft
         ? [
-            button("↑", () => moveTrack(index, -1), "ghost", {
+            button(icon("arrow-up"), () => moveTrack(index, -1), "ghost", {
               "aria-label": "Mover " + (t.name || "faixa") + " para cima",
               disabled: index === 0,
             }),
-            button("↓", () => moveTrack(index, 1), "ghost", {
+            button(icon("arrow-down"), () => moveTrack(index, 1), "ghost", {
               "aria-label": "Mover " + (t.name || "faixa") + " para baixo",
               disabled: index === state.draft.tracks.length - 1,
             }),
             button(
-              "×",
+              icon("x"),
               () => {
                 state.draft.tracks.splice(index, 1);
                 renderReview();
@@ -1478,7 +1622,7 @@ function trackRow(raw, index, { draft = false } = {}) {
               },
             ),
           ]
-        : button("+", () => addDraft(t), "ghost", {
+        : button(icon("plus"), () => addDraft(t), "ghost", {
             "aria-label": "Adicionar " + (t.name || "faixa") + " à seleção",
           }),
     ),
@@ -1541,7 +1685,7 @@ function searchView() {
         "data-wrap": "true",
         disabled: state.searchBusy,
       },
-      state.searchBusy ? "Buscando…" : "Buscar ↗",
+      state.searchBusy ? "Buscando…" : ["Buscar ", icon("external-link")],
     ),
   );
   const tabs = [
@@ -1601,7 +1745,7 @@ function searchView() {
                     h(
                       "div",
                       { class: "track-art" },
-                      state.searchTab === "artists" ? "◉" : "≋",
+                      state.searchTab === "artists" ? icon("music") : icon("music"),
                     ),
                     h("div", { class: "flex track-title" }, t.name),
                     state.searchTab === "playlists"
@@ -1624,7 +1768,7 @@ function searchView() {
                             target: "_blank",
                             rel: "noopener noreferrer",
                           },
-                          "Abrir ↗",
+                          ["Abrir ", icon("external-link")],
                         ),
                   ),
             ),
@@ -1769,7 +1913,7 @@ function review() {
         h("h2", { class: "rda-typography rda-typography--lg rda-typography--bold" }, "Sua seleção"),
       ),
       button(
-        "×",
+        icon("x"),
         () => $(".review").classList.remove("visible"),
         "ghost mobile-review icon-btn",
         { "aria-label": "Fechar revisão" },
@@ -1779,8 +1923,8 @@ function review() {
       h(
         "div",
         { class: "review-banner rda-notice rda-notice--info", "data-color": "info" },
-        "✦ " +
-          pending +
+        icon("sparkles"),
+        pending +
           (pending > 1 ? " alterações" : " alteração") +
           " aguardando sua aprovação.",
         button(
@@ -1856,14 +2000,14 @@ function review() {
       : h(
           "div",
           { class: "review-empty rda-empty-state" },
-          h("div", { class: "record" }),
+          h("div", { class: "record", "aria-hidden": "true" }, h("span", { class: "record-mark" }, icon("sparkles", "20px"))),
           h("h3", { class: "rda-empty-state__title" }, "Uma ideia ganha forma aqui."),
           h(
             "p",
             { class: "small muted rda-empty-state__description" },
             "Adicione músicas da biblioteca ou da busca. Reordene, refine e aprove quando estiver do seu jeito.",
           ),
-          button("+ Começar uma seleção", newDraft, "ghost small"),
+          button([icon("plus"), " Começar uma seleção"], newDraft, "ghost small"),
         ),
     h(
       "div",
@@ -1871,7 +2015,7 @@ function review() {
       d && h("p", { class: "review-summary" }, draftSummary(d)),
       d &&
         button(
-          state.jobs.size ? "Aguardando conclusão…" : "Revisar alterações ↗",
+          state.jobs.size ? "Aguardando conclusão…" : ["Revisar alterações ", icon("external-link")],
           applyDraft,
           "primary",
           { disabled: state.jobs.size > 0 || !d.name.trim() },
@@ -1903,7 +2047,7 @@ function review() {
       h(
         "span",
         { class: "small muted" },
-        "◉ Você aprova antes de alterar o Spotify.",
+        [icon("music"), " Você aprova antes de alterar o Spotify."],
       ),
     ),
   );
@@ -2248,7 +2392,7 @@ async function reviewProposal(p) {
           target: "_blank",
           rel: "noopener noreferrer",
         },
-        "Conferir playlist no Spotify ↗",
+        ["Conferir playlist no Spotify ", icon("external-link")],
       ),
     h(
       "p",
@@ -2298,6 +2442,239 @@ async function reviewProposal(p) {
     ]),
   );
 }
+const auditLabels = {
+  "context.metrics": "Orçamento e compactação de contexto", "llm.response": "Tempo e consumo do modelo",
+  "operation.progress": "Checkpoint da operação",
+  "tools.available": "Ferramentas disponíveis nesta execução", "tool-result": "Resultado da ferramenta",
+  "cancel.requested": "Cancelamento solicitado", "proposal.decision": "Decisão de aprovação",
+  "request.started": "Solicitação recebida", "request.finished": "Execução encerrada",
+  "session.start": "Modelo selecionado", "session.end": "Resposta registrada",
+  "llm.turn": "Ferramentas solicitadas pelo modelo", "llm.final": "Resposta gerada",
+  "llm.error": "Falha no modelo", "tool.result": "Resultado da ferramenta",
+  status: "Estado do agente", tool: "Chamada de ferramenta", proposal: "Aprovação solicitada", error: "Erro",
+};
+function auditIsError(event) {
+  return event.event === "error" || event.event === "llm.error" || event.payload.ok === false ||
+    ["failed", "interrupted"].includes(event.payload.outcome);
+}
+async function loadAudit(id) {
+  const generation = ++state.auditGeneration;
+  state.auditConversation = id || "";
+  state.audit = null;
+  state.auditLoading = Boolean(id);
+  if (state.view === "audit") replaceView();
+  if (!id) return;
+  try {
+    const result = await api("/conversations/" + id + "/audit");
+    if (generation === state.auditGeneration) state.audit = result;
+  } catch (error) {
+    if (generation === state.auditGeneration) throw error;
+  } finally {
+    if (generation === state.auditGeneration) {
+      state.auditLoading = false;
+      if (state.view === "audit") replaceView();
+    }
+  }
+}
+function auditView() {
+  const data = state.audit;
+  const events = data?.events || [];
+  const filtered = events.filter(e => state.auditFilter === "all" ||
+    (state.auditFilter === "errors" ? auditIsError(e) : ["tool", "tool.result", "proposal", "proposal.decision"].includes(e.event)));
+  const date = ts => new Date(ts * 1000).toLocaleString("pt-BR");
+  const selector = h("select", { "aria-label": "Conversa para auditar", onChange: e => safe(() => loadAudit(e.target.value)) },
+    h("option", { value: "" }, "Selecione uma conversa"),
+    state.conversations.map(c => h("option", { value: c.id }, c.title)));
+  selector.value = state.auditConversation;
+  const filter = h("select", { "aria-label": "Filtrar eventos", onChange: e => { state.auditFilter = e.target.value; replaceView(); } },
+    h("option", { value: "all" }, "Todos os eventos"), h("option", { value: "errors" }, "Falhas e interrupções"),
+    h("option", { value: "tools" }, "Ferramentas e aprovações"));
+  filter.value = state.auditFilter;
+  return h("section", { class: "stack audit-view" },
+    h("h1", {}, "Auditoria de conversas"),
+    h("p", { class: "muted" }, "Entenda as solicitações, as ferramentas acionadas e o resultado de cada execução."),
+    h("div", { class: "row audit-controls" }, selector,
+      button([icon("refresh-cw"), " Atualizar"], () => loadAudit(state.auditConversation), "small", { disabled: state.auditLoading || !state.auditConversation })),
+    state.auditLoading ? h("p", { role: "status" }, "Carregando auditoria…") : !data ?
+      h("p", { class: "muted" }, state.auditConversation ? "Não foi possível carregar a auditoria. Tente atualizar." : "Selecione uma conversa para investigar.") : [
+      h("div", { class: "row audit-summary", "aria-label": "Resumo da auditoria" },
+        badge(data.running ? "Em execução" : "Sem execução ativa"),
+        badge(events.filter(e => e.event === "request.started").length + " solicitações registradas"),
+        badge(events.filter(e => e.event === "tool.result").length + " resultados de ferramentas"),
+        badge(events.filter(auditIsError).length + " eventos de falha/interrupção", events.some(auditIsError) ? "danger" : "secondary")),
+      h("p", { class: "small muted" }, "ID da conversa: " + data.conversation.id),
+      h("p", { class: "notice small" }, "Registros do gateway são coletados a partir desta versão. Conversas anteriores podem ter cobertura parcial. Uma solicitação sem encerramento pode ter sido interrompida por reinício do serviço."),
+      !data.agent_logs_available && h("p", { class: "notice", role: "status" }, "Diagnóstico do agente indisponível. As mensagens e os registros do gateway continuam disponíveis."),
+      h("h2", {}, "Linha do tempo"), filter,
+      filtered.length ? h("ol", { class: "audit-timeline" }, filtered.map(e => h("li", { class: "audit-event rda-card rda-card--p-md" },
+        h("div", { class: "row between" }, h("strong", {}, auditLabels[e.event] || e.event), badge(auditIsError(e) ? "Atenção" : e.source === "agent" ? "Agente" : "Gateway", auditIsError(e) ? "danger" : "secondary")),
+        h("time", { class: "small muted", datetime: new Date(e.created * 1000).toISOString() }, date(e.created)),
+        e.payload.outcome && h("p", {}, ({ completed: "Concluída", failed: "Falhou", interrupted: "Interrompida" }[e.payload.outcome] || e.payload.outcome) + " · " + e.payload.duration_ms + " ms"),
+        e.payload.decision && h("p", {}, e.payload.decision === "approve" ? "Alteração aprovada" : "Alteração recusada"),
+        e.payload.name && h("p", {}, names[e.payload.name.replace(/^spotify_/, "")] || e.payload.name),
+        e.payload.model && h("p", {}, "Modelo: " + e.payload.model),
+        e.run_id && h("p", { class: "small muted audit-id" }, "Execução: " + e.run_id),
+        h("details", {}, h("summary", {}, "Detalhes técnicos"), h("pre", {}, JSON.stringify(e.payload, null, 2)))))) : h("p", { class: "muted" }, "Nenhum evento para este filtro."),
+      h("h2", {}, "Mensagens registradas"),
+      data.conversation.messages.length ? data.conversation.messages.map(m => h("article", { class: "rda-card rda-card--p-md" },
+        h("strong", {}, m.role === "user" ? "Você" : "Euterpe"),
+        h("span", { class: "small muted" }, " · " + date(m.created) + (m.interrupted ? " · Resposta interrompida" : "")),
+        h("p", { class: "audit-message" }, m.content))) : h("p", { class: "muted" }, "Esta conversa ainda não tem mensagens."),
+    ]);
+}
+let workbenchTimer = null;
+function resetWorkbench() {
+  clearTimeout(workbenchTimer);
+  state.workbenchGeneration++;
+  state.workbench = null;
+  state.workbenchConversation = "";
+  state.workbenchDataset = "";
+  state.workbenchPage = null;
+  state.workbenchPreview = null;
+}
+async function loadWorkbench(id, polling = false) {
+  clearTimeout(workbenchTimer);
+  const changed = state.workbenchConversation !== id;
+  if (changed) {
+    state.workbenchDataset = ""; state.workbenchPage = null; state.workbenchPreview = null;
+    state.workbench = null;
+  }
+  state.workbenchConversation = id || "";
+  const generation = ++state.workbenchGeneration;
+  const account = state.user?.id;
+  if (!id) { if (state.view === "operations") replaceView(); return; }
+  const data = await api("/conversations/" + id + "/workbench");
+  if (generation !== state.workbenchGeneration || account !== state.user?.id) return;
+  const sameRefs = JSON.stringify(state.workbench?.state?.references) === JSON.stringify(data.state?.references);
+  const terminalChanged = (data.operations || []).some(o => ["completed", "failed", "cancelled", "uncertain"].includes(o.status) && state.workbench?.operations?.find(old => old.operation_id === o.operation_id)?.status !== o.status);
+  state.workbench = data;
+  if (state.view === "operations") {
+    if (polling && sameRefs && !terminalChanged && $("#operation-list")) $("#operation-list").replaceChildren(...operationCards());
+    else replaceView();
+    if ((data.operations || []).some(o => ["queued", "running", "awaiting_approval", "verifying", "cancel_requested"].includes(o.status))) {
+      workbenchTimer = setTimeout(() => {
+        if (state.view === "operations" && state.user?.id === account) safe(() => loadWorkbench(id, true));
+      }, 2500);
+    }
+  }
+}
+async function workspaceAction(name, args = {}) {
+  const id = state.workbenchConversation;
+  const account = state.user?.id;
+  if (!id) throw Error("Selecione uma conversa.");
+  const r = await api("/conversations/" + id + "/workbench", "POST", { name, arguments: args });
+  if (account !== state.user?.id || id !== state.workbenchConversation) throw Error("Sessão alterada");
+  if (!r.ok) throw Error(errors[r.code] || r.code || "Não foi possível concluir a operação.");
+  return r.data;
+}
+const operationNames = { dataset: "Leitura da playlist", analysis: "Análise por critérios", review: "Revisão curatorial", apply: "Aplicação da seleção" };
+const operationStatuses = {
+  queued: "Na fila", running: "Em andamento", paused: "Pausada; checkpoint preservado",
+  awaiting_approval: "Aguardando sua aprovação", verifying: "Conferindo resultado no Spotify",
+  completed: "Concluída", failed: "Falhou", cancelled: "Cancelada",
+  cancel_requested: "Cancelamento solicitado", uncertain: "Resultado incerto; conferir antes de repetir",
+};
+function operationCards() {
+  const operations = state.workbench?.operations || [];
+  if (!operations.length) return [h("p", { class: "muted" }, "Nenhuma operação nesta conversa.")];
+  return operations.map(o => h("article", { class: "rda-card rda-card--p-md stack" },
+    h("div", { class: "row between" }, h("strong", {}, operationNames[o.kind] || o.kind),
+      badge(operationStatuses[o.status] || o.status, ["failed", "uncertain"].includes(o.status) ? "danger" : "secondary")),
+    o.total_items != null && h("div", {},
+      h("p", { class: "small" }, (o.items_processed || 0) + " de " + o.total_items + " itens processados"),
+      h("progress", { value: o.items_processed || 0, max: Math.max(1, o.total_items), "aria-label": "Progresso da operação" })),
+    o.error && h("p", { role: "status" }, errors[o.error] || o.error),
+    o.result?.verified && h("p", {}, "Resultado conferido: ordem e repetições correspondem à seleção aprovada."),
+    o.kind === "analysis" && o.status === "completed" && h("p", {}, "Análise completa. A classificação usa os metadados disponíveis; características ausentes continuam desconhecidas."),
+    o.kind === "review" && o.status === "completed" && h("div", { class: "stack" },
+      h("p", { class: "small muted" }, "Contagens e diversidade verificadas no conjunto completo. A avaliação de coerência e sequência considera uma amostra e os totais."),
+      ["coherence_notes", "sequence_notes", "missing_evidence", "warnings"].flatMap(key => (o.result?.review?.[key] || []).map(text => h("p", {}, text)))),
+    h("div", { class: "row workbench-actions" },
+      o.can_resume && button("Retomar do checkpoint", async () => { await workspaceAction("operation_resume", { operation_id: o.operation_id }); await loadWorkbench(state.workbenchConversation); }, "small"),
+      ["queued", "running", "paused", "awaiting_approval", "verifying"].includes(o.status) &&
+        button("Cancelar", async () => { await workspaceAction("operation_cancel", { operation_id: o.operation_id }); await loadWorkbench(state.workbenchConversation); }, "small ghost"),
+      o.status === "uncertain" && button("Conferir estado no Spotify", async () => { await workspaceAction("operation_status", { operation_id: o.operation_id }); await loadWorkbench(state.workbenchConversation); }, "small"),
+      o.status === "awaiting_approval" && button("Abrir revisão", async () => { await refreshProposals(); if (state.proposals[0]) await reviewProposal(state.proposals[0]); }, "small primary")),
+    h("details", {}, h("summary", {}, "Detalhes da operação"), h("pre", { class: "workbench-json" }, JSON.stringify(o, null, 2)))));
+}
+async function readWorkspacePage(id, cursor = "") {
+  if (!id) { state.workbenchDataset = ""; state.workbenchPage = null; state.workbenchPreview = null; replaceView(); return; }
+  state.workbenchDataset = id; state.workbenchPreview = null;
+  state.workbenchPage = await workspaceAction("dataset_page", { dataset_id: id, ...(cursor ? { cursor } : {}), limit: 25 });
+  replaceView();
+}
+function operationsView() {
+  const selector = h("select", { "aria-label": "Conversa das operações", onChange: e => safe(() => loadWorkbench(e.target.value)) },
+    h("option", { value: "" }, "Selecione uma conversa"), state.conversations.map(c => h("option", { value: c.id }, c.title)));
+  selector.value = state.workbenchConversation;
+  const refs = (state.workbench?.state?.references || []).filter(r => r.kind === "dataset");
+  const datasets = h("select", { "aria-label": "Dados disponíveis", onChange: e => safe(() => readWorkspacePage(e.target.value)) },
+    h("option", { value: "" }, "Selecione dados da conversa"), refs.map((r, i) => h("option", { value: r.id }, "Conjunto " + (i + 1) + " · " + r.id.slice(0, 8))));
+  datasets.value = state.workbenchDataset;
+  const page = state.workbenchPage, preview = state.workbenchPreview;
+  const reviewed = preview && (state.workbench?.operations || []).some(o => o.kind === "review" && o.status === "completed" && o.result?.selection_id === preview.selection_id);
+  const playlist = h("input", { placeholder: "ID da playlist Spotify", "aria-label": "ID da playlist para leitura" });
+  const criteria = h("textarea", { rows: 3, maxlength: 3000, "aria-label": "Critérios da análise", placeholder: "Critérios para analisar os metadados. Informações musicais ausentes serão marcadas como desconhecidas." });
+  const dedup = h("input", { type: "checkbox", checked: true });
+  const sort = h("select", { "aria-label": "Ordem da seleção" },
+    [["original", "Preservar ordem"], ["name", "Nome da faixa"], ["artist", "Artista"], ["album", "Álbum"], ["duration_ms", "Duração"]].map(([value, label]) => h("option", { value }, label)));
+  const maxTracks = h("input", { type: "number", min: 0, max: 50000, placeholder: "Sem limite", "aria-label": "Máximo de faixas" });
+  const artistLimit = h("input", { type: "number", min: 1, max: 50000, placeholder: "Sem limite", "aria-label": "Máximo de faixas por artista" });
+  const analyses = (state.workbench?.operations || []).filter(o => o.kind === "analysis" && o.status === "completed" && o.result?.dataset_id === state.workbenchDataset);
+  const analysis = h("select", { "aria-label": "Classificação da análise" }, h("option", { value: "" }, "Sem classificação por análise"),
+    analyses.map((o, i) => h("option", { value: o.operation_id }, "Usar classificação da análise " + (i + 1))));
+  const minScore = h("input", { type: "number", min: 0, max: 1, step: 0.05, value: 0.5, "aria-label": "Pontuação mínima da análise" });
+  return h("section", { class: "stack workbench-view" },
+    h("h1", {}, "Operações e seleções"),
+    h("p", { class: "muted" }, "Acompanhe leituras e análises, retome checkpoints e confira seleções antes de alterar o Spotify."),
+    h("div", { class: "row workbench-actions" }, selector, button([icon("refresh-cw"), " Atualizar"], () => loadWorkbench(state.workbenchConversation), "small")),
+    !state.workbenchConversation ? h("p", { class: "muted" }, "Selecione uma conversa para começar.") : [
+      h("div", { class: "rda-card rda-card--p-md stack" }, h("h2", {}, "Ler playlist por páginas"),
+        playlist, button("Iniciar leitura", async () => {
+          await workspaceAction("playlist_dataset_create", { playlist_id: playlist.value.trim() });
+          await loadWorkbench(state.workbenchConversation);
+        }, "small")),
+      h("h2", {}, "Trabalhos e checkpoints"), h("div", { id: "operation-list", class: "stack", "aria-live": "polite" }, operationCards()),
+      h("h2", {}, "Dados disponíveis"), datasets,
+      page && [
+        h("p", { class: "small muted" }, "Amostra: " + page.items_returned + " itens nesta página · " + page.items_processed + " carregados de " + page.total_items + ". Esta página não representa a análise de todo o conjunto."),
+        h("ol", { class: "workbench-items" }, (page.items || []).map(t => h("li", {}, t.name || t.uri || JSON.stringify(t.value ?? t)))),
+        page.has_more && button("Próxima página", () => readWorkspacePage(state.workbenchDataset, page.next_cursor), "small"),
+        h("div", { class: "rda-card rda-card--p-md stack" },
+          h("h3", {}, "Construir seleção"), h("label", { class: "row" }, dedup, "Remover repetidas, preservando a primeira ocorrência"),
+          sort, h("label", {}, "Quantidade máxima de faixas", maxTracks), h("label", {}, "Máximo por artista, incluindo participações", artistLimit),
+          analyses.length > 0 && h("div", { class: "stack" }, analysis, h("label", {}, "Pontuação mínima da classificação", minScore)),
+          button("Gerar prévia", async () => {
+            const args = { dataset_id: state.workbenchDataset, deduplicate: dedup.checked, sort_by: sort.value };
+            if (maxTracks.value !== "") args.max_tracks = Number(maxTracks.value);
+            if (artistLimit.value !== "") args.max_per_artist = Number(artistLimit.value);
+            if (analysis.value) { args.analysis_id = analysis.value; args.min_score = Number(minScore.value); args.sort_by = "score"; }
+            const selection = await workspaceAction("selection_build", args);
+            state.workbenchPreview = await workspaceAction("selection_preview", { selection_id: selection.selection_id });
+            replaceView();
+          }, "small")),
+        h("div", { class: "rda-card rda-card--p-md stack" }, h("h3", {}, "Analisar por critérios"), criteria,
+          button("Iniciar análise em lotes", async () => {
+            await workspaceAction("analysis_start", { dataset_id: state.workbenchDataset, criteria: criteria.value.trim(), batch_size: 20 });
+            await loadWorkbench(state.workbenchConversation);
+          }, "small")),
+      ],
+      preview && h("div", { class: "rda-card rda-card--p-md stack" }, h("h2", {}, "Prévia da seleção"),
+        h("p", {}, preview.before + " → " + preview.after + " faixas · " + preview.removed_occurrences + " ocorrências removidas · " + preview.added_occurrences + " adicionadas"),
+        h("p", { class: "small muted" }, preview.reordered ? "A ordem será alterada." : "A ordem relativa foi preservada."),
+        h("ol", {}, (preview.sample || []).map(t => h("li", {}, t.name || t.uri))),
+        h("p", {}, "A alteração ainda passará pela sua aprovação. Se a playlist mudar, será necessária uma nova prévia."),
+        preview.review_required && !reviewed && h("p", {}, "Esta seleção usa uma classificação subjetiva. Conclua a revisão curatorial antes de aplicar."),
+        button("Revisar curadoria e sequência", async () => {
+          await workspaceAction("selection_review", { selection_id: preview.selection_id });
+          await loadWorkbench(state.workbenchConversation);
+        }, "small"),
+        button("Solicitar aplicação e revisão", async () => {
+          await workspaceAction("selection_apply", { preview_id: preview.preview_id });
+          await loadWorkbench(state.workbenchConversation); await refreshProposals();
+        }, "primary", { disabled: preview.review_required && !reviewed })),
+    ]);
+}
 async function loadActivity() {
   const r = await api("/activity");
   state.activity = r.activity;
@@ -2324,7 +2701,7 @@ function activityView() {
     h(
       "div",
       { style: "margin-bottom: var(--rda-spacing-4)" },
-      button("↻ Atualizar", loadActivity, "ghost small"),
+      button([icon("refresh-cw"), " Atualizar"], loadActivity, "ghost small"),
     ),
     state.activity.length
       ? state.activity.map((a) =>
@@ -2387,6 +2764,39 @@ async function loadSettings() {
   state.settings = s.settings;
   state.providers = p.providers || [];
   if (state.view === "settings") replaceView();
+}
+function mcpSettingsView() {
+  const tokens = h("div", { class: "stack", "aria-live": "polite" });
+  const secret = h("div", { class: "stack", "aria-live": "polite" });
+  const name = h("input", { placeholder: "Ex.: cliente remoto", maxLength: 80, "aria-label": "Nome do token" });
+  const scope = h("select", { "aria-label": "Permissões do token" },
+    h("option", { value: "read" }, "Somente leitura"),
+    h("option", { value: "write" }, "Leitura e escrita com aprovação"));
+  const days = h("input", { type: "number", min: 1, max: 90, value: 30, "aria-label": "Validade em dias" });
+  async function refresh() {
+    const result = await api("/mcp/tokens");
+    tokens.replaceChildren(...(result.tokens || []).map(t => h("div", { class: "stack" },
+      h("span", {}, `${t.name} · ${t.scope === "read" ? "leitura" : "escrita"} · expira em ${new Date(t.expires * 1000).toLocaleDateString("pt-BR")}`),
+      button("Revogar", async () => { await api(`/mcp/tokens/${t.id}`, "DELETE", {}); await refresh(); }))));
+  }
+  return h("section", { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
+    h("h2", {}, "Acesso remoto MCP"),
+    h("p", { class: "small muted" }, "Conecte um cliente MCP com um token pessoal. Escritas exigem aprovação nas propostas do Euterpe. O token aparece uma vez; guarde-o como uma senha."),
+    field("Endpoint MCP", h("input", { value: window.location.origin + "/mcp", readOnly: true })),
+    field("Nome do token", name), field("Permissões", scope), field("Validade em dias", days),
+    button("Gerar token", async () => {
+      const validity = days.value.trim() === "" ? 30 : Number(days.value);
+      if (!name.value.trim()) { name.focus(); throw Error("invalid_token_name"); }
+      if (!Number.isInteger(validity) || validity < 1 || validity > 90) { days.focus(); throw Error("invalid_token_options"); }
+      if (!['read', 'write'].includes(scope.value)) { scope.focus(); throw Error("invalid_token_options"); }
+      days.value = String(validity);
+      const result = await api("/mcp/tokens", "POST", { name: name.value, scope: scope.value, expiresInDays: validity });
+      secret.replaceChildren(
+        field("Token gerado — copie agora", h("textarea", { value: result.token, readOnly: true, "aria-label": "Token gerado" })),
+        h("p", { class: "small muted" }, "Use no cabeçalho Authorization: Bearer <token>."),
+        button("Ocultar token", () => secret.replaceChildren()));
+      await refresh();
+    }), secret, button("Listar tokens", refresh), tokens);
 }
 function settingsView() {
   if (!state.settings)
@@ -2513,6 +2923,7 @@ function settingsView() {
     h(
       "div",
       { class: "settings-form" },
+      mcpSettingsView(),
       state.sso.enabled && h("section", { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
         h("h2", { class: "rda-typography rda-typography--xl rda-typography--semibold" }, "Conta RDA"),
         h("p", { class: "small muted" }, state.ssoLinked
@@ -2767,7 +3178,7 @@ function curationsView() {
           ),
         ),
       ),
-      button("+ Novo Projeto", openNewCurationModal, "primary small"),
+      button([icon("plus"), " Novo Projeto"], openNewCurationModal, "primary small"),
     ),
     state.curationsTab === "projects" && curationsProjectsSubView(),
     state.curationsTab === "workflow" && workflowEditorSubView(),
@@ -2781,7 +3192,7 @@ function curationsProjectsSubView() {
     return h(
       "div",
       { class: "empty-state rda-empty-state" },
-      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, "◈"),
+      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, icon("layers")),
       h("h3", { class: "rda-empty-state__title" }, "Nenhum projeto de curadoria ainda"),
       h(
         "p",
@@ -2846,7 +3257,7 @@ function curationsProjectsSubView() {
               state.curationsTab = "dossier";
               render();
             }, "ghost small"),
-            button("×", async () => {
+            button(icon("x"), async () => {
               if (confirm("Deseja excluir o projeto " + cur.title + "?")) {
                 await api("/curations/" + cur.id, "DELETE");
                 if (state.activeCuration?.id === cur.id) state.activeCuration = null;
@@ -2865,7 +3276,7 @@ function workflowEditorSubView() {
     return h(
       "div",
       { class: "empty-state rda-empty-state" },
-      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, "◈"),
+      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, icon("layers")),
       h("h3", { class: "rda-empty-state__title" }, "Nenhum projeto selecionado"),
       h("p", { class: "small muted rda-empty-state__description" }, "Selecione ou crie um projeto para abrir o Editor Visual de Fluxos."),
       button("Ir para Projetos", () => {
@@ -2896,10 +3307,10 @@ function workflowEditorSubView() {
       h(
         "div",
         { class: "row", style: "gap:6px; flex-wrap: wrap" },
-        button("+ Adicionar Etapa", addWorkflowStepModal, "ghost small"),
+        button([icon("plus"), " Adicionar Etapa"], addWorkflowStepModal, "ghost small"),
         button("Validar DAG", validateWorkflowDag, "ghost small"),
         button("Salvar Rascunho", saveWorkflow, "ghost small"),
-        button("▶ Executar Fluxo", executeWorkflow, "primary small"),
+        button([icon("play"), " Executar Fluxo"], executeWorkflow, "primary small"),
         button(
           state.workflowMode === "canvas" ? "Modo Lista Acessível" : "Modo Canvas Visual",
           () => {
@@ -2920,7 +3331,7 @@ function workflowEditorSubView() {
         h(
           "h4",
           { class: "rda-notice__title" },
-          state.workflowValidation.valid ? "✓ Grafo Acíclico Válido (DAG)" : "⚠ Erro de Validação no Grafo",
+          state.workflowValidation.valid ? [icon("check"), " Grafo Acíclico Válido (DAG)"] : [icon("alert-triangle"), " Erro de Validação no Grafo"],
         ),
         h("div", { class: "small rda-notice__description" }, state.workflowValidation.message),
       ),
@@ -2989,9 +3400,9 @@ function renderWorkflowCanvas(steps, edges) {
         { class: "workflow-node-header" },
         h("span", { class: "workflow-node-kind" }, s.kind),
         isDone
-          ? h("span", { style: "color:#ccf378;font-size:11px" }, "✓")
+          ? h("span", { style: "color:#ccf378;font-size:11px" }, icon("check"))
           : isPaused
-          ? h("span", { style: "color:#fbbf24;font-size:11px" }, "⏸")
+          ? h("span", { style: "color:#fbbf24;font-size:11px" }, icon("circle-stop"))
           : null,
       ),
       h("div", { class: "workflow-node-label" }, s.label),
@@ -3181,11 +3592,11 @@ function renderWorkflowAccessibleList(steps, edges) {
         h(
           "div",
           { class: "row", style: "gap:4px" },
-          button("↑", () => moveWorkflowStep(idx, -1), "ghost small", {
+          button(icon("arrow-up"), () => moveWorkflowStep(idx, -1), "ghost small", {
             "aria-label": "Mover etapa para cima",
             disabled: idx === 0,
           }),
-          button("↓", () => moveWorkflowStep(idx, 1), "ghost small", {
+          button(icon("arrow-down"), () => moveWorkflowStep(idx, 1), "ghost small", {
             "aria-label": "Mover etapa para baixo",
             disabled: idx === steps.length - 1,
           }),
@@ -3214,7 +3625,7 @@ function approvalGateBanner(pending) {
   return h(
     "div",
     { class: "approval-gate-banner rda-notice rda-notice--warning", "data-color": "warning" },
-    h("h4", { class: "rda-notice__title" }, "⏸ Confirmação Humana Obrigatória (Decisão 17A)"),
+    h("h4", { class: "rda-notice__title" }, [icon("circle-stop"), " Confirmação Humana Obrigatória (Decisão 17A)"]),
     h(
       "div",
       { class: "small rda-notice__description" },
@@ -3317,7 +3728,7 @@ async function validateWorkflowDag() {
     const res = await api("/curations/" + cur.id + "/workflow", "PUT", cur.workflow);
     state.workflowValidation = {
       valid: true,
-      message: "Grafo acíclico válido. Ordem de execução: " + res.topological_order.join(" → "),
+      message: "Grafo acíclico válido. Ordem de execução: " + res.topological_order.join(", "),
     };
   } catch (err) {
     state.workflowValidation = {
@@ -3337,7 +3748,7 @@ async function saveWorkflow() {
     toast("Fluxo salvo (versão " + res.version + ").");
     state.workflowValidation = {
       valid: true,
-      message: "Fluxo salvo com sucesso. Topologia: " + res.topological_order.join(" → "),
+      message: "Fluxo salvo com sucesso. Topologia: " + res.topological_order.join(", "),
     };
     render();
   } catch (err) {
@@ -3368,7 +3779,7 @@ function dossierSubView() {
     return h(
       "div",
       { class: "empty-state rda-empty-state" },
-      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, "◈"),
+      h("span", { class: "rda-empty-state__icon", "aria-hidden": true }, icon("layers")),
       h("h3", { class: "rda-empty-state__title" }, "Nenhum projeto selecionado"),
       h("p", { class: "small muted rda-empty-state__description" }, "Selecione um projeto para visualizar o dossiê curatorial."),
     );

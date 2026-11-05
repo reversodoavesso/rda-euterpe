@@ -117,7 +117,8 @@ fn openai_schemas_match_the_fixture_shape() {
 #[test]
 fn mcp_listing_uses_namespaced_names_and_annotations() {
     let listed = catalog::mcp_list();
-    assert_eq!(listed.len(), 45);
+    assert_eq!(listed.len(), 45 + euterpe::tools::workbench::definitions().len());
+    assert!(listed.iter().any(|t|t["name"]=="spotify_selection_apply"));
     for entry in &listed {
         let name = entry["name"].as_str().unwrap();
         assert!(name.starts_with("spotify_"), "{name} sem prefixo");

@@ -8,8 +8,8 @@ use euterpe::i18n;
 use euterpe::llm::prompts;
 use serde_json::Value;
 
-fn text(name: &str) -> &'static str {
-    match name {
+fn text(name: &str) -> String {
+    let fixture = match name {
         "system_en" => include_str!("fixtures/system_prompt_en.txt"),
         "system_ptbr" => include_str!("fixtures/system_prompt_ptbr.txt"),
         "system_debug" => include_str!("fixtures/system_prompt_debug.txt"),
@@ -19,7 +19,9 @@ fn text(name: &str) -> &'static str {
         "routing_en" => include_str!("fixtures/routing_prompt_en.txt"),
         "routing_ptbr" => include_str!("fixtures/routing_prompt_ptbr.txt"),
         other => panic!("fixture desconhecida: {other}"),
-    }
+    };
+    // Git may check out text fixtures as CRLF on Windows; JSON strings stay LF.
+    fixture.replace("\r\n", "\n")
 }
 
 #[test]

@@ -10,6 +10,7 @@ pub mod sessions;
 pub mod settings;
 pub mod spotify_auth;
 pub mod storage;
+pub mod workbench;
 
 use axum::routing::{delete, get, post, put};
 use axum::Router;
@@ -65,6 +66,7 @@ pub fn router(state: AppState) -> Router {
         .route("/profiles/:id/test", post(settings::test_profile))
         // Armazenamento (página "Armazenamento"): inspeção e limpeza explícita.
         .route("/storage", get(storage::get))
+        .route("/workbench/:id",get(workbench::get).post(workbench::action))
         .route("/storage/erase", post(storage::erase))
         // MCP (Streamable HTTP): initialize / tools/list / tools/call / resources
         .route(

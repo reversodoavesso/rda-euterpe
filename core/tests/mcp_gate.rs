@@ -79,6 +79,33 @@ fn content_text(result: &Value) -> Value {
 }
 
 #[tokio::test]
+async fn remote_confirmation_cannot_be_bypassed_by_an_allow_setting() {
+    let daemon = spawn_with(|c| {
+        c.headless_url = "http://127.0.0.1:1".into();
+        c.mutation_policy = euterpe::config::MutationPolicy::Allow;
+    }).await;
+    let state = daemon.state.clone();
+    let call = tokio::spawn(async move {
+        server::dispatch(&state, "tools/call", &json!({
+            "name":"spotify_add_tracks", "arguments":{"playlist_id":"p","uris":["spotify:track:a"]},
+            "_requireConfirmation":true
+        })).await.unwrap()
+    });
+    let proposal = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            if let Some(p) = daemon.state.bridge.pending_proposals().first() {
+                break p.clone();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }).await.expect("remote write must wait for approval");
+    daemon.state.bridge.resolve_proposal(proposal["proposalId"].as_str().unwrap(), euterpe::protocol::Decision::Reject);
+    let result = call.await.unwrap();
+    assert_eq!(result["isError"], true);
+    assert!(result["content"][0]["text"].as_str().unwrap().contains("user_rejected"));
+}
+
+#[tokio::test]
 async fn deny_blocks_the_mutation_before_touching_the_client() {
     let daemon = spawn().await;
     let _ext = approving_extension(&daemon);

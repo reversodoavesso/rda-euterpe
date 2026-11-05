@@ -34,6 +34,9 @@ pub struct ChatRequest {
 /// Converte uma mensagem do protocolo no par `(evento SSE, payload)`.
 pub fn to_sse(msg: &ServerMsg) -> Option<(&'static str, Value)> {
     match msg {
+        ServerMsg::ChatStatus { status, detail, .. } if status == "error" => {
+            Some(("error", json!({ "code": detail.as_deref().unwrap_or("provider_error") })))
+        }
         ServerMsg::ChatStatus { status, detail, .. } => {
             Some(("status", json!({ "status": status, "detail": detail })))
         }
@@ -54,6 +57,7 @@ pub fn to_sse(msg: &ServerMsg) -> Option<(&'static str, Value)> {
         ServerMsg::ToolCall { id, name, args } => {
             Some(("tool", json!({ "id": id, "name": name, "args": args })))
         }
+        ServerMsg::ToolOutcome { id, name, ok, code } => Some(("tool-result", json!({"id":id,"name":name,"ok":ok,"code":code}))),
         ServerMsg::ProposalCreate {
             proposal_id,
             kind,

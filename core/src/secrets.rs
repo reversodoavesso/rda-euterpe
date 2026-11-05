@@ -26,6 +26,7 @@ static SECRETS_LOCK: Mutex<()> = Mutex::new(());
 /// Nome da variável de ambiente *legada* por provider.
 fn env_keys(provider: &str) -> &'static [&'static str] {
     match provider {
+        "rda" => &["RDA_AI_API_KEY"],
         "deepseek" => &["DEEPSEEK_API_KEY"],
         "openai" => &["OPENAI_API_KEY"],
         "anthropic" => &["ANTHROPIC_API_KEY"],

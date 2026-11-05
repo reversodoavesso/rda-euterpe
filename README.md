@@ -19,6 +19,8 @@ do chat (o espelho da Fase 2 / D6).
 
 ## Interface web headless
 
+O gateway também pode delegar os workers por usuário à plataforma de execução RDA, usando `RDA_RUNTIME_URL` e `RDA_RUNTIME_KEY_FILE`. O override `headless-lab/compose.runtime.yml` ativa esse modo após vinculação SSO e migração dos diretórios privados para volumes exclusivos. A instalação existente continua no modo anterior até o corte explícito; detalhes no runbook do ecossistema `docs/plans/rda-runtime-platform.md`.
+
 A aplicação em [`web/`](./web/README.md) roda em um container Linux, com login próprio,
 contas Spotify separadas, chat com streaming, biblioteca, busca, revisão editável,
 aprovações, histórico e configurações de IA. O build baixa o go-librespot em uma revisão

@@ -277,6 +277,10 @@ pub fn tool_result_content(
     }
     match code {
         Some("rate_limited") => serde_json::json!({ "error": "rate_limited" }).to_string(),
+        Some(code @ ("unsupported_in_headless" | "not_authenticated" | "spotify_not_authenticated" | "web_search_disabled" | "empty_query" | "user_rejected" | "headless_unavailable" | "headless_outcome_unknown")) => serde_json::json!({ "error": code }).to_string(),
+        Some("selection_reference_required") => serde_json::json!({"error":"selection_reference_required","next_action":"Build and preview an immutable selection, then call selection_apply with preview_id. Do not resend large URI arrays."}).to_string(),
+        Some(code) if code.starts_with("unknown_tool:") => serde_json::json!({ "error": "unknown_tool" }).to_string(),
+        Some(code @ ("incomplete_dataset" | "invalid_cursor" | "playlist_version_conflict" | "workspace_reference_unavailable" | "operation_not_resumable" | "write_requires_reconciliation_and_fresh_preview" | "versioned_dataset_required" | "artist_metadata_required_for_diversity" | "analysis_incomplete_or_wrong_dataset" | "operation_pending" | "row_too_large_select_fewer_fields")) => serde_json::json!({ "error": code }).to_string(),
         Some(code) if debug => serde_json::json!({ "error": code }).to_string(),
         _ => serde_json::json!({ "error": "tool_failed" }).to_string(),
     }

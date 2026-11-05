@@ -33,4 +33,4 @@ O cadastro local fica desativado quando SSO está ativo; contas locais ainda nã
 
 Na pasta `web`, execute `python -m unittest discover -p 'test_*.py'` e `npm test`. Os testes verificam PKCE, state de uso único, emissor, revogação, propriedade de dados, vínculo explícito, aposentadoria de credenciais antigas e a interface de migração. O canário do repositório RDA também valida o fluxo contra o provedor real, usando somente uma conta sintética.
 
-O cliente `RDA Euterpe Web` foi cadastrado para uma implantação futura em `https://euterpe.reversodoavesso.com`; o cadastro por si só não publica o aplicativo. A implantação validada em 27/10/2026 é local.
+Desde 29/10/2026, `RDA Euterpe Web` está publicado em `https://euterpe.reversodoavesso.com`, no Pi, com cliente confidencial e login exclusivamente RDA. A instalação local permanece separada, sem migração automática de dados. Após o login, a tela de preparação aguarda o compute ficar pronto e carregar as conversas; falhas oferecem nova tentativa e saída.

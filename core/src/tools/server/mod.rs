@@ -102,6 +102,9 @@ pub async fn run_server_tool(
     args: &serde_json::Value,
     ctx: &ServerToolContext<'_>,
 ) -> ToolResult {
+    if crate::tools::workbench::definitions().iter().any(|t| t.name == name) {
+        return crate::tools::workbench::run(name,args,ctx).await;
+    }
     let str_arg = |key: &str| {
         args.get(key)
             .and_then(|v| v.as_str())

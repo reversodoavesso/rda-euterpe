@@ -86,6 +86,8 @@ pub enum DebugLevel {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum ServerMsg {
+    #[serde(rename = "tool.outcome")]
+    ToolOutcome { id: String, name: String, ok: bool, code: Option<String> },
     #[serde(rename = "hello.ok")]
     HelloOk { version: String },
     #[serde(rename = "pong")]

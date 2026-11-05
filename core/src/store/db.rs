@@ -70,6 +70,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     }
     conn.execute_batch(INDEX_SQL)?;
     conn.execute_batch(DIFFS_SQL)?;
+    conn.execute_batch(crate::tools::workbench::SCHEMA)?;
     Ok(())
 }
 

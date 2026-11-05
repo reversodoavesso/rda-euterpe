@@ -60,7 +60,7 @@ async fn tools_list_equals_the_frozen_catalog() {
         .await
         .unwrap();
     let tools = result["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), euterpe::tools::catalog::all().len());
+    assert_eq!(tools.len(), euterpe::tools::catalog::all().len()+euterpe::tools::workbench::definitions().len());
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"spotify_get_currently_playing"));
     assert!(names.contains(&"spotify_undo_last_mutation"));

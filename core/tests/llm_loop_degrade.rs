@@ -98,6 +98,53 @@ fn tool_call(id: &str, name: &str) -> ToolCall {
     ToolCall::new(id, name, json!({ "ids": ["a"] }).to_string())
 }
 
+#[tokio::test]
+async fn sse_quota_failure_emits_error_fallback_and_done() {
+    use euterpe::llm::adapters::openai_compat::OpenAiCompat;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::matchers::{method, path};
+    let upstream = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/v1/chat/completions"))
+        .respond_with(ResponseTemplate::new(429).set_body_json(json!({"error":{"code":"quota_exhausted_app_tokens"}})))
+        .mount(&upstream).await;
+    let daemon = spawn().await;
+    let eff = daemon.state.effective();
+    let adapter = std::sync::Arc::new(OpenAiCompat::new(upstream.uri(), None, "m", Default::default(), serde_json::Value::Null));
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let mut d = deps(&daemon, &eff, adapter, tx);
+    d.stream_deltas = true;
+    d.locale = "pt-br".into();
+    euterpe::llm::handle_chat(&d, "oi").await;
+    let mut text = String::new();
+    let mut error = false;
+    let mut done = false;
+    while let Ok(msg) = rx.try_recv() {
+        match msg {
+            ServerMsg::ChatStatus { status, detail, .. } if status == "error" => error = detail.as_deref() == Some("quota_exhausted"),
+            ServerMsg::ChatStream { delta, .. } => text.push_str(&delta),
+            ServerMsg::ChatDone { .. } => done = true,
+            _ => {},
+        }
+    }
+    assert!(error && done);
+    assert!(text.contains("cota de IA"));
+    assert_eq!(text.matches("cota de IA").count(), 1);
+}
+
+#[tokio::test]
+async fn non_streaming_provider_still_delivers_text_to_sse() {
+    let daemon = spawn().await;
+    let eff = daemon.state.effective();
+    let adapter = std::sync::Arc::new(ScriptedAdapter::new(vec![Completion { text: Some("Resposta final.".into()), ..Default::default() }]));
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let mut d = deps(&daemon, &eff, adapter, tx);
+    d.stream_deltas = true;
+    euterpe::llm::handle_chat(&d, "oi").await;
+    let mut text = String::new();
+    while let Ok(msg) = rx.try_recv() { if let ServerMsg::ChatStream { delta, .. } = msg { text.push_str(&delta); } }
+    assert_eq!(text, "Resposta final.");
+}
+
 fn deps<'a>(
     daemon: &'a TestDaemon,
     eff: &'a euterpe::config::EffectiveConfig,

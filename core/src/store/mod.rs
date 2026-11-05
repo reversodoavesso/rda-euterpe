@@ -13,8 +13,9 @@ use std::path::Path;
 
 /// Conexão SQLite serializada. As operações são curtas (KV + histórico), então um
 /// `Mutex` sincrono é mais simples e mais rápido que um pool.
+#[derive(Clone)]
 pub struct Store {
-    conn: Mutex<Connection>,
+    conn: std::sync::Arc<Mutex<Connection>>,
 }
 
 impl Store {
@@ -25,7 +26,7 @@ impl Store {
         }
         let conn = db::open(path)?;
         Ok(Self {
-            conn: Mutex::new(conn),
+            conn: std::sync::Arc::new(Mutex::new(conn)),
         })
     }
 
@@ -34,7 +35,7 @@ impl Store {
         let conn = Connection::open_in_memory()?;
         db::migrate(&conn)?;
         Ok(Self {
-            conn: Mutex::new(conn),
+            conn: std::sync::Arc::new(Mutex::new(conn)),
         })
     }
 

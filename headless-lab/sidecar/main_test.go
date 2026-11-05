@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -101,6 +102,33 @@ func TestReplaceIsOneChangeAndPreservesDuplicates(t *testing.T) {
 	}
 	if !bytes.Equal(f.writes[0].BaseRevision, []byte("r")) {
 		t.Fatal("revision not used")
+	}
+}
+
+func TestPagedMetadataUsesAnImmutableSnapshotAndRejectsStaleWrites(t *testing.T) {
+	f := &fake{pages: []*pb.SelectedListContent{page("r", false, a, b, a)}}
+	service := &backend{sp: f}
+	ctx := context.Background()
+	manifest, err := service.execute(ctx, "get_playlist_tracks", arguments{PlaylistID: pid, ResponseFormat: "manifest"})
+	if err != nil || manifest.(map[string]any)["total"] != 3 {
+		t.Fatal("manifest failed", err)
+	}
+	revision := base64.RawURLEncoding.EncodeToString([]byte("r"))
+	result, err := service.execute(ctx, "get_playlist_tracks", arguments{PlaylistID: pid, ResponseFormat: "page", ExpectedRevision: revision, Offset: 1, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := result.(map[string]any)
+	if data["complete"] != false || data["next_offset"] != 2 || len(data["items"].([]map[string]any)) != 1 {
+		t.Fatal("incorrect page", data)
+	}
+	if len(f.offsets) != 1 {
+		t.Fatal("page refetched playlist instead of using snapshot", f.offsets)
+	}
+	f.pages = []*pb.SelectedListContent{page("external", false, a, b, a)}
+	_, err = service.execute(ctx, "replace_playlist_tracks", arguments{PlaylistID: pid, ExpectedRevision: revision, URIs: []string{a}})
+	if err == nil || err.Error() != "playlist_version_conflict" || len(f.writes) != 0 {
+		t.Fatal("stale write accepted", err)
 	}
 }
 func TestRemoveAllOccurrencesByDescendingPosition(t *testing.T) {
