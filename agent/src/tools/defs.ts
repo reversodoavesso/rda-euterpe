@@ -169,8 +169,12 @@ export const clientTools: ToolDef[] = [
   ),
   def(
     "get_playlists",
-    "Lists the user's playlists. Returns {source, total, playlists[]} with id/uri, name, track count and image. Use before referencing a playlist.",
-    { limit: { type: "integer", description: "max 50" } },
+    "Lists library playlists. Filter ownership: all, owned (created by the connected Spotify account), followed (owned by others, including collaborative playlists). Filters before pagination. Returns {source, total, offset, limit, playlists[]} with id/uri, name, tracks, owner, is_owned (true/false/null if unknown), image (HTTPS cover URL or null). Edit permission does not imply ownership. Use before referencing a playlist.",
+    {
+      limit: { type: "integer", minimum: 1, maximum: 50, description: "Page size, default 50" },
+      offset: { type: "integer", minimum: 0, description: "Offset in filtered results, default 0" },
+      ownership: { type: "string", enum: ["all", "owned", "followed"], description: "Default all. Unknown owners appear only in all." },
+    },
     [],
     "client"
   ),

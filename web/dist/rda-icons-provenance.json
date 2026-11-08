@@ -1,6 +1,11 @@
 {
   "package": "@reversodoavesso/design-system",
-  "version": "3.5.1",
+  "version": "3.8.0",
+  "cssSha256": "8447c4284be32ac51bf8ef40062e7a1ab4b4c29ba372bcd22f9fc4d93a276d34",
+  "sourceSha256": "f6458eae9df797cd85973e0a9840c551e77ad2b99e2e3e4a9d87dbb83d181a06",
+  "tokensSha256": "a1aa1cac4f12cc932999fc16b17451e98490cbcb694dfe190073b3f44a8bed4c",
+  "runtimeSha256": "4957c03b9e086e753dd02d5995d17066ad941a5c08be16fd50798310c1634fd2",
+  "catalogSha256": "c8a5c9c0167d19715851c4299649d01e2e3341cb1b7cb29ca42c042fa1393934",
   "sourceModuleSha256": "c05f2e508ca75554edda29077326eb9d6d5e8a4f96bf1a99451ea199e85bf9e1",
-  "sourceCatalogSha256": "94b1ffcf397bbc7d5b6feda334974c6371d24cba7941a4d593bc8007efedd54f"
+  "sourceCatalogSha256": "6edaefce4814235601993c59de1aa8099c2f60aae0d8a58674e85361d2d469c9"
 }

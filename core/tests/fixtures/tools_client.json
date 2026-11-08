@@ -319,13 +319,29 @@
     "side": "client"
   },
   {
-    "description": "Lists the user's playlists. Returns {source, total, playlists[]} with id/uri, name, track count and image. Use before referencing a playlist.",
+    "description": "Lists library playlists. Filter ownership: all, owned (created by the connected Spotify account), followed (owned by others, including collaborative playlists). Filters before pagination. Returns {source, total, offset, limit, playlists[]} with id/uri, name, tracks, owner, is_owned (true/false/null if unknown), image (HTTPS cover URL or null). Edit permission does not imply ownership. Use before referencing a playlist.",
     "name": "get_playlists",
     "parameters": {
       "properties": {
         "limit": {
-          "description": "max 50",
+          "description": "Page size, default 50",
+          "maximum": 50,
+          "minimum": 1,
           "type": "integer"
+        },
+        "offset": {
+          "description": "Offset in filtered results, default 0",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ownership": {
+          "description": "Default all. Unknown owners appear only in all.",
+          "enum": [
+            "all",
+            "owned",
+            "followed"
+          ],
+          "type": "string"
         }
       },
       "required": [],

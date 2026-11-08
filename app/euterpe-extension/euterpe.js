@@ -367,8 +367,27 @@
         uri: p.uri,
         name: p.name,
         tracks: p.tracks ? p.tracks.total ?? null : null,
-        image: p.images && p.images[0] ? p.images[0].url : null,
+        image: playlistImage(p.images && p.images[0] ? p.images[0].url : null),
+        owner: p.owner?.id || p.owner?.username || p.owner?.uri?.split(":").pop() || null,
       };
+    }
+
+    function playlistImage(raw) {
+      if (typeof raw !== "string") return null;
+      if (/^spotify:image:[a-f0-9]{40}$/i.test(raw)) return "https://i.scdn.co/image/" + raw.split(":").pop();
+      return /^https:\/\//i.test(raw) ? raw : null;
+    }
+
+    async function spotifyUsername() {
+      const UserAPI = platformApi("UserAPI", "getUser");
+      if (UserAPI) {
+        try {
+          const user = await UserAPI.getUser();
+          const id = user?.username || user?.id || user?.uri?.split(":").pop();
+          if (id) return id;
+        } catch (_) {}
+      }
+      try { return (await api(`${API}/me`)).id || null; } catch (_) { return null; }
     }
 
     // Persisted-query hashes captured in phase 0 (see agent/data/probes/*.json
@@ -394,7 +413,8 @@
               tracks: Array.isArray(p.numberOfItemsPerLinkType)
                 ? p.numberOfItemsPerLinkType.reduce((acc, l) => acc + ((l && l.numItems) || 0), 0)
                 : null,
-              image: p.imageUrl || (Array.isArray(p.images) && p.images[0] ? p.images[0].url : null),
+              image: playlistImage(p.imageUrl || (Array.isArray(p.images) && p.images[0] ? p.images[0].url : null)),
+              owner: p.owner?.username || p.owner?.id || p.owner?.uri?.split(":").pop() || null,
             }));
           } catch (err) {
             return null;
@@ -904,8 +924,7 @@
       // Tier 3: the original Web API calls, kept intact as the fallback path.
       web: {
         async myPlaylists(limit) {
-          const raw = await api(`${API}/me/playlists?limit=${limit || PAGE_SIZE}&offset=0`);
-          const items = raw && raw.items ? raw.items : [];
+          const items = await paginate("/me/playlists", limit || PAGE_SIZE, MAX_LIBRARY_ITEMS);
           return items.map(apiPlaylist);
         },
       },
@@ -1519,6 +1538,10 @@
           }
 
           case "get_playlists": {
+            const ownership = args.ownership || "all";
+            if (!["all", "owned", "followed"].includes(ownership)) throw new Error("invalid_ownership");
+            const offset = args.offset ?? 0;
+            if (!Number.isInteger(offset) || offset < 0) throw new Error("invalid_offset");
             // Tier 1 (client store, no pagination) -> Tier 3 (Web API).
             let playlists = await Access.platform.playlists(MAX_LIBRARY_ITEMS);
             let source = ACCESS_SOURCE.PLATFORM;
@@ -1530,7 +1553,11 @@
                 playlists = [];
               }
             }
-            data = { source, total: playlists.length, playlists };
+            const username = playlists.some(p => p.owner) ? await spotifyUsername() : null;
+            playlists = playlists.map(p => ({ ...p, is_owned: p.owner && username ? p.owner === username : null }))
+              .filter(p => ownership === "all" || (ownership === "owned" ? p.is_owned === true : p.is_owned === false));
+            const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 50);
+            data = { source, total: playlists.length, offset, limit, playlists: playlists.slice(offset, offset + limit) };
             break;
           }
 

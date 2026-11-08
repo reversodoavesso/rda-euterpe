@@ -173,7 +173,7 @@ export function Rail({ mode, tr, conversations, prefs, steps }) {
                       onClose(s.id);
                     },
                   },
-                  "×",
+                  h(InlineIcon, { name: ICON.close, size: 14 }),
                 ),
               ),
             ),

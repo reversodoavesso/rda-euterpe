@@ -350,6 +350,8 @@ mod tests {
         let v = find("get_playlists").unwrap().mcp_schema();
         assert_eq!(v["name"], "spotify_get_playlists");
         assert!(v.get("inputSchema").is_some());
+        assert_eq!(v["inputSchema"]["properties"]["ownership"]["enum"], json!(["all", "owned", "followed"]));
+        assert_eq!(v["inputSchema"]["properties"]["offset"]["minimum"], 0);
         assert_eq!(v["annotations"]["readOnlyHint"], true);
         assert_eq!(v["annotations"]["destructiveHint"], false);
     }

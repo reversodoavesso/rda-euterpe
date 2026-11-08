@@ -14,6 +14,7 @@ const state = {
   likedMore: true,
   libraryTab: "playlists",
   libraryFilter: "",
+  libraryOwnership: "all",
   selected: null,
   search: null,
   searchBusy: false,
@@ -80,6 +81,7 @@ const errors = {
   unsupported_track_type_for_write: "A playlist contém tipos de faixa que o backend não consegue restaurar com segurança. A análise continua disponível.",
   selection_exceeds_spotify_write_limit: "A seleção excede o limite de escrita reversível do backend.",
   playlist_id_required: "Informe o ID da playlist que será consultada.",
+  invalid_ownership: "Escolha Todas, Criadas por mim ou Seguindo para filtrar as playlists.",
   stream_interrupted: "A conexão de resposta da IA foi interrompida. Os resultados já processados estão na auditoria e nas operações.",
   playlist_version_conflict: "A playlist mudou desde a leitura. Atualize os dados e gere uma nova prévia antes de aprovar.",
   incomplete_dataset: "A leitura está incompleta. Aguarde a operação terminar antes de calcular ou alterar a playlist.",
@@ -632,7 +634,7 @@ function shell() {
                 h(
                   "div",
                   { class: "conversation-tools" },
-                  button("✎", () => renameConversation(c), "ghost", {
+                  button(icon("pencil"), () => renameConversation(c), "ghost", {
                     "aria-label": "Renomear " + c.title,
                   }),
                   button(icon("x"), () => deleteConversation(c), "ghost", {
@@ -658,7 +660,7 @@ function shell() {
         h("div", { class: "small" }, state.user.display_name),
         h("div", { class: "small muted" }, "Espaço pessoal"),
       ),
-      button("↪", logout, "ghost icon-btn", { "aria-label": "Sair da conta" }),
+      button(icon("log-out"), logout, "ghost icon-btn", { "aria-label": "Sair da conta" }),
     ),
   );
   const labels = {
@@ -909,6 +911,7 @@ async function logout() {
     query: "",
     searchTab: "tracks",
     libraryTab: "playlists",
+    libraryOwnership: "all",
     libraryFilter: "",
     likedMore: true,
     authMode: "login",
@@ -1435,8 +1438,41 @@ function libraryView() {
       ),
       button([icon("plus"), " Nova playlist"], () => newDraft(), "primary small"),
     ),
+    state.libraryTab === "playlists" && h(
+      "div",
+      { class: "playlist-filters rda-segmented-control rda-segmented-control--sm", role: "group", "aria-label": "Proprietário das playlists" },
+      [["all", "Todas"], ["owned", "Criadas por mim"], ["followed", "Seguindo"]].map(([value, label]) => h(
+        "button",
+        {
+          type: "button",
+          class: "rda-segmented-control__item",
+          "aria-pressed": String(state.libraryOwnership === value),
+          onClick: (event) => {
+            state.libraryOwnership = value;
+            state.selected = null;
+            for (const item of event.currentTarget.parentElement.children)
+              item.setAttribute("aria-pressed", String(item === event.currentTarget));
+            $("#library-content").replaceChildren(libraryContent());
+          },
+        },
+        label,
+      )),
+    ),
     h("div", { id: "library-content" }, libraryContent()),
   );
+}
+function playlistArt(p) {
+  const art = h("div", { class: "playlist-art", "aria-hidden": "true" }, icon("music"));
+  if (typeof p.image === "string" && /^https:\/\//i.test(p.image)) {
+    art.replaceChildren(h("img", {
+      src: p.image,
+      alt: "",
+      loading: "lazy",
+      decoding: "async",
+      onError: () => art.replaceChildren(icon("music")),
+    }));
+  }
+  return art;
 }
 function libraryContent() {
   if (state.selected) return selectedPlaylist();
@@ -1464,7 +1500,9 @@ function libraryContent() {
   if (!state.playlists)
     return h("div", { class: "empty" }, "Carregando playlists…");
   const rows = state.playlists.filter((p) =>
-    (p.name || "")
+    (state.libraryOwnership === "all" ||
+      (state.libraryOwnership === "owned" && p.is_owned === true) ||
+      (state.libraryOwnership === "followed" && p.is_owned === false)) && (p.name || "")
       .toLocaleLowerCase()
       .includes(state.libraryFilter.toLocaleLowerCase()),
   );
@@ -1480,9 +1518,10 @@ function libraryContent() {
               class: "playlist-card rda-card rda-card--p-sm",
               "data-color": "surface",
               "data-style": "outlined",
+              title: p.name || "Playlist",
               onClick: () => safe(() => openPlaylist(p)),
             },
-            h("div", { class: "playlist-art", "aria-hidden": true }, icon("music")),
+            playlistArt(p),
             h(
               "div",
               { class: "playlist-info" },
@@ -1501,7 +1540,7 @@ function libraryContent() {
     : h(
         "div",
         { class: "empty" },
-        "Nenhuma playlist encontrada com esse nome.",
+        "Nenhuma playlist encontrada com esses filtros.",
       );
 }
 async function loadLiked() {
@@ -1582,7 +1621,7 @@ function trackRow(raw, index, { draft = false } = {}) {
     "div",
     { class: "track" + (draft ? " draft-track" : ""), draggable: draft },
     h("span", { class: "track-number" }, index + 1),
-    h("div", { class: "track-art", "aria-hidden": true }, "♪"),
+    h("div", { class: "track-art", "aria-hidden": true }, icon("music")),
     h(
       "div",
       { class: "flex" },
@@ -2047,7 +2086,7 @@ function review() {
       h(
         "span",
         { class: "small muted" },
-        [icon("music"), " Você aprova antes de alterar o Spotify."],
+        [icon("music"), " As alterações seguem suas preferências de autorização."],
       ),
     ),
   );
@@ -2781,7 +2820,7 @@ function mcpSettingsView() {
   }
   return h("section", { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
     h("h2", {}, "Acesso remoto MCP"),
-    h("p", { class: "small muted" }, "Conecte um cliente MCP com um token pessoal. Escritas exigem aprovação nas propostas do Euterpe. O token aparece uma vez; guarde-o como uma senha."),
+    h("p", { class: "small muted" }, "Conecte um cliente MCP com um token pessoal ou autorize com sua conta RDA. Escritas seguem suas preferências em Operações e autorizações. O token pessoal aparece uma vez; guarde-o como uma senha."),
     field("Endpoint MCP", h("input", { value: window.location.origin + "/mcp", readOnly: true })),
     field("Nome do token", name), field("Permissões", scope), field("Validade em dias", days),
     button("Gerar token", async () => {
@@ -2802,6 +2841,18 @@ function settingsView() {
   if (!state.settings)
     return h("div", { class: "loading" }, "Carregando suas preferências…");
   const s = state.settings;
+  const operationApproval = h("input", {
+    type: "checkbox", role: "switch", checked: s.mutationPolicy !== "allow",
+    "aria-label": "Pedir aprovação antes de alterar playlists", "aria-describedby": "operation-policy-help",
+  });
+  const saveOperations = button("Salvar autorizações", async () => {
+    saveOperations.disabled = true;
+    try {
+      await api("/settings", "PUT", { mutationPolicy: operationApproval.checked ? "confirm" : "allow" });
+      await loadSettings();
+      toast("Preferência de autorização salva para sua conta.");
+    } finally { saveOperations.disabled = false; }
+  }, "primary");
   const provider = h(
     "select",
     { "aria-label": "Provedor de IA" },
@@ -2923,6 +2974,13 @@ function settingsView() {
     h(
       "div",
       { class: "settings-form" },
+      h("section", { id: "operation-settings", class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
+        h("h2", { class: "rda-typography rda-typography--xl rda-typography--semibold" }, "Operações e autorizações"),
+        h("label", { class: "row", style: "gap: var(--rda-spacing-3); min-height: 44px" },
+          operationApproval, h("span", {}, "Pedir aprovação antes de alterar playlists")),
+        h("p", { id: "operation-policy-help", class: "small muted" },
+          "Vale para as próximas operações do agente e de todas as conexões MCP da sua conta. Ao desativar, criação, edição e remoção de playlists podem ser executadas sem uma nova confirmação. Tokens de leitura continuam sem permissão para escrever."),
+        saveOperations),
       mcpSettingsView(),
       state.sso.enabled && h("section", { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
         h("h2", { class: "rda-typography rda-typography--xl rda-typography--semibold" }, "Conta RDA"),
@@ -2995,7 +3053,7 @@ function settingsView() {
         h(
           "div",
           { class: "notice rda-notice rda-notice--info", "data-color": "info" },
-          "Toda alteração de playlist exige sua aprovação. Essa regra também vale para o agente.",
+          "As alterações seguem a opção em Operações e autorizações, tanto no agente quanto no MCP.",
         ),
       ),
       button("Salvar preferências", save, "primary"),

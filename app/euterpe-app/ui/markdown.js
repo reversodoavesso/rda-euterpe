@@ -41,27 +41,7 @@ import { icon as nativeIcon } from "./icons.js";
 export { nativeIcon };
 
 export function spotifyLinkIcon(size) {
-  const path =
-    (Spicetify &&
-      Spicetify.SVGIcons &&
-      (Spicetify.SVGIcons["spotify-logo"] || Spicetify.SVGIcons["external-link"] || Spicetify.SVGIcons["link"])) ||
-    null;
-  if (path) {
-    return React.createElement("svg", {
-      width: size || 14,
-      height: size || 14,
-      viewBox: "0 0 16 16",
-      fill: "currentColor",
-      dangerouslySetInnerHTML: { __html: path },
-    });
-  }
-  return React.createElement(
-    "svg",
-    { width: size || 14, height: size || 14, viewBox: "0 0 16 16", fill: "currentColor", "aria-hidden": true },
-    React.createElement("path", {
-      d: "M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm3.67 11.54c-.15.24-.47.31-.71.16-1.94-1.18-4.38-1.45-7.26-.8-.28.06-.55-.12-.61-.4-.06-.28.12-.55.4-.61 3.15-.7 5.85-.4 8.01.9.25.15.32.48.17.72Zm.99-2.18c-.19.3-.58.39-.88.2-2.22-1.36-5.6-1.76-8.22-.96-.32.1-.67-.08-.77-.4-.1-.32.08-.67.4-.77 2.98-.91 6.69-.46 9.26 1.12.3.18.38.58.21.88v.01Zm.09-2.26C10.07 5.4 6.06 5.21 3.57 5.99c-.38.12-.78-.1-.9-.47-.12-.38.1-.78.47-.9 2.84-.89 7.27-.68 10.14 1.34.34.25.42.73.18 1.07-.25.34-.73.42-1.07.18l-.02-.01Z",
-    })
-  );
+  return nativeIcon("external-link", size || 14);
 }
 
 /* Euterpe logo — Lyre mark from assets/logo.svg.
@@ -414,7 +394,7 @@ export function renderMarkdown(md, keyBase = "md") {
                       lineHeight: "1.5",
                     },
                   },
-                  checked ? "☑" : "☐"
+                  nativeIcon(checked ? "square-check" : "square", 14)
                 ),
                 React.createElement("span", { style: checked ? { opacity: 0.6, textDecoration: "line-through" } : {} }, ...mdInline(body, `${keyBase}-tk${key}${j}`))
               );

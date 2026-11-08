@@ -1,0 +1,11 @@
+/* Consent uses the same bundled RDA fonts, controls and semantic tokens. */
+body { margin: 0; background: var(--rda-surface-primary); color: var(--rda-content-primary); font-family: var(--rda-font-family-body); }
+.oauth-consent { max-width: 38rem; margin: 0 auto; padding: var(--rda-space-8, 2rem) var(--rda-space-5, 1.25rem); line-height: 1.6; overflow-wrap: anywhere; }
+.oauth-consent h1 { font-family: var(--rda-font-family-display); line-height: 1.15; margin-bottom: var(--rda-spacing-4); }
+.oauth-consent p { margin-block: var(--rda-spacing-4); }
+.oauth-eyebrow { color: var(--rda-content-brand); }
+.oauth-consent dl { border-block: 1px solid var(--rda-border-primary); padding-block: var(--rda-space-4, 1rem); }
+.oauth-consent dt { font-weight: 600; margin-top: var(--rda-space-3, .75rem); }
+.oauth-consent dd { margin: 0 0 var(--rda-space-3, .75rem); }
+.oauth-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--rda-space-3, .75rem); margin-top: var(--rda-space-6, 1.5rem); }
+.oauth-actions .rda-button { min-height: 44px; }

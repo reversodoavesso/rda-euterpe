@@ -7,6 +7,56 @@ const { JSDOM } = require('jsdom');
 const source = fs.readFileSync(__dirname + '/dist/app.js', 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('account operation settings default to confirmation and save independently of model config', async () => {
+  const p = await page();
+  try {
+    p.run('state.view="settings";state.settings={};state.providers=[];render()');
+    const doc = p.dom.window.document;
+    const toggle = doc.querySelector('input[aria-label="Pedir aprovação antes de alterar playlists"]');
+    assert(toggle);
+    assert.equal(toggle.checked, true);
+    assert.match(doc.querySelector('#operation-settings').textContent, /agente e.*MCP/);
+    toggle.click();
+    const save = [...doc.querySelectorAll('button')].find(b=>b.textContent==='Salvar autorizações');
+    save.click(); await tick(); await tick();
+    const request = p.requests.find(r=>r.url==='/api/settings'&&r.method==='PUT');
+    assert(request);
+    assert.equal(JSON.parse(request.body).mutationPolicy,'allow');
+    assert.equal(p.requests.some(r=>r.url==='/api/providers'&&r.method==='POST'),false);
+    p.run('state.settings={mutationPolicy:"allow"};render()');
+    assert.equal(doc.querySelector('input[aria-label="Pedir aprovação antes de alterar playlists"]').checked,false);
+  } finally {p.dom.window.close();}
+});
+
+test('library combines ownership and name filters and recovers broken covers', async () => {
+  const p = await page();
+  try {
+    p.run(`state.view='library';state.playlists=[
+      {id:'a',name:'Minha viagem',is_owned:true,image:'https://i.scdn.co/image/cover'},
+      {id:'b',name:'Outra viagem',is_owned:false,can_edit:true},
+      {id:'c',name:'Sem proprietário',is_owned:null}];render()`);
+    const doc = p.dom.window.document;
+    assert.equal(doc.querySelectorAll('.playlist-card').length, 3);
+    const img = doc.querySelector('.playlist-art img');
+    assert(img);
+    assert.equal(img.loading || img.getAttribute('loading'), 'lazy');
+    img.dispatchEvent(new p.dom.window.Event('error'));
+    assert.equal(doc.querySelector('.playlist-art img'), null);
+    assert(doc.querySelector('.playlist-art rda-icon[name="music"]'));
+    const filter = label => [...doc.querySelectorAll('button')].find(b => b.textContent === label);
+    filter('Criadas por mim').click();
+    assert.equal(doc.querySelectorAll('.playlist-card').length, 1);
+    assert.match(doc.querySelector('.playlist-card').textContent, /Minha viagem/);
+    filter('Seguindo').click();
+    assert.equal(doc.querySelectorAll('.playlist-card').length, 1);
+    assert.match(doc.querySelector('.playlist-card').textContent, /Outra viagem/);
+    const search = doc.querySelector('input[type="search"]');
+    search.value = 'inexistente'; search.dispatchEvent(new p.dom.window.Event('input'));
+    assert.equal(doc.querySelectorAll('.playlist-card').length, 0);
+    assert.match(doc.querySelector('#library-content').textContent, /filtros/);
+  } finally { p.dom.window.close(); }
+});
+
 test('public SSO-only mode hides local credentials and uses DS icon elements', async()=>{
   const p=await page();
   try {

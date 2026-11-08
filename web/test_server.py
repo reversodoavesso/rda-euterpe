@@ -145,7 +145,8 @@ class GatewayTests(unittest.TestCase):
                 {'name': 'spotify_get_playlists'}, {'name': 'spotify_create_playlist'}, {'name': 'spotify_selection_apply'}]}}
         body = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'}
         with patch.object(worker, 'json', side_effect=AssertionError('initialize must not create private sessions')):
-            status, initialized, _ = self.request('/mcp', 'POST', {**body, 'method': 'initialize', 'params': {'protocolVersion': '2025-06-18'}}, headers=headers)
+            status, initialized, _ = self.request('/mcp', 'POST', {**body, 'method': 'initialize', 'params': {
+                'protocolVersion': '2025-06-18', 'capabilities': {}, 'clientInfo': {'name': 'test', 'version': '1'}}}, headers=headers)
             self.assertEqual(status, 200)
             self.assertEqual(initialized['result']['protocolVersion'], '2025-06-18')
             self.assertEqual(self.request('/mcp', 'POST', {**body, 'method': 'ping'}, headers=headers)[1]['result'], {})
@@ -399,15 +400,44 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(worker.writes, 0)
 
-    def test_read_endpoint_cannot_mutate_and_policy_cannot_be_bypassed(self):
-        auth, _ = self.account()
+    def test_only_authenticated_owner_can_set_account_operation_policy(self):
+        auth, user = self.account()
+        other, _ = self.account()
         self.assertEqual(self.request("/api/tools", "POST", {"name": "create_playlist"}, auth)[0], 400)
+        self.assertEqual(self.request('/api/settings', 'PUT', {'mutationPolicy': 'allow'})[0], 401)
+        self.assertEqual(self.request('/api/settings', 'PUT', {'mutationPolicy': 'allow'}, (auth[0], 'wrong'))[0], 403)
         status, result, _ = self.request("/api/settings", "PUT", {"mutationPolicy": "allow", "mutationAllowlist": ["*"], "chatUpstream": "http://evil", "instructions": "music"}, auth)
         self.assertEqual(status, 200)
-        self.assertEqual(result["settings"]["mutationPolicy"], "confirm")
+        self.assertEqual(result["settings"]["mutationPolicy"], "allow")
+        self.assertEqual(self.request('/api/settings', auth=other)[1]['settings']['mutationPolicy'], 'confirm')
+        self.assertEqual(self.request('/api/settings', 'PUT', {'instructions': 'more music'}, auth)[1]['settings']['mutationPolicy'], 'allow')
+        for value in ('invalid', True, None, [], 'deny'):
+            self.assertEqual(self.request('/api/settings', 'PUT', {'mutationPolicy': value}, auth)[0], 400)
+        self.assertEqual(self.request('/api/settings', 'PUT', {'mutationPolicy': 'confirm'}, auth)[1]['settings']['mutationPolicy'], 'confirm')
         self.assertEqual(result["settings"]["chatUpstream"], "")
         self.assertEqual(result["settings"]["mutationAllowlist"], [])
         self.assertNotIn("runtime", result)
+
+    def test_mcp_uses_owner_policy_and_ignores_caller_confirmation_flags(self):
+        auth, user = self.account()
+        _, issued, _ = self.request('/api/mcp/tokens', 'POST', {'name': 'writer', 'scope': 'write'}, auth)
+        headers = {'Authorization': 'Bearer ' + issued['token'], 'Accept': 'application/json, text/event-stream'}
+        worker = self.workers.items.setdefault(user['id'], FakeWorker())
+        original = worker.json
+        body = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {
+            'name': 'spotify_create_playlist', 'arguments': {'name': 'Synthetic'}, '_requireConfirmation': False}}
+        calls = []
+        def rpc(path, method='GET', payload=None):
+            if path == '/mcp':
+                calls.append(payload)
+                return 200, {'jsonrpc': '2.0', 'id': 1, 'result': {}}
+            return original(path, method, payload)
+        with patch.object(worker, 'json', side_effect=rpc):
+            for policy, required in [('confirm', True), ('allow', False), ('confirm', True)]:
+                self.request('/api/settings', 'PUT', {'mutationPolicy': policy}, auth)
+                self.assertEqual(self.request('/mcp', 'POST', body, headers=headers)[0], 200)
+                self.assertEqual(calls[-1]['params']['_requireConfirmation'], required)
+        self.assertEqual(self.request('/api/settings', 'PUT', {'mutationPolicy': 'allow'}, headers=headers)[0], 401)
 
     def test_single_use_ticket_and_hashed_storage(self):
         auth, user = self.account()

@@ -58,6 +58,7 @@ type arguments struct {
 	URIs             []string          `json:"uris"`
 	Limit            int               `json:"limit"`
 	Offset           int               `json:"offset"`
+	Ownership        string            `json:"ownership"`
 	Q                string            `json:"q"`
 	Types            string            `json:"types"`
 	IDs              []string          `json:"ids"`
@@ -285,6 +286,9 @@ func (b *backend) execute(ctx context.Context, name string, a arguments) (any, e
 		return b.resolve(ctx, a.Tracks)
 	}
 	if name == "get_playlists" {
+		if a.Ownership != "" && a.Ownership != "all" && a.Ownership != "owned" && a.Ownership != "followed" {
+			return nil, failure("invalid_ownership")
+		}
 		root, err := b.read(ctx, b.rootPath())
 		if err != nil {
 			return nil, err
@@ -298,7 +302,14 @@ func (b *backend) execute(ctx context.Context, name string, a arguments) (any, e
 			if i < len(root.GetContents().GetMetaItems()) {
 				m = root.Contents.MetaItems[i]
 			}
-			playlists = append(playlists, map[string]any{"id": strings.TrimPrefix(item.GetUri(), "spotify:playlist:"), "uri": item.GetUri(), "name": m.GetAttributes().GetName(), "tracks": m.GetLength(), "owner": m.GetOwnerUsername(), "description": m.GetAttributes().GetDescription(), "image": nil, "can_edit": m.GetCapabilities().GetCanEditItems()})
+			var owned any
+			if m.GetOwnerUsername() != "" && b.username != "" {
+				owned = m.GetOwnerUsername() == b.username
+			}
+			if (a.Ownership == "owned" && owned != true) || (a.Ownership == "followed" && owned != false) {
+				continue
+			}
+			playlists = append(playlists, map[string]any{"id": strings.TrimPrefix(item.GetUri(), "spotify:playlist:"), "uri": item.GetUri(), "name": m.GetAttributes().GetName(), "tracks": m.GetLength(), "owner": m.GetOwnerUsername(), "is_owned": owned, "description": m.GetAttributes().GetDescription(), "image": playlistImage(m.GetAttributes()), "can_edit": m.GetCapabilities().GetCanEditItems()})
 		}
 		total := len(playlists)
 		limit := a.Limit

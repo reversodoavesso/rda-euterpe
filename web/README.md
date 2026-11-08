@@ -3,6 +3,52 @@
 Aplicação web para conversar com o agente e gerenciar playlists com Spotify headless.
 A interface em português tem três áreas: conversas, área de trabalho e seleção em revisão.
 
+## MCP remoto com OAuth
+
+Clientes como Gemini podem conectar a URL pública `/mcp` usando descoberta OAuth
+e registro dinâmico, sem preencher o ID/segredo do cliente nas opções avançadas.
+O gateway publica `/.well-known/oauth-protected-resource/mcp` (também na raiz) e
+`/.well-known/oauth-authorization-server`. Os endpoints `/oauth/register`,
+`/oauth/authorize`, `/oauth/token` e `/oauth/revoke` implementam authorization code
+com PKCE S256, consentimento e renovação. O modo de autenticação do cliente é
+`none`; a prova de posse do código é obrigatória. Configure `WEB_PUBLIC_ORIGIN`
+com a origem HTTPS canônica; descoberta local aceita apenas loopback.
+
+A autorização reutiliza o login RDA e solicita consentimento antes de emitir
+credenciais. O usuário é definido pela sessão autenticada; IDs e cabeçalhos
+enviados pelo cliente não selecionam outra conta. Escopos: `read` (padrão),
+`write`, ou `read write`. Escritas exigem aprovação por padrão. Em **Ajustes →
+Operações e autorizações**, o proprietário pode desativar essa confirmação para
+as próximas operações de sua conta, tanto no agente quanto nas conexões MCP.
+Tokens de leitura continuam sem poder escrever. A preferência é persistida no
+compute pessoal; mudanças em outras preferências não a redefinem.
+
+Access tokens expiram em uma hora; a autorização para renovação dura 30 dias.
+Cada renovação substitui os tokens e invalida o access token anterior. Reutilizar
+um refresh token consumido ou um código já trocado revoga toda a autorização.
+O cliente deve serializar renovações e guardar o novo refresh token recebido.
+Reenviar o formulário de consentimento com a mesma conta/sessão retorna o mesmo
+código ainda não trocado, sem criar outra autorização. Após a troca, o formulário
+não reenvia o código; apresenta uma orientação de retorno ao aplicativo. Pedidos
+expirados apresentam uma página para reiniciar a conexão em vez de JSON bruto.
+Tokens persistem somente como hashes e continuam válidos após reinício do gateway.
+Para revogar, use **Ajustes → Acesso remoto MCP**, onde o aplicativo aparece com
+o prefixo `MCP:`; a exclusão impede também a renovação. Tokens pessoais existentes
+continuam funcionando. Registros de clientes sem uso por 90 dias e sem autorização
+ativa podem ser removidos para liberar capacidade de registro.
+
+Um `initialize` autenticado e válido aguarda a prontidão do compute pessoal.
+Listar/executar ferramentas também retoma o compute após suspensão por inatividade,
+sem cookie, aba ou heartbeat da interface. Descoberta pública e pedidos inválidos
+não iniciam compute. Falha ao iniciar retorna 503; mutações de resultado incerto
+nunca são repetidas automaticamente.
+
+Verificação local: `python -m unittest discover -v` nesta pasta e `npm test`.
+`test_mcp_oauth.py` cobre consentimento/CSRF, SSO, PKCE, códigos de uso único,
+rotatividade/revogação, expiração, isolamento entre contas e HTTP sem interface
+contra runtime suspenso. A prova visual e de callback em Chromium está em
+`artifacts/euterpe-oauth-browser-20261108.mjs` no workspace do ecossistema.
+
 ## Executar
 
 É necessário Docker com containers Linux, acesso à internet durante o build e uma conta Spotify.

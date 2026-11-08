@@ -22,6 +22,7 @@ const result = await build({
   format: "iife",
   platform: "browser",
   target: "es2020",
+  loader: { ".css": "text", ".woff2": "dataurl" },
   minify: false,
   sourcemap: false,
   legalComments: "none",

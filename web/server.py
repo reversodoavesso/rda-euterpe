@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 import hashlib
 import hmac
+import html
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -31,6 +32,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from rda_sso import RdaSso, SsoError
+from mcp_oauth import McpOAuth
 from curation import (
     EDITORIAL_MODELS,
     DRAMATURGIAS,
@@ -44,7 +46,7 @@ from rda_ai_client import RdaAiClient
 STATIC = Path(__file__).parent / "dist"
 READ_TOOLS = {"get_playlists", "get_playlist_tracks", "get_saved_tracks", "get_several_tracks", "search_spotify", "resolve_tracks"}
 WRITE_TOOLS = {"create_playlist", "delete_playlist", "add_tracks", "remove_tracks", "set_playlist_details", "replace_playlist_tracks", "undo_last_mutation"}
-SETTING_KEYS = {"activeProvider", "activeModel", "curationModel", "profiles", "activeProfile", "roleProfiles", "instructions", "suggestions", "chatHistoryTurns", "maxToolSteps"}
+SETTING_KEYS = {"activeProvider", "activeModel", "curationModel", "profiles", "activeProfile", "roleProfiles", "instructions", "suggestions", "chatHistoryTurns", "maxToolSteps", "mutationPolicy"}
 COOKIE = "euterpe_session"
 SESSION_SECONDS = 7 * 24 * 3600
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -703,6 +705,7 @@ class Workers:
 class Application:
     def __init__(self, root, workers=None):
         self.store = Store(root)
+        self.oauth = McpOAuth(self.store, APIError)
         with self.store.db() as c:
             c.execute("UPDATE jobs SET status='interrupted',result=? WHERE status IN ('pending','running')", (json.dumps({"code": "operation_interrupted_verify_state"}),))
         self.workers = workers or (PlatformWorkers(self.store) if os.getenv('RDA_RUNTIME_URL') else Workers(self.store))
@@ -773,10 +776,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "no-referrer")
+        # Same-origin keeps the Origin header on native consent forms. A
+        # no-referrer policy makes Chromium send Origin: null on form POST.
+        self.send_header("Referrer-Policy", "same-origin" if getattr(self, '_oauth_form_target', '') else "no-referrer")
         if os.getenv('WEB_REQUIRE_HTTPS') == 'true':
             self.send_header('Strict-Transport-Security', 'max-age=31536000')
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        form_target = getattr(self, '_oauth_form_target', '')
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" + (' ' + form_target if form_target else ''))
 
     def cookie(self, token, clear=False):
         same_site = 'Lax' if self.app.sso else 'Strict'
@@ -792,7 +798,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         if status == 401 and urllib.parse.urlsplit(self.path).path == '/mcp':
-            self.send_header('WWW-Authenticate', 'Bearer realm="euterpe-mcp"')
+            self.send_header('WWW-Authenticate', 'Bearer realm="euterpe-mcp", resource_metadata="' + self.oauth_origin() + '/.well-known/oauth-protected-resource/mcp"')
         if cookie:
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
@@ -821,7 +827,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin and origin.rstrip("/") not in allowed:
             raise APIError("origin_rejected", 403)
 
-    def authenticated(self):
+    def authenticated(self, csrf=None):
         user, token = self.app.store.authenticate(self.headers.get("Cookie"))
         binding = self.app.store.sso_binding(user['id'])
         if binding:
@@ -832,9 +838,152 @@ class Handler(BaseHTTPRequestHandler):
             self.app.sso.verify_session(token, binding['subject'])
         if self.command not in {"GET", "HEAD"}:
             self.origin()
-            if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), self.app.store.csrf(token)):
+            if not hmac.compare_digest(csrf if csrf is not None else self.headers.get("X-CSRF-Token", ""), self.app.store.csrf(token)):
                 raise APIError("csrf_rejected", 403)
         return user, token
+
+    def oauth_origin(self):
+        origin = os.getenv('WEB_PUBLIC_ORIGIN', '').rstrip('/')
+        if not origin:
+            host, port = self.server.server_address[:2]
+            if host != '127.0.0.1':
+                raise APIError('oauth_origin_not_configured', 503)
+            origin = f'http://127.0.0.1:{port}'
+        parsed = urllib.parse.urlsplit(origin)
+        if (parsed.scheme != 'https' and not (parsed.scheme == 'http' and parsed.hostname == '127.0.0.1')
+                or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment
+                or re.search(r'[\s\x00-\x1f\x7f"<>]', origin)):
+            raise APIError('oauth_origin_not_configured', 503)
+        return origin
+
+    @staticmethod
+    def oauth_params(raw):
+        try:
+            parsed = urllib.parse.parse_qs(raw, keep_blank_values=True, max_num_fields=30, errors='strict')
+            if any(len(values) != 1 for values in parsed.values()):
+                raise ValueError()
+            return {key: values[0] for key, values in parsed.items()}
+        except (ValueError, UnicodeError):
+            raise APIError('invalid_request') from None
+
+    def oauth_body(self):
+        if self.headers.get_content_type() == 'application/json':
+            body = self.body()
+            if any(not isinstance(value, str) for value in body.values()):
+                raise APIError('invalid_request')
+            return body
+        if self.headers.get_content_type() != 'application/x-www-form-urlencoded':
+            raise APIError('form_required', 415)
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+            if not 0 < size <= 16384:
+                raise APIError('request_too_large', 413)
+            raw = self.rfile.read(size)
+            self._body_consumed = len(raw) == size
+            return self.oauth_params(raw.decode('utf-8'))
+        except (ValueError, UnicodeError):
+            raise APIError('invalid_request') from None
+
+    def redirect(self, location, cookie=None):
+        self.send_response(303)
+        self.common_headers()
+        self.send_header('Location', location)
+        if cookie:
+            self.send_header('Set-Cookie', cookie)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def oauth_route(self, path, query):
+        origin = self.oauth_origin()
+        if self.command == 'GET' and path in {'/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'}:
+            return self.reply({'resource': origin + '/mcp', 'authorization_servers': [origin],
+                'bearer_methods_supported': ['header'], 'scopes_supported': ['read', 'write'], 'resource_name': 'Euterpe MCP'})
+        if self.command == 'GET' and path == '/.well-known/oauth-authorization-server':
+            return self.reply({'issuer': origin, 'authorization_endpoint': origin + '/oauth/authorize',
+                'token_endpoint': origin + '/oauth/token', 'registration_endpoint': origin + '/oauth/register',
+                'revocation_endpoint': origin + '/oauth/revoke', 'response_types_supported': ['code'],
+                'grant_types_supported': ['authorization_code', 'refresh_token'],
+                'token_endpoint_auth_methods_supported': ['none'], 'code_challenge_methods_supported': ['S256'],
+                'scopes_supported': ['read', 'write'], 'authorization_response_iss_parameter_supported': True})
+        if path == '/oauth/register' and self.command == 'POST':
+            self.origin()
+            self.app.login_limit('oauth-register:' + self.client_address[0])
+            return self.reply(self.app.oauth.register(self.body()), 201)
+        if path in {'/oauth/token', '/oauth/revoke'} and self.command == 'POST':
+            self.origin()
+            params = self.oauth_body()
+            if self.headers.get('Authorization') or params.get('client_secret'):
+                raise APIError('invalid_client', 401)
+            if path.endswith('/token'):
+                return self.reply(self.app.oauth.exchange(params, origin))
+            self.app.oauth.revoke(params)
+            return self.reply({})
+        if path != '/oauth/authorize' or self.command not in {'GET', 'POST'}:
+            raise APIError('method_not_allowed', 405)
+        if self.command == 'POST':
+            params = self.oauth_body()
+            user, session = self.authenticated(params.get('csrf', ''))
+            if params.get('decision') not in {'approve', 'deny'}:
+                raise APIError('invalid_request')
+            result = self.app.oauth.consent(params.get('transaction', ''), user['id'], session, params['decision'] == 'approve')
+            target = result.pop('redirect_uri')
+            callback = urllib.parse.urlsplit(target)
+            self._oauth_form_target = callback.scheme + '://' + callback.netloc
+            return self.redirect(target + ('&' if '?' in target else '?') + urllib.parse.urlencode(result))
+        params = self.oauth_params(query)
+        if 'transaction' in params:
+            if set(params) != {'transaction'}:
+                raise APIError('invalid_request')
+            transaction = params['transaction']
+            self.app.oauth.pending(transaction)
+        else:
+            self.app.login_limit('oauth-authorize:' + self.client_address[0])
+            transaction = self.app.oauth.begin(params, origin)
+        try:
+            user, session = self.authenticated()
+        except (APIError, SsoError) as error:
+            if error.status != 401 or not self.app.sso:
+                raise
+            self.app.login_limit('oauth-login:' + self.client_address[0])
+            url, state = self.app.sso.start({'mcp_transaction': transaction})
+            cookie = f'euterpe_sso_state={state}; Path=/api/account/sso; HttpOnly; SameSite=Lax; Max-Age=600'
+            if self.app.sso.cookie_secure:
+                cookie += '; Secure'
+            return self.redirect(url, cookie)
+        data = self.app.oauth.bind(transaction, user['id'], session)
+        escape = html.escape
+        permissions = ('Ler sua biblioteca e alterar playlists conforme suas preferências de autorização no Euterpe. Se a confirmação estiver desativada, alterações poderão ser executadas automaticamente.'
+                       if 'write' in data['scope'].split() else 'Consultar sua biblioteca, playlists e buscar músicas. Sem permissão para alterar playlists.')
+        callback_host = urllib.parse.urlsplit(data['redirect_uri']).netloc
+        callback = urllib.parse.urlsplit(data['redirect_uri'])
+        # Chromium checks form-action against the final 303 destination too.
+        # This page permits only its own origin and this registered callback.
+        self._oauth_form_target = callback.scheme + '://' + callback.netloc
+        page = f'''<!doctype html><html lang="pt-BR" data-theme="dark"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Autorizar aplicativo — Euterpe</title><link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/rda-tokens.css"><link rel="stylesheet" href="/rda-ds.css">
+<link rel="stylesheet" href="/oauth.css"></head><body class="rda-body">
+<main class="oauth-consent" aria-labelledby="consent-title"><p class="oauth-eyebrow">Euterpe · Acesso MCP</p>
+<h1 id="consent-title">Autorizar aplicativo</h1>
+<p><strong class="oauth-client">{escape(data['client_name'])}</strong> solicita acesso à sua conta Euterpe.</p>
+<dl><dt>Conta</dt><dd>{escape(user['display_name'])} <span>({escape(user['username'])})</span></dd>
+<dt>Permissões solicitadas</dt><dd>{permissions}</dd>
+<dt>Destino da autorização</dt><dd>{escape(callback_host)}</dd></dl>
+<p>O nome do aplicativo é informado por quem o registrou. Autorize apenas se você iniciou esta conexão e reconhece o destino.</p>
+<p>Você pode revogar este acesso em Ajustes → Acesso remoto MCP. A conexão poderá retomar seu compute mesmo com a interface fechada.</p>
+<form method="post" action="/oauth/authorize">
+<input type="hidden" name="transaction" value="{escape(transaction)}">
+<input type="hidden" name="csrf" value="{escape(self.app.store.csrf(session))}">
+<div class="oauth-actions"><button class="rda-button rda-button--md" data-color="secondary" name="decision" value="deny">Cancelar</button>
+<button class="rda-button rda-button--md" data-color="brand" name="decision" value="approve">Autorizar acesso</button></div>
+</form></main></body></html>'''.encode()
+        self.send_response(200)
+        self.common_headers()
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(page)))
+        self.end_headers()
+        self.wfile.write(page)
 
     def remote_mcp(self):
         self.origin()
@@ -847,7 +996,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         version = self.headers.get('MCP-Protocol-Version', '2025-03-26')
-        if version not in {'2025-03-26', '2025-06-18'}:
+        if version not in {'2025-03-26', '2025-06-18', '2025-11-25'}:
             raise APIError('unsupported_protocol_version')
         accept = self.headers.get('Accept', '')
         if 'application/json' not in accept or 'text/event-stream' not in accept:
@@ -875,11 +1024,19 @@ class Handler(BaseHTTPRequestHandler):
             return error(-32601, 'Method not found')
         if method == 'initialize':
             requested = params.get('protocolVersion')
-            negotiated = requested if requested in ('2025-03-26', '2025-06-18') else '2025-06-18'
+            info = params.get('clientInfo')
+            if (not isinstance(requested, str) or not requested or not isinstance(params.get('capabilities'), dict)
+                    or not isinstance(info, dict) or not all(isinstance(info.get(key), str) and info[key] for key in ('name', 'version'))):
+                return error(-32602, 'Invalid initialize parameters')
+            negotiated = requested if requested in ('2025-03-26', '2025-06-18', '2025-11-25') else '2025-11-25'
+            # Authenticate and validate the handshake before resuming this owner's
+            # compute. No UI cookie or browser heartbeat is required afterwards.
+            with self.app.workers.lease(user):
+                pass
             return self.reply({'jsonrpc': '2.0', 'id': request_id, 'result': {
                 'protocolVersion': negotiated, 'serverInfo': {'name': 'euterpe-remote', 'version': '1.0.0'},
                 'capabilities': {'tools': {'listChanged': False}, 'resources': {'subscribe': False, 'listChanged': False}, 'prompts': {'listChanged': False}},
-                'instructions': 'Acesso Spotify pessoal. Leia antes de escrever. Escritas exigem aprovação nas propostas da interface Euterpe; nunca repita uma escrita de resultado incerto.'}})
+                'instructions': 'Acesso Spotify pessoal. Leia antes de escrever. Escritas seguem a preferência de autorização da conta (aprovação por padrão); nunca repita uma escrita de resultado incerto.'}})
         if method == 'ping':
             return self.reply({'jsonrpc': '2.0', 'id': request_id, 'result': {}})
         allowed_tools = {'spotify_' + name for name in READ_TOOLS | (WRITE_TOOLS if scope == 'write' else set())}
@@ -888,15 +1045,40 @@ class Handler(BaseHTTPRequestHandler):
                 return error(-32602, 'Tool unavailable for this token')
             if not isinstance(params.get('arguments', {}), dict):
                 return error(-32602, 'Invalid arguments')
-            # This flag can only strengthen the daemon policy, never bypass it.
+            # Never take the caller's flag as the owner's operation preference.
             body = {**body, 'params': {**params, '_requireConfirmation': True}}
         with self.app.workers.lease(user) as worker:
+            if method == 'tools/call' and params.get('name') in {'spotify_' + name for name in WRITE_TOOLS}:
+                settings_status, settings = worker.json('/settings')
+                if settings_status != 200 or not isinstance(settings, dict):
+                    raise APIError('operation_policy_unavailable', 503)
+                policy = settings.get('settings', {}).get('mutationPolicy', 'confirm')
+                body['params']['_requireConfirmation'] = policy != 'allow'
             status, reply = worker.json('/mcp', 'POST', body)
         if status != 200 or not isinstance(reply, dict):
             raise APIError('agent_unavailable', 502)
         if method == 'tools/list' and isinstance(reply.get('result'), dict):
             reply['result']['tools'] = [tool for tool in reply['result'].get('tools', []) if tool.get('name') in allowed_tools]
         return self.reply(reply)
+
+    def oauth_problem(self, error):
+        completed = error.code == 'authorization_already_completed'
+        title = 'Autorização já enviada' if completed else 'Solicitação de conexão encerrada'
+        message = ('A autorização desta conexão já foi enviada. Volte ao aplicativo em que você iniciou a conexão.'
+                   if completed else 'Esta solicitação expirou ou já foi utilizada. Volte ao aplicativo e inicie a conexão novamente.')
+        page = f'''<!doctype html><html lang="pt-BR" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title} — Euterpe</title>
+<link rel="stylesheet" href="/fonts.css"><link rel="stylesheet" href="/rda-tokens.css">
+<link rel="stylesheet" href="/rda-ds.css"><link rel="stylesheet" href="/oauth.css"></head>
+<body class="rda-body"><main class="oauth-consent"><p class="oauth-eyebrow">Euterpe · Acesso MCP</p>
+<h1>{title}</h1><p>{message}</p><a class="rda-button rda-button--md" data-color="secondary" href="/">Abrir Euterpe</a>
+</main></body></html>'''.encode()
+        self.send_response(error.status)
+        self.common_headers()
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(page)))
+        self.end_headers()
+        self.wfile.write(page)
 
     def do_GET(self):
         self.handle_route()
@@ -918,9 +1100,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_route(self):
         self._body_consumed = False
+        self._oauth_form_target = ''
         try:
             self.route()
         except APIError as error:
+            if (urllib.parse.urlsplit(self.path).path == '/oauth/authorize' and 'text/html' in self.headers.get('Accept', '')
+                    and error.code in {'invalid_authorization_request', 'authorization_already_completed'}):
+                return self.oauth_problem(error)
             self.reply({"error": error.code}, error.status)
         except SsoError as error:
             self.reply({"error": error.code}, error.status)
@@ -957,6 +1143,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({"ok": True, "app": "euterpe-web"})
         if path == '/mcp':
             return self.remote_mcp()
+        if path.startswith('/oauth/') or path.startswith('/.well-known/oauth-'):
+            return self.oauth_route(path, parsed.query)
         if path == '/api/account/sso/config' and self.command == 'GET':
             return self.reply({'enabled': bool(self.app.sso), 'loginUrl': '/api/account/sso/login', 'localLoginEnabled': os.getenv('WEB_LOCAL_LOGIN_ENABLED', 'true') != 'false'})
         if path in {'/api/account/sso/login', '/api/account/sso/link'}:
@@ -989,6 +1177,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise APIError('invalid_oauth_callback')
             identity = self.app.sso.finish({key: value[0] for key, value in query.items()}, cookies['euterpe_sso_state'].value if 'euterpe_sso_state' in cookies else '')
             link = identity['link'] or {}
+            transaction = link.get('mcp_transaction')
+            if transaction:
+                self.app.oauth.pending(transaction)
             user = self.app.store.bind_sso(identity['profile'], link.get('user_id'), link.get('session_hash'))
             token = self.app.store.issue_session(user['id'])
             with self.app.store.db() as c:
@@ -996,9 +1187,10 @@ class Handler(BaseHTTPRequestHandler):
                 c.execute('INSERT INTO sso_sessions VALUES (?,?)', (digest(token), identity['profile']['sub']))
             self.app.sso.remember(token, identity)
             self.send_response(303); self.common_headers()
-            self.send_header('Set-Cookie', self.cookie(token))
             self.send_header('Set-Cookie', 'euterpe_sso_state=; Path=/api/account/sso; HttpOnly; SameSite=Lax; Max-Age=0' + ('; Secure' if self.app.sso.cookie_secure else ''))
-            self.send_header('Location', '/'); self.send_header('Content-Length', '0'); self.end_headers(); return
+            self.send_header('Set-Cookie', self.cookie(token))
+            self.send_header('Location', '/oauth/authorize?' + urllib.parse.urlencode({'transaction': transaction}) if transaction else '/')
+            self.send_header('Content-Length', '0'); self.end_headers(); return
         if path in {"/api/account/login", "/api/account/register"} and self.command == "POST":
             self.origin()
             if path.endswith('/login') and os.getenv('WEB_LOCAL_LOGIN_ENABLED', 'true') == 'false':
@@ -1277,7 +1469,9 @@ class Handler(BaseHTTPRequestHandler):
                 if self.command == "PUT":
                     body = self.body()
                     patch = {k: v for k, v in body.items() if k in SETTING_KEYS}
-                    patch.update(mutationPolicy="confirm", mutationAllowlist=[], chatUpstream="")
+                    if 'mutationPolicy' in body and (not isinstance(body['mutationPolicy'], str) or body['mutationPolicy'] not in {'confirm', 'allow'}):
+                        raise APIError('invalid_operation_policy')
+                    patch.update(mutationAllowlist=[], chatUpstream="")
                 status, data = worker.json("/settings", self.command, patch)
                 data.pop("runtime", None)
                 return self.reply(data, status)

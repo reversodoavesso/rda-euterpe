@@ -14,6 +14,7 @@ import { appLocale, tr } from "../lib/i18n.js";
 import { getSettings, listModels, listProviders, saveSettings, streamChat } from "../lib/daemon.js";
 import { copyText, euterpeLogo, renderMarkdown } from "./markdown.js";
 import { icon, ICON, InlineIcon } from "./icons.js";
+import { injectRdaStyles } from "./rda-styles.js";
 import { useSessions } from "./sessions.js";
 import { SettingsPanel, PREFS_SECTIONS } from "./settings.js";
 import { Rail } from "./rail.js";
@@ -28,51 +29,47 @@ const { React } = Spicetify;
    ============================================================ */
 export function injectStyles() {
   try {
+    injectRdaStyles();
     const existing = document.getElementById("euterpe-styles");
     if (existing) existing.remove();
     const s = document.createElement("style");
     s.id = "euterpe-styles";
-    s.textContent = `:root {
-  /* Euterpe design tokens — aliases da camada semântica do Encore (o DS do
-     próprio client: --background-*, --text-*, --essential-*, --decorative-*),
-     definida em \`xpui-snapshot.css\` sob \`.encore-dark-theme\`. Fonte primária =
-     token nativo; o \`--spice-*\` do spicetify fica só como rede para temas que
-     redefinem apenas a camada dele. */
-  --euterpe-bg: var(--background-base, var(--spice-main, #121212));
-  --euterpe-surface: var(--background-elevated-base, var(--spice-card, #1f1f1f));
-  --euterpe-surface-raised: var(--background-elevated-highlight, var(--spice-main-elevated, #2a2a2a));
-  --euterpe-text: var(--text-base, var(--spice-text, #ffffff));
-  --euterpe-subtext: var(--text-subdued, var(--spice-subtext, #b3b3b3));
-  --euterpe-accent: var(--essential-bright-accent, var(--spice-button, #1ed760));
-  --euterpe-accent-active: var(--text-bright-accent, var(--spice-button-active, #1ed760));
-  --euterpe-on-accent: #000000;
-  --euterpe-divider: var(--decorative-subdued, rgba(255,255,255,.1));
-  --euterpe-border: var(--essential-subdued, rgba(255,255,255,.25));
-  --euterpe-shadow: var(--encore-overlay-box-shadow, 0 4px 12px 0 #0000004d);
-  --euterpe-text-muted: var(--text-subdued, rgba(255,255,255,.5));
-  --euterpe-text-dim: var(--text-subdued, rgba(255,255,255,.78));
-  --euterpe-status: var(--text-subdued, rgba(255,255,255,.55));
-  --euterpe-surface-soft: var(--background-tinted-base, rgba(255,255,255,.1));
-  --euterpe-btn-bg: var(--background-tinted-highlight, rgba(255,255,255,.14));
-  --euterpe-code-bg: var(--background-tinted-highlight, rgba(255,255,255,.14));
-  --euterpe-message-bot-bg: var(--background-tinted-base, rgba(255,255,255,.1));
-  --euterpe-message-user-bg: color-mix(in srgb, var(--essential-bright-accent) 22%, transparent);
-  /* Tints do accent: o Encore não expõe "accent translúcido", então derivamos do
-     token com \`color-mix\` (o client já usa color-mix/oklch no próprio CSS). */
-  --euterpe-chip-bg: color-mix(in srgb, var(--essential-bright-accent) 16%, transparent);
-  --euterpe-chip-border: color-mix(in srgb, var(--essential-bright-accent) 35%, transparent);
-  --euterpe-accent-soft: color-mix(in srgb, var(--essential-bright-accent) 20%, transparent);
-  --euterpe-accent-soft-2: color-mix(in srgb, var(--essential-bright-accent) 14%, transparent);
-  --euterpe-accent-border-strong: color-mix(in srgb, var(--essential-bright-accent) 40%, transparent);
-  --euterpe-danger: var(--essential-negative, #f15e6c);
-  --euterpe-danger-soft: color-mix(in srgb, var(--essential-negative) 20%, transparent);
+    s.textContent = `.euterpe-app {
+  /* Product aliases of the official RDA semantic tokens. */
+  --euterpe-bg: var(--rda-surface-primary);
+  --euterpe-surface: var(--rda-surface-card);
+  --euterpe-surface-raised: var(--rda-surface-elevated);
+  --euterpe-text: var(--rda-content-primary);
+  --euterpe-subtext: var(--rda-content-secondary);
+  --euterpe-accent: var(--rda-action-primary-bg);
+  --euterpe-accent-active: var(--rda-action-primary-bg);
+  --euterpe-on-accent: var(--rda-action-primary-fg);
+  --euterpe-divider: var(--rda-border-subtle);
+  --euterpe-border: var(--rda-border-primary);
+  --euterpe-shadow: var(--rda-box-shadow-md);
+  --euterpe-text-muted: var(--rda-content-tertiary);
+  --euterpe-text-dim: var(--rda-content-secondary);
+  --euterpe-status: var(--rda-content-tertiary);
+  --euterpe-surface-soft: var(--rda-surface-secondary);
+  --euterpe-btn-bg: var(--rda-surface-elevated);
+  --euterpe-code-bg: var(--rda-surface-elevated);
+  --euterpe-message-bot-bg: var(--rda-surface-secondary);
+  --euterpe-message-user-bg: color-mix(in srgb, var(--rda-action-primary-bg) 22%, transparent);
+  /* Product tints derived from the canonical RDA action token. */
+  --euterpe-chip-bg: color-mix(in srgb, var(--rda-action-primary-bg) 16%, transparent);
+  --euterpe-chip-border: color-mix(in srgb, var(--rda-action-primary-bg) 35%, transparent);
+  --euterpe-accent-soft: color-mix(in srgb, var(--rda-action-primary-bg) 20%, transparent);
+  --euterpe-accent-soft-2: color-mix(in srgb, var(--rda-action-primary-bg) 14%, transparent);
+  --euterpe-accent-border-strong: color-mix(in srgb, var(--rda-action-primary-bg) 40%, transparent);
+  --euterpe-danger: var(--rda-status-error);
+  --euterpe-danger-soft: color-mix(in srgb, var(--rda-status-error) 20%, transparent);
   /* Aviso/atenção (escopo fixado, "sem perfil") e métricas do shell. */
-  --euterpe-warn: var(--essential-warning, #ffa42b);
-  --euterpe-warn-soft: color-mix(in srgb, var(--essential-warning) 16%, transparent);
-  --euterpe-warn-border: color-mix(in srgb, var(--essential-warning) 40%, transparent);
+  --euterpe-warn: var(--rda-status-warning);
+  --euterpe-warn-soft: color-mix(in srgb, var(--rda-status-warning) 16%, transparent);
+  --euterpe-warn-border: color-mix(in srgb, var(--rda-status-warning) 40%, transparent);
   --euterpe-rail-w: 236px;
   --euterpe-nav-w: 208px;
-  --euterpe-radius: var(--encore-corner-radius-larger-2, 8px);
+  --euterpe-radius: var(--rda-border-radius-lg);
 }
 /* Painel estreito: o rail de CONVERSAS sai de cena em vez de espremer o chat.
    O rail de AJUSTES (prefs) é a navegação da view — esse nunca some, senão a
@@ -423,7 +420,7 @@ export function injectStyles() {
 .euterpe-app .ds-badge--neutral { background-color: var(--background-tinted-highlight, #ffffff24); color: var(--text-base, #fff); }
 .euterpe-app .ds-badge--accent { background-color: var(--essential-bright-accent, #1ed760); color: #000; }
 .euterpe-app .ds-badge--danger { background-color: var(--essential-negative, #ed2c3f); color: #000; }
-.euterpe-app .ds-badge--warning { background-color: var(--essential-warning, #ffa42b); color: #000; }
+.euterpe-app .ds-badge--warning { background-color: var(--rda-status-warning); color: #000; }
 
 /* Faixa de aviso/erro — nativo .pbUCYjfrxYPcoHiO29W3 / .Yr9KNwq8wcBEv1GfmvBG */
 .euterpe-app .ds-banner {
@@ -1330,10 +1327,8 @@ export function EuterpeApp() {
               title: tr("action.clearTitle"),
               "aria-label": tr("action.clear"),
             },
-            // `x` existe no icon set do client (77 ícones). O fallback textual
-            // existe porque `nativeIcon` devolve null para nome inexistente —
-            // foi assim que este botão ficou invisível com "ban".
-            icon(ICON.close, 14) || React.createElement("span", null, "✕")
+            // The official catalog supplies a visible fallback for unknown names.
+            icon(ICON.close, 14)
           )
         )
       ),

@@ -77,7 +77,7 @@ function loadExtension(opts = {}) {
     },
     fetch: fetchImpl,
     WebSocket: FakeWebSocket,
-    setTimeout: () => 0,
+    setTimeout: (fn, ms) => opts.throttleTimers && ms <= 120 ? setTimeout(fn, ms) : 0,
     clearTimeout: () => {},
     console,
     URLSearchParams,
@@ -143,6 +143,49 @@ test("get_playlists: Platform throws -> falls back to the Web API", async () => 
   assert.equal(res.data.source, "webapi");
   assert.equal(res.data.playlists[0].name, "Web");
   assert.ok(fetchCalls.some((u) => u.includes("/me/playlists")), "must fall back to the Web API");
+});
+
+test("get_playlists: ownership filters before pagination and keeps editable followed playlists separate", async () => {
+  const { euterpe } = loadExtension({ platform: {
+    UserAPI: { getUser: async () => ({ username: 'me' }) },
+    LibraryAPI: { getContents: async () => ({ items: [
+      { uri: 'spotify:playlist:p1', name: 'Followed', owner: { username: 'other' }, canEdit: true },
+      { uri: 'spotify:playlist:p2', name: 'Mine', owner: { username: 'me' }, images: [{ url: 'spotify:image:' + 'a'.repeat(40) }] },
+      { uri: 'spotify:playlist:p3', name: 'Unknown' },
+    ] }) },
+  } });
+  const mine = await euterpe.execSpotifyTool('get_playlists', { ownership: 'owned', limit: 1 });
+  assert.equal(mine.data.total, 1);
+  assert.equal(mine.data.playlists[0].id, 'p2');
+  assert.equal(mine.data.playlists[0].is_owned, true);
+  assert.equal(mine.data.playlists[0].image, 'https://i.scdn.co/image/' + 'a'.repeat(40));
+  const followed = await euterpe.execSpotifyTool('get_playlists', { ownership: 'followed' });
+  assert.equal(followed.data.total, 1);
+  assert.equal(followed.data.playlists[0].id, 'p1');
+  assert.equal(followed.data.playlists[0].is_owned, false);
+  const last = await euterpe.execSpotifyTool('get_playlists', { offset: 2, limit: 1 });
+  assert.equal(last.data.total, 3);
+  assert.equal(last.data.playlists[0].is_owned, null);
+  const invalid = await euterpe.execSpotifyTool('get_playlists', { ownership: 'invalid' });
+  assert.equal(invalid.ok, false);
+});
+
+test("get_playlists: Web API ownership includes playlists beyond the first page", async () => {
+  const { euterpe } = loadExtension({ throttleTimers: true, apiResponse: u => {
+    if (u.includes('/me/playlists')) {
+      const offset = Number(new URL(u).searchParams.get('offset'));
+      return { body: { items: offset === 0
+        ? Array.from({length:50}, (_,i)=>({id:'f'+i,owner:{id:'other'},images:[]}))
+        : [{id:'mine',owner:{id:'me'},images:[{url:'https://i.scdn.co/image/cover'}]}] } };
+    }
+    if (u.endsWith('/me')) return {body:{id:'me'}};
+    return {status:404,body:{}};
+  } });
+  const res = await euterpe.execSpotifyTool('get_playlists', {ownership:'owned'});
+  assert.equal(res.ok,true);
+  assert.equal(res.data.total,1);
+  assert.equal(res.data.playlists[0].id,'mine');
+  assert.equal(res.data.playlists[0].image,'https://i.scdn.co/image/cover');
 });
 
 test("get_saved_tracks: empty Platform result -> falls back to the Web API", async () => {

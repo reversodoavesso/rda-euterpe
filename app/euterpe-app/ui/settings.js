@@ -967,7 +967,7 @@ export function SettingsPanel({ onClose, onToast, inline: inlineView, section })
             tr("prefs.restoreSection"),
           )
         : null,
-      inlineView ? null : React.createElement(IconButton, { label: tr("settings.close"), onClick: onClose }, icon(ICON.close, 16) || React.createElement("span", null, "✕")),
+      inlineView ? null : React.createElement(IconButton, { label: tr("settings.close"), onClick: onClose }, icon(ICON.close, 16)),
     ),
   );
 

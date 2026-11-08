@@ -8,7 +8,42 @@ import (
 	"testing"
 
 	pb "github.com/devgianlu/go-librespot/proto/spotify/playlist4"
+	permission "github.com/devgianlu/go-librespot/proto/spotify/playlist_permission"
+	"google.golang.org/protobuf/proto"
 )
+
+func TestLibraryOwnershipAndCovers(t *testing.T) {
+	root := page("r", false, "spotify:playlist:"+pid, "spotify:playlist:"+pid, "spotify:playlist:"+pid)
+	root.Contents.MetaItems = []*pb.MetaItem{
+		{OwnerUsername: proto.String("other"), Capabilities: &permission.Capabilities{CanEditItems: proto.Bool(true)}},
+		{OwnerUsername: proto.String("me"), Attributes: &pb.ListAttributes{PictureSize: []*pb.PictureSize{{Url: proto.String("https://i.scdn.co/image/cover")}}}},
+		{},
+	}
+	service := &backend{sp: &fake{pages: []*pb.SelectedListContent{root}}, username: "me"}
+	for _, ownership := range []string{"owned", "followed", "all"} {
+		value, err := service.execute(context.Background(), "get_playlists", arguments{Ownership: ownership, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := value.(map[string]any)
+		rows := data["playlists"].([]map[string]any)
+		if len(rows) != 1 {
+			t.Fatal("wrong page size", data)
+		}
+		if ownership == "owned" && (data["total"] != 1 || rows[0]["is_owned"] != true || rows[0]["image"] != "https://i.scdn.co/image/cover") {
+			t.Fatal("owned filtering or cover lost", data)
+		}
+		if ownership == "followed" && (data["total"] != 1 || rows[0]["is_owned"] != false || rows[0]["owner"] != "other") {
+			t.Fatal("collaborative playlist misclassified", data)
+		}
+		if ownership == "all" && data["total"] != 3 {
+			t.Fatal("unknown owner omitted", data)
+		}
+	}
+	if _, err := service.execute(context.Background(), "get_playlists", arguments{Ownership: "invalid"}); err == nil {
+		t.Fatal("invalid ownership accepted")
+	}
+}
 
 func TestPrivateServiceRequiresItsOwnBearer(t *testing.T) {
 	handler := serviceAuth("account-a", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
