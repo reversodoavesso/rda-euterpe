@@ -148,20 +148,38 @@ class Store:
         expires = now + days * 86400
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
-            count = c.execute('SELECT count(*) FROM mcp_tokens WHERE user_id=? AND expires>?', (user_id, now)).fetchone()[0]
+            count = self.active_mcp_credentials(c, user_id, now)
             if count >= 20:
                 raise APIError('token_limit', 409)
             c.execute('INSERT INTO mcp_tokens VALUES (?,?,?,?,?,?,?,NULL)',
                       (token_id, digest(raw), user_id, name.strip(), scope, now, expires))
         return {'id': token_id, 'token': raw, 'name': name.strip(), 'scope': scope, 'expires': expires}
 
+    @staticmethod
+    def active_mcp_credentials(c, user_id, now):
+        if not c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='oauth_grants'").fetchone():
+            return c.execute('SELECT count(*) FROM mcp_tokens WHERE user_id=? AND expires>?', (user_id, now)).fetchone()[0]
+        return c.execute('SELECT count(*) FROM mcp_tokens t LEFT JOIN oauth_grants g ON g.token_id=t.id '
+                         'WHERE t.user_id=? AND ((g.id IS NULL AND t.expires>?) OR (g.revoked=0 AND g.expires>?))',
+                         (user_id, now, now)).fetchone()[0]
+
     def mcp_tokens(self, user_id):
         with self.db() as c:
-            return [dict(row) for row in c.execute(
+            tokens = [dict(row) for row in c.execute(
                 'SELECT id,name,scope,created,expires,last_used FROM mcp_tokens WHERE user_id=? ORDER BY created DESC', (user_id,))]
+            oauth_ids = set()
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='oauth_grants'").fetchone():
+                oauth_ids = {row[0] for row in c.execute('SELECT token_id FROM oauth_grants WHERE user_id=?', (user_id,))}
+            return [{**token, 'kind': 'oauth' if token['id'] in oauth_ids else 'personal'} for token in tokens]
 
     def revoke_mcp_token(self, user_id, token_id):
         with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='oauth_grants'").fetchone():
+                grant = c.execute('SELECT id FROM oauth_grants WHERE token_id=? AND user_id=?', (token_id, user_id)).fetchone()
+                if grant:
+                    McpOAuth._revoke(c, grant['id'])
+                    return
             if not c.execute('DELETE FROM mcp_tokens WHERE id=? AND user_id=?', (token_id, user_id)).rowcount:
                 raise APIError('token_not_found', 404)
 
@@ -173,6 +191,10 @@ class Store:
             row = c.execute('SELECT id,user_id,scope FROM mcp_tokens WHERE hash=? AND expires>?', (digest(raw), time.time())).fetchone()
             if row is None:
                 raise APIError('invalid_token', 401)
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='oauth_grants'").fetchone():
+                grant = c.execute('SELECT revoked,expires FROM oauth_grants WHERE token_id=?', (row['id'],)).fetchone()
+                if grant and (grant['revoked'] or grant['expires'] <= time.time()):
+                    raise APIError('invalid_token', 401)
             c.execute('UPDATE mcp_tokens SET last_used=? WHERE id=?', (time.time(), row['id']))
         return self.user(row['user_id']), row['scope']
 
@@ -781,8 +803,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "same-origin" if getattr(self, '_oauth_form_target', '') else "no-referrer")
         if os.getenv('WEB_REQUIRE_HTTPS') == 'true':
             self.send_header('Strict-Transport-Security', 'max-age=31536000')
-        form_target = getattr(self, '_oauth_form_target', '')
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" + (' ' + form_target if form_target else ''))
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
     def cookie(self, token, clear=False):
         same_site = 'Lax' if self.app.sso else 'Strict'
@@ -895,6 +916,30 @@ class Handler(BaseHTTPRequestHandler):
 
     def oauth_route(self, path, query):
         origin = self.oauth_origin()
+        if path == '/oauth/return' and self.command == 'GET':
+            params = self.oauth_params(query)
+            if set(params) != {'transaction'}:
+                raise APIError('invalid_request')
+            user, session = self.authenticated()
+            result = self.app.oauth.continuation(params['transaction'], user['id'], session)
+            target = result.pop('redirect_uri')
+            destination = target + ('&' if '?' in target else '?') + urllib.parse.urlencode(result)
+            page = f'''<!doctype html><html lang="pt-BR" data-theme="dark"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voltando ao aplicativo — Euterpe</title><link rel="stylesheet" href="/rda-tokens.css">
+<link rel="stylesheet" href="/rda-ds.css"><link rel="stylesheet" href="/oauth.css">
+<script src="/oauth-return.js" defer></script></head><body class="rda-body">
+<main class="oauth-consent"><p class="oauth-eyebrow">Euterpe · Acesso MCP</p>
+<h1>Voltando ao aplicativo</h1><p>Sua decisão foi registrada. Aguarde o aplicativo concluir a conexão.</p>
+<p>Se você não for redirecionado, use o link abaixo.</p>
+<a id="oauth-continue" class="rda-button rda-button--md" data-color="brand" href="{html.escape(destination, quote=True)}" rel="noreferrer">Continuar</a>
+</main></body></html>'''.encode()
+            self.send_response(200)
+            self.common_headers()
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(page)))
+            self.end_headers()
+            return self.wfile.write(page)
         if self.command == 'GET' and path in {'/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'}:
             return self.reply({'resource': origin + '/mcp', 'authorization_servers': [origin],
                 'bearer_methods_supported': ['header'], 'scopes_supported': ['read', 'write'], 'resource_name': 'Euterpe MCP'})
@@ -925,11 +970,9 @@ class Handler(BaseHTTPRequestHandler):
             user, session = self.authenticated(params.get('csrf', ''))
             if params.get('decision') not in {'approve', 'deny'}:
                 raise APIError('invalid_request')
-            result = self.app.oauth.consent(params.get('transaction', ''), user['id'], session, params['decision'] == 'approve')
-            target = result.pop('redirect_uri')
-            callback = urllib.parse.urlsplit(target)
-            self._oauth_form_target = callback.scheme + '://' + callback.netloc
-            return self.redirect(target + ('&' if '?' in target else '?') + urllib.parse.urlencode(result))
+            transaction = params.get('transaction', '')
+            self.app.oauth.consent(transaction, user['id'], session, params['decision'] == 'approve')
+            return self.redirect('/oauth/return?' + urllib.parse.urlencode({'transaction': transaction}))
         params = self.oauth_params(query)
         if 'transaction' in params:
             if set(params) != {'transaction'}:
@@ -955,10 +998,7 @@ class Handler(BaseHTTPRequestHandler):
         permissions = ('Ler sua biblioteca e alterar playlists conforme suas preferências de autorização no Euterpe. Se a confirmação estiver desativada, alterações poderão ser executadas automaticamente.'
                        if 'write' in data['scope'].split() else 'Consultar sua biblioteca, playlists e buscar músicas. Sem permissão para alterar playlists.')
         callback_host = urllib.parse.urlsplit(data['redirect_uri']).netloc
-        callback = urllib.parse.urlsplit(data['redirect_uri'])
-        # Chromium checks form-action against the final 303 destination too.
-        # This page permits only its own origin and this registered callback.
-        self._oauth_form_target = callback.scheme + '://' + callback.netloc
+        self._oauth_form_target = 'self'
         page = f'''<!doctype html><html lang="pt-BR" data-theme="dark"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Autorizar aplicativo — Euterpe</title><link rel="stylesheet" href="/fonts.css">
@@ -1033,11 +1073,13 @@ class Handler(BaseHTTPRequestHandler):
             # compute. No UI cookie or browser heartbeat is required afterwards.
             with self.app.workers.lease(user):
                 pass
+            self.app.oauth.record_use(self.headers.get('Authorization'))
             return self.reply({'jsonrpc': '2.0', 'id': request_id, 'result': {
                 'protocolVersion': negotiated, 'serverInfo': {'name': 'euterpe-remote', 'version': '1.0.0'},
                 'capabilities': {'tools': {'listChanged': False}, 'resources': {'subscribe': False, 'listChanged': False}, 'prompts': {'listChanged': False}},
                 'instructions': 'Acesso Spotify pessoal. Leia antes de escrever. Escritas seguem a preferência de autorização da conta (aprovação por padrão); nunca repita uma escrita de resultado incerto.'}})
         if method == 'ping':
+            self.app.oauth.record_use(self.headers.get('Authorization'))
             return self.reply({'jsonrpc': '2.0', 'id': request_id, 'result': {}})
         allowed_tools = {'spotify_' + name for name in READ_TOOLS | (WRITE_TOOLS if scope == 'write' else set())}
         if method == 'tools/call':
@@ -1059,13 +1101,17 @@ class Handler(BaseHTTPRequestHandler):
             raise APIError('agent_unavailable', 502)
         if method == 'tools/list' and isinstance(reply.get('result'), dict):
             reply['result']['tools'] = [tool for tool in reply['result'].get('tools', []) if tool.get('name') in allowed_tools]
+        if 'result' in reply and 'error' not in reply:
+            self.app.oauth.record_use(self.headers.get('Authorization'))
         return self.reply(reply)
 
     def oauth_problem(self, error):
         completed = error.code == 'authorization_already_completed'
-        title = 'Autorização já enviada' if completed else 'Solicitação de conexão encerrada'
+        signed_out = error.status == 401
+        title = 'Entre novamente para conectar' if signed_out else 'Autorização já enviada' if completed else 'Solicitação de conexão encerrada'
         message = ('A autorização desta conexão já foi enviada. Volte ao aplicativo em que você iniciou a conexão.'
-                   if completed else 'Esta solicitação expirou ou já foi utilizada. Volte ao aplicativo e inicie a conexão novamente.')
+                   if completed else 'Sua sessão terminou. Entre novamente no Euterpe e inicie a conexão pelo aplicativo.'
+                   if signed_out else 'Esta solicitação expirou ou já foi utilizada. Volte ao aplicativo e inicie a conexão novamente.')
         page = f'''<!doctype html><html lang="pt-BR" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{title} — Euterpe</title>
 <link rel="stylesheet" href="/fonts.css"><link rel="stylesheet" href="/rda-tokens.css">
@@ -1104,11 +1150,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.route()
         except APIError as error:
-            if (urllib.parse.urlsplit(self.path).path == '/oauth/authorize' and 'text/html' in self.headers.get('Accept', '')
-                    and error.code in {'invalid_authorization_request', 'authorization_already_completed'}):
+            if (urllib.parse.urlsplit(self.path).path in {'/oauth/authorize', '/oauth/return'} and 'text/html' in self.headers.get('Accept', '')
+                    and error.code in {'invalid_authorization_request', 'authorization_already_completed', 'login_required', 'rda_sso_required'}):
                 return self.oauth_problem(error)
             self.reply({"error": error.code}, error.status)
         except SsoError as error:
+            if urllib.parse.urlsplit(self.path).path in {'/oauth/authorize', '/oauth/return'} and 'text/html' in self.headers.get('Accept', ''):
+                return self.oauth_problem(error)
             self.reply({"error": error.code}, error.status)
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             self.close_connection = True
@@ -1224,6 +1272,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         user, token = self.authenticated()
+        if path == '/api/mcp/connections' and self.command == 'GET':
+            return self.reply(self.app.oauth.connections(user['id']))
+        if path.startswith('/api/mcp/connections/') and self.command == 'DELETE':
+            self.app.oauth.revoke_connection(user['id'], identifier(path.rsplit('/', 1)[-1]))
+            return self.reply({'ok': True})
         if path == '/api/mcp/tokens':
             if self.command == 'GET':
                 return self.reply({'tokens': self.app.store.mcp_tokens(user['id']), 'endpoint': '/mcp'})

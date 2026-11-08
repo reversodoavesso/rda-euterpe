@@ -220,15 +220,13 @@ Configure um cliente compatível com Streamable HTTP e cabeçalhos personalizado
 ```
 
 O formato da configuração depende do cliente. Use a origem de sua instalação e HTTPS
-para acesso remoto; depois de publicar esta versão no ambiente RDA, o endpoint será
-`https://euterpe.reversodoavesso.com/mcp`. Esta implementação usa tokens pessoais,
-sem fluxo OAuth para clientes MCP. Clientes que aceitam somente OAuth precisam de
-uma integração adicional.
+para acesso remoto. O endpoint RDA é `https://euterpe.reversodoavesso.com/mcp`.
+Clientes OAuth usam descoberta e registro dinâmico, sem necessidade de token manual.
 
 O endpoint é stateless, responde JSON a POST e aceita notificações com HTTP 202.
 GET/DELETE retornam 405; não há stream SSE proativo ou identificador de sessão MCP.
 O cliente envia `Accept: application/json, text/event-stream` e, após inicializar,
-`MCP-Protocol-Version: 2025-06-18` (também aceita `2025-03-26`). A origem é validada
+`MCP-Protocol-Version: 2025-11-25` (também aceita `2025-03-26` e `2025-06-18`). A origem é validada
 quando informada. O proxy deve encaminhar `Authorization` e `/mcp` ao gateway e permitir
 requisições longas durante a aprovação. Nenhuma credencial do worker é exposta.
 
@@ -238,11 +236,59 @@ têm prefixo `spotify_`. Recursos e prompts do daemon também estão disponívei
 As ferramentas de workspace, operações, configurações, pareamento e gestão de tokens
 não são expostas ao cliente remoto. Tokens não autenticam as APIs da interface.
 
-Cada requisição usa o worker do titular do token. Escritas recebem uma exigência de
-confirmação no daemon, inclusive se uma configuração antiga estiver em `allow`;
-`deny` continua bloqueando. Aprove a proposta na interface Euterpe. O MCP não oferece
+Cada requisição usa o worker do titular do token. Escritas seguem a preferência do
+proprietário em **Operações e autorizações** (confirmação por padrão); clientes não
+podem substituir essa preferência nem aprovar propostas remotamente. Tokens de
+leitura nunca escrevem. `deny` continua bloqueando. Aprove a proposta na interface Euterpe. O MCP não oferece
 um método remoto de aprovação. Revogar um token impede novas chamadas, mas não
 desfaz chamadas já iniciadas ou escritas aprovadas.
+
+### Conexões OAuth
+
+Em **Ajustes → Conexões MCP**, copie o endpoint para o cliente, escolha OAuth e
+entre com RDA. O consentimento informa conta, nome autodeclarado do aplicativo,
+permissões e domínio de retorno. Descoberta: `/.well-known/oauth-protected-resource/mcp`
+e `/.well-known/oauth-authorization-server`. Registro: `/oauth/register`.
+Código PKCE S256: `/oauth/authorize`; troca/renovação: `/oauth/token`;
+revogação: `/oauth/revoke`. Sem passagem de credenciais Spotify ao cliente.
+
+O POST de consentimento retorna a `/oauth/return?transaction=...`, que exige a
+mesma sessão/conta e entrega um documento HTTP 200. O script local
+`/oauth-return.js` navega para o callback registrado; o link **Continuar** funciona
+sem script. Essa separação encerra a cadeia de formulário que Chromium bloqueia
+com `form-action` quando o callback redireciona para outra origem. CSP mantém
+`form-action 'self'`. O retorno usa `no-referrer` e `no-store`.
+
+`GET /api/mcp/connections` lista somente grants e tentativas da sessão autenticada.
+`DELETE /api/mcp/connections/<id>` exige CSRF e revoga o grant e sua renovação.
+A API legada `/api/mcp/tokens` continua válida; `kind: personal|oauth` distingue
+credenciais. Revogar um token OAuth pela API antiga também revoga o grant.
+
+Estados diferenciam autorização ainda sem uso, chamada MCP válida, acesso expirado
+com renovação possível, grant expirado e revogação. Autenticação isolada ou método
+MCP inválido não contam como chamada válida. Acesso dura uma hora, grant 30 dias,
+código 120 segundos e tentativa inicial 10 minutos. A cota de 20 conta tokens
+pessoais ativos e grants ainda renováveis, mesmo com acesso expirado.
+
+Eventos mínimos das tentativas ficam por 7 dias, no máximo 200 por conta, sem
+códigos, tokens, verifier, state, cookie ou CSRF. “Retorno encaminhado” não prova
+recebimento pelo cliente. Datas históricas ausentes aparecem como não registradas.
+Migração SQLite é aditiva, conserva IDs e hashes e mantém as oito colunas de
+`oauth_grants`. Novos metadados ficam em `oauth_grant_details`, preservando os
+INSERTs posicionais usados pela imagem anterior no rollback.
+
+Regressão de navegador (dependência de desenvolvimento Playwright do workspace):
+
+```powershell
+cd web
+python -m unittest discover -q
+npm test
+node test_oauth_browser.mjs
+```
+
+O teste Chromium usa duas origens e callback encadeado, continuação manual,
+troca PKCE, revogação, recuperação de erro e layout 320/1440px com contas locais
+sintéticas. Não acessa Spotify nem comprova a conexão interativa com Gemini.
 
 ## Validação
 

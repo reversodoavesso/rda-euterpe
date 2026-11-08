@@ -1145,3 +1145,16 @@ dialog.rda-dialog::backdrop {
 .workbench-json { white-space: pre-wrap; max-height: 360px; overflow: auto; font-family: var(--rda-font-family-mono); }
 .workbench-view progress { width: 100%; accent-color: var(--rda-content-brand); }
 .chat-error { margin-top: var(--rda-spacing-3); padding: var(--rda-spacing-3); border: 1px solid var(--rda-status-error); border-radius: var(--rda-border-radius-md); }
+/* MCP connection management uses the existing RDA settings composition. */
+.mcp-connections { min-width: 0; }
+.mcp-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--rda-spacing-3); }
+.mcp-heading h3, .mcp-heading h4 { margin: 0; overflow-wrap: anywhere; }
+.mcp-connection, .mcp-attempt { padding-block: var(--rda-spacing-4); border-top: 1px solid var(--rda-border-primary); overflow-wrap: anywhere; }
+.mcp-connection .rda-button { align-self: flex-start; }
+.mcp-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--rda-spacing-2) var(--rda-spacing-4); margin: 0; font-size: var(--rda-font-size-sm); }
+.mcp-details dt { color: var(--rda-content-secondary); }
+.mcp-details dd { margin: 0; }
+.mcp-attempt { display: grid; gap: var(--rda-spacing-2); }
+.mcp-attempt p { margin: 0; }
+.mcp-instructions { padding-inline-start: var(--rda-spacing-5); list-style: decimal; }
+@media (max-width: 480px) { .mcp-details { grid-template-columns: 1fr; } .mcp-details dd { margin-bottom: var(--rda-spacing-2); } }

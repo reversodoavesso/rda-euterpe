@@ -2804,24 +2804,107 @@ async function loadSettings() {
   state.providers = p.providers || [];
   if (state.view === "settings") replaceView();
 }
+function mcpConnectionsView() {
+  const owner = state.user?.id, csrf = state.csrf;
+  let generation = 0;
+  const connections = h("div", { id: "mcp-connections", class: "stack", "aria-live": "polite" });
+  const attempts = h("div", { id: "mcp-attempts", class: "stack", "aria-live": "polite" });
+  const labels = {
+    authorized: "Autorizada, ainda sem uso", used: "Em uso", renewable: "Renovação disponível",
+    expired: "Expirada", revoked: "Revogada", awaiting_consent: "Aguardando autorização",
+    awaiting_client: "Aguardando o aplicativo", connected: "Credenciais entregues", denied: "Cancelada",
+  };
+  const date = value => value ? new Date(value * 1000).toLocaleString("pt-BR") : "Não registrado";
+  const section = h("div", { class: "mcp-connections stack" },
+    h("div", { class: "mcp-heading" }, h("h3", {}, "Aplicativos autorizados"), button("Atualizar conexões", refresh, "small")),
+    connections, h("h3", {}, "Tentativas recentes"),
+    h("p", { class: "small muted" }, "Histórico dos últimos 7 dias. Encaminhar o retorno não confirma que o aplicativo o recebeu."), attempts);
+  const alive = () => section.isConnected && state.user?.id === owner && state.csrf === csrf;
+  async function revoke(connection) {
+    const confirm = button("Confirmar revogação", async () => {
+      if (!alive()) { closeModal(); return; }
+      confirm.disabled = true;
+      try {
+        await api(`/mcp/connections/${connection.id}`, "DELETE", {});
+        closeModal();
+        if (alive()) { await refresh(); toast("Conexão revogada."); }
+      } finally { confirm.disabled = false; }
+    }, "danger");
+    modal(modalFrame("Revogar conexão", h("div", { class: "stack" },
+      h("p", {}, `Revogar o acesso de ${connection.name}? O aplicativo precisará de uma nova autorização.`),
+      h("p", { class: "small muted" }, "Isso impede novas chamadas e renovações. Operações já iniciadas não são desfeitas.")),
+      [button("Cancelar", closeModal), confirm]));
+  }
+  async function refresh() {
+    if (!alive()) return;
+    const current = ++generation;
+    connections.setAttribute("aria-busy", "true");
+    connections.replaceChildren(h("p", { class: "small muted" }, "Carregando conexões…"));
+    attempts.replaceChildren();
+    try {
+      const result = await api("/mcp/connections");
+      if (!alive() || current !== generation) return;
+      connections.replaceChildren(...(result.connections?.length ? result.connections.map(c =>
+        h("article", { class: "mcp-connection stack" },
+          h("div", { class: "mcp-heading" }, h("h4", {}, c.name), badge(labels[c.status] || "Estado indisponível", c.status === "used" ? "brand" : "secondary")),
+          h("p", { class: "small" }, c.scope?.split(" ").includes("write") ? "Leitura e escrita conforme suas autorizações" : "Somente leitura"),
+          h("dl", { class: "mcp-details" },
+            h("dt", {}, "Autorizada em"), h("dd", {}, date(c.created)),
+            h("dt", {}, "Autorização válida até"), h("dd", {}, date(c.expires)),
+            h("dt", {}, "Acesso atual válido até"), h("dd", {}, date(c.access_expires)),
+            h("dt", {}, "Última chamada MCP válida"), h("dd", {}, date(c.last_used))),
+          c.status === "renewable" && h("p", { class: "small muted" }, "O acesso atual expirou. O aplicativo pode renová-lo sem pedir autorização novamente."),
+          c.status === "expired" && h("p", { class: "small muted" }, "Inicie uma nova conexão no aplicativo."),
+          !["revoked", "expired"].includes(c.status) && button("Revogar conexão", () => revoke(c), "small danger"))) :
+        [h("p", { class: "small muted" }, "Nenhum aplicativo autorizado. Adicione o endpoint no cliente e entre com sua conta RDA.")]));
+      attempts.replaceChildren(...(result.attempts?.length ? result.attempts.slice(0, 20).map(a =>
+        h("div", { class: "mcp-attempt" }, h("strong", {}, a.name),
+          h("span", {}, labels[a.status] || "Estado indisponível"),
+          h("span", { class: "small muted" }, `${a.callback_host} · ${date(a.updated)}`),
+          a.status === "awaiting_client" && h("p", { class: "small muted" }, "Volte ao aplicativo para concluir. Se não avançar, reinicie a conexão por lá."),
+          a.status === "expired" && h("p", { class: "small muted" }, "A tentativa expirou. Inicie a conexão novamente no aplicativo."))) :
+        [h("p", { class: "small muted" }, "Nenhuma tentativa recente.")]));
+    } catch (error) {
+      if (alive() && current === generation && error.name !== "AbortError") {
+        connections.replaceChildren(h("p", { role: "alert" }, "Não foi possível carregar as conexões. Tente novamente."), button("Tentar novamente", refresh));
+      }
+    } finally { if (current === generation) connections.removeAttribute("aria-busy"); }
+  }
+  queueMicrotask(refresh);
+  return section;
+}
 function mcpSettingsView() {
+  const owner = state.user?.id, csrf = state.csrf;
   const tokens = h("div", { class: "stack", "aria-live": "polite" });
   const secret = h("div", { class: "stack", "aria-live": "polite" });
   const name = h("input", { placeholder: "Ex.: cliente remoto", maxLength: 80, "aria-label": "Nome do token" });
   const scope = h("select", { "aria-label": "Permissões do token" },
     h("option", { value: "read" }, "Somente leitura"),
-    h("option", { value: "write" }, "Leitura e escrita com aprovação"));
+    h("option", { value: "write" }, "Leitura e escrita conforme suas autorizações"));
   const days = h("input", { type: "number", min: 1, max: 90, value: 30, "aria-label": "Validade em dias" });
   async function refresh() {
     const result = await api("/mcp/tokens");
-    tokens.replaceChildren(...(result.tokens || []).map(t => h("div", { class: "stack" },
+    if (!tokens.isConnected || state.user?.id !== owner || state.csrf !== csrf) return;
+    tokens.replaceChildren(...(result.tokens || []).filter(t => t.kind !== "oauth").map(t => h("div", { class: "stack" },
       h("span", {}, `${t.name} · ${t.scope === "read" ? "leitura" : "escrita"} · expira em ${new Date(t.expires * 1000).toLocaleDateString("pt-BR")}`),
       button("Revogar", async () => { await api(`/mcp/tokens/${t.id}`, "DELETE", {}); await refresh(); }))));
   }
   return h("section", { class: "settings-card rda-card rda-card--p-lg stack", "data-color": "surface", "data-style": "matte" },
-    h("h2", {}, "Acesso remoto MCP"),
-    h("p", { class: "small muted" }, "Conecte um cliente MCP com um token pessoal ou autorize com sua conta RDA. Escritas seguem suas preferências em Operações e autorizações. O token pessoal aparece uma vez; guarde-o como uma senha."),
+    h("h2", {}, "Conexões MCP"),
+    h("p", {}, "Use sua conta RDA para conectar o Gemini e outros clientes compatíveis com MCP."),
     field("Endpoint MCP", h("input", { value: window.location.origin + "/mcp", readOnly: true })),
+    button("Copiar endpoint", async () => {
+      if (!navigator.clipboard?.writeText) { toast("Selecione e copie o endpoint no campo acima."); return; }
+      await navigator.clipboard.writeText(window.location.origin + "/mcp"); toast("Endpoint copiado.");
+    }, "small"),
+    h("ol", { class: "mcp-instructions" },
+      h("li", {}, "Adicione o endpoint como servidor MCP remoto no aplicativo."),
+      h("li", {}, "Escolha a autenticação OAuth, entre com RDA e autorize o acesso."),
+      h("li", {}, "Aguarde o retorno ao aplicativo. Confira abaixo a autorização e a primeira chamada MCP.")),
+    h("p", { class: "small muted" }, "Escritas seguem a preferência em Operações e autorizações. O nome de cada aplicativo é informado por quem o registrou."),
+    mcpConnectionsView(),
+    h("h3", {}, "Tokens pessoais"),
+    h("p", { class: "small muted" }, "Para clientes que aceitam o cabeçalho Authorization. O token aparece uma vez; guarde-o como uma senha."),
     field("Nome do token", name), field("Permissões", scope), field("Validade em dias", days),
     button("Gerar token", async () => {
       const validity = days.value.trim() === "" ? 30 : Number(days.value);
@@ -2830,6 +2913,7 @@ function mcpSettingsView() {
       if (!['read', 'write'].includes(scope.value)) { scope.focus(); throw Error("invalid_token_options"); }
       days.value = String(validity);
       const result = await api("/mcp/tokens", "POST", { name: name.value, scope: scope.value, expiresInDays: validity });
+      if (!secret.isConnected || state.user?.id !== owner || state.csrf !== csrf) return;
       secret.replaceChildren(
         field("Token gerado — copie agora", h("textarea", { value: result.token, readOnly: true, "aria-label": "Token gerado" })),
         h("p", { class: "small muted" }, "Use no cabeçalho Authorization: Bearer <token>."),

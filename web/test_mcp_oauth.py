@@ -1,6 +1,7 @@
 """OAuth grants are owned by the consenting session, never client-supplied IDs."""
 import base64
 import hashlib
+import html as html_module
 import http.client
 import json
 import os
@@ -216,9 +217,49 @@ class OAuthHTTPTests(unittest.TestCase):
         fields = dict(re.findall(r'name="(transaction|csrf)" value="([^"]+)"', html.decode()))
         status, _, response = self.form('/oauth/authorize', {**fields, 'decision': 'approve'}, auth)
         self.assertEqual(status, 303)
-        query = urllib.parse.parse_qs(urllib.parse.urlsplit(response['Location']).query)
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.callback(response, auth)).query)
         self.assertEqual(query['state'], ['abc'])
         return query['code'][0]
+
+    def callback(self, response, auth):
+        self.assertTrue(response['Location'].startswith('/oauth/return?transaction='))
+        status, page, headers = self.request(response['Location'], auth=auth)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Referrer-Policy'], 'no-referrer')
+        self.assertIn("form-action 'self'", headers['Content-Security-Policy'])
+        self.assertIn(b'/oauth-return.js', page)
+        return html_module.unescape(re.search(r'id="oauth-continue"[^>]*href="([^"]+)"', page.decode())[1])
+
+    def test_handoff_requires_same_session_decision_and_rejects_tampering(self):
+        auth, _ = self.account()
+        other, _ = self.account()
+        client = self.registration()
+        _, page, _ = self.authorize(client, auth)
+        fields = dict(re.findall(r'name="(transaction|csrf)" value="([^"]+)"', page.decode()))
+        location = '/oauth/return?' + urllib.parse.urlencode({'transaction': fields['transaction']})
+        self.assertEqual(self.request(location, auth=auth)[0], 400)
+        _, _, response = self.form('/oauth/authorize', {**fields, 'decision': 'deny'}, auth)
+        self.assertEqual(self.request(response['Location'], auth=other)[0], 400)
+        self.assertEqual(self.request(response['Location'])[0], 401)
+        self.assertEqual(self.request(response['Location'] + '&redirect_uri=https://evil.example', auth=auth)[0], 400)
+        target = self.callback(response, auth)
+        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(target).query)['error'], ['access_denied'])
+
+    def test_consumed_code_handoff_is_readable_and_does_not_revoke_connection(self):
+        auth, _ = self.account()
+        client = self.registration()
+        _, page, _ = self.authorize(client, auth)
+        fields = dict(re.findall(r'name="(transaction|csrf)" value="([^"]+)"', page.decode()))
+        _, _, response = self.form('/oauth/authorize', {**fields, 'decision': 'approve'}, auth)
+        target = self.callback(response, auth)
+        code = urllib.parse.parse_qs(urllib.parse.urlsplit(target).query)['code'][0]
+        status, tokens, _ = self.token(client, code)
+        self.assertEqual(status, 200)
+        status, page, _ = self.request(response['Location'], auth=auth, headers={'Accept': 'text/html'})
+        self.assertEqual(status, 409)
+        self.assertIn('já enviada'.encode(), page)
+        self.assertNotIn(code.encode(), page)
+        self.server.app.store.authenticate_mcp('Bearer ' + tokens['access_token'])
 
     def token(self, client, code):
         return self.form('/oauth/token', {'client_id': client['client_id'], 'code': code,
@@ -251,7 +292,7 @@ class OAuthHTTPTests(unittest.TestCase):
         self.assertEqual(self.form('/oauth/authorize', {**fields, 'csrf': other[1], 'decision': 'approve'}, other)[0], 400)
         status, _, response = self.form('/oauth/authorize', {**fields, 'decision': 'approve'}, auth)
         self.assertEqual(status, 303)
-        code = urllib.parse.parse_qs(urllib.parse.urlsplit(response['Location']).query)['code'][0]
+        code = urllib.parse.parse_qs(urllib.parse.urlsplit(self.callback(response, auth)).query)['code'][0]
         status, tokens, _ = self.token(client, code)
         self.assertEqual(status, 200)
         raw = tokens['access_token']

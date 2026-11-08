@@ -460,8 +460,9 @@ test('MCP settings generate a token once, hide it, list and revoke without stori
     [...doc.querySelectorAll('button')].find(b=>b.textContent==='Gerar token').click();
     await tick(); await tick();
     assert.equal(doc.querySelector('[aria-label="Token gerado"]').value, 'eut_mcp_test_secret');
-    assert.equal(JSON.parse(calls[0].body).scope, 'read');
-    assert.equal(JSON.parse(calls[0].body).expiresInDays, 30);
+    const generated = calls.find(c=>c.method==='POST');
+    assert.equal(JSON.parse(generated.body).scope, 'read');
+    assert.equal(JSON.parse(generated.body).expiresInDays, 30);
     assert.equal(p.dom.window.localStorage.length, 0);
     [...doc.querySelectorAll('button')].find(b=>b.textContent==='Ocultar token').click();
     await tick();
@@ -486,10 +487,48 @@ test('MCP token validity defaults when empty and explains out-of-range values', 
     const days = doc.querySelector('[aria-label="Validade em dias"]');
     const generate = [...doc.querySelectorAll('button')].find(b=>b.textContent==='Gerar token');
     days.value = '365'; generate.click(); await tick();
-    assert.equal(calls.length, 0);
+    assert.equal(calls.filter(c=>c.method==='POST').length, 0);
     assert.match(doc.querySelector('#notifications').textContent, /entre 1 e 90 dias/);
     days.value = ''; generate.click(); await tick(); await tick();
-    assert.equal(JSON.parse(calls[0].body).expiresInDays, 30);
+    assert.equal(JSON.parse(calls.find(c=>c.method==='POST').body).expiresInDays, 30);
+  } finally {p.dom.window.close();}
+});
+
+test('MCP connections load truthful states, escape names, copy endpoint and revoke explicitly', async () => {
+  const p = await page();
+  try {
+    const calls = []; let copied = '';
+    Object.defineProperty(p.dom.window.navigator, 'clipboard', {value:{writeText:async value=>{copied=value;}}});
+    p.dom.window.fetch = async (url, options={}) => {
+      calls.push({url,method:options.method});
+      const data = url.endsWith('/connections') ? {connections:[{id:'g1',name:'Google <script>unsafe</script>',scope:'read write',status:'renewable',expires:1900000000}],attempts:[{id:'a1',name:'Google',status:'awaiting_client',stage:'forwarded',callback_host:'oauth-redirect.googleusercontent.com',updated:1800000000}]} : {tokens:[]};
+      return {ok:true,status:200,json:async()=>data};
+    };
+    p.run('document.querySelector("#view").replaceChildren(mcpSettingsView())'); await tick(); await tick();
+    const doc = p.dom.window.document;
+    assert.match(doc.querySelector('#mcp-connections').textContent,/Renovação disponível/);
+    assert.match(doc.querySelector('#mcp-attempts').textContent,/Aguardando o aplicativo/);
+    assert.equal(doc.querySelector('#mcp-connections script'),null);
+    const click = name => [...doc.querySelectorAll('button')].find(b=>b.textContent===name).click();
+    click('Copiar endpoint'); await tick(); assert.equal(copied,'http://localhost/mcp');
+    click('Revogar conexão'); await tick();
+    assert(!calls.some(c=>c.method==='DELETE'));
+    click('Confirmar revogação'); await tick(); await tick();
+    assert(calls.some(c=>c.url==='/api/mcp/connections/g1'&&c.method==='DELETE'));
+  } finally {p.dom.window.close();}
+});
+
+test('MCP connection failure offers retry and late response cannot populate after logout', async () => {
+  const p = await page(); let finish;
+  try {
+    p.dom.window.fetch = async url => ({ok:false,status:503,json:async()=>({error:'compute_unavailable'})});
+    p.run('document.querySelector("#view").replaceChildren(mcpSettingsView())'); await tick(); await tick();
+    const doc = p.dom.window.document;
+    assert.match(doc.querySelector('#mcp-connections').textContent,/Não foi possível/);
+    p.dom.window.fetch = async url => new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({connections:[{id:'private',name:'Private client',status:'authorized',scope:'read'}],attempts:[]})});});
+    [...doc.querySelectorAll('button')].find(b=>b.textContent==='Tentar novamente').click(); await tick();
+    p.run('state.user=null;state.csrf="";render()'); finish(); await tick(); await tick();
+    assert(!doc.body.textContent.includes('Private client'));
   } finally {p.dom.window.close();}
 });
 
