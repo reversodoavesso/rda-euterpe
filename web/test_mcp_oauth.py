@@ -167,6 +167,66 @@ class OAuthTests(unittest.TestCase):
             replies = list(pool.map(redeem, range(2)))
         self.assertEqual(sum(reply is not None for reply in replies), 1)
 
+    def test_d1_release_contract_cancellation_replay_redirect_client_restart_isolation(self):
+        # 1. Cancelamento: consentimento negado retorna erro de acesso e nenhum codigo/token
+        tx_deny = self.oauth.begin(self.params, ORIGIN)
+        self.oauth.bind(tx_deny, self.user['id'], 'session-alice')
+        denied = self.oauth.consent(tx_deny, self.user['id'], 'session-alice', False)
+        self.assertEqual(denied['error'], 'access_denied')
+        self.assertNotIn('code', denied)
+        cont = self.oauth.continuation(tx_deny, self.user['id'], 'session-alice')
+        self.assertEqual(cont['error'], 'access_denied')
+        self.assertNotIn('code', cont)
+
+        # 2. Redirect inválido / não registrado fail-closed
+        with self.assertRaises(APIError):
+            self.oauth.begin({**self.params, 'redirect_uri': 'https://attacker.example/cb'}, ORIGIN)
+
+        # 3. Callback em cliente correto e troca válida
+        code_alice = self.code()
+        client_b = self.oauth.register({'client_name': 'Other client', 'redirect_uris': ['https://other.example/cb']})
+        # Tentativa de trocar o código de Alice com o client_id de Client B falha
+        with self.assertRaises(APIError):
+            self.oauth.exchange({'grant_type': 'authorization_code', 'client_id': client_b['client_id'],
+                                 'code': code_alice, 'redirect_uri': self.params['redirect_uri'],
+                                 'code_verifier': VERIFIER}, ORIGIN)
+        # Troca com o cliente legítimo tem sucesso
+        tokens_alice = self.exchange(code_alice)
+        self.assertIn('access_token', tokens_alice)
+
+        # 4. Replay: reutilização de código consumido falha e revoga tokens emitidos
+        with self.assertRaises(APIError):
+            self.exchange(code_alice)
+        with self.assertRaises(APIError):
+            self.store.authenticate_mcp('Bearer ' + tokens_alice['access_token'])
+
+        # 5. Duas contas isoladas e persistência pós-reinício de processo
+        code_alice2 = self.code()
+        tokens_alice2 = self.exchange(code_alice2)
+        tx_bobby = self.oauth.begin(self.params, ORIGIN)
+        self.oauth.bind(tx_bobby, self.other['id'], 'session-bobby')
+        code_bobby = self.oauth.consent(tx_bobby, self.other['id'], 'session-bobby', True)['code']
+        tokens_bobby = self.exchange(code_bobby)
+
+        # Simula reinício de processo reabrindo Store e McpOAuth a partir do disco
+        restarted_store = Store(self.directory.name)
+        restarted_oauth = McpOAuth(restarted_store, APIError)
+        user_alice, scope_alice = restarted_store.authenticate_mcp('Bearer ' + tokens_alice2['access_token'])
+        user_bobby, scope_bobby = restarted_store.authenticate_mcp('Bearer ' + tokens_bobby['access_token'])
+        self.assertEqual(user_alice['id'], self.user['id'])
+        self.assertEqual(user_bobby['id'], self.other['id'])
+        connections_alice = restarted_oauth.connections(self.user['id'])['connections']
+        bobby_conn_ids = [c['id'] for c in restarted_oauth.connections(self.other['id'])['connections']]
+        self.assertTrue(any(c['name'] == 'Test client' for c in connections_alice))
+        self.assertNotIn(connections_alice[0]['id'], bobby_conn_ids)
+        with self.assertRaises(APIError):
+            restarted_oauth.revoke_connection(self.other['id'], connections_alice[0]['id'])
+
+        # 6. Expiração e revogação
+        restarted_oauth.revoke_connection(self.user['id'], connections_alice[0]['id'])
+        with self.assertRaises(APIError):
+            restarted_store.authenticate_mcp('Bearer ' + tokens_alice2['access_token'])
+
 
 class OAuthHTTPTests(unittest.TestCase):
     setUpClass = classmethod(gateway.GatewayTests.setUpClass.__func__)
@@ -463,6 +523,35 @@ class OAuthHTTPTests(unittest.TestCase):
             runtime.shutdown()
             runtime.server_close()
             thread.join()
+
+    def test_d1_mcp_oauth_write_requires_spotify_confirmation(self):
+        auth, user = self.account()
+        client = self.registration()
+        status, html, _ = self.authorize(client, auth, scope='read write')
+        self.assertEqual(status, 200)
+        fields = dict(re.findall(r'name="(transaction|csrf)" value="([^"]+)"', html.decode()))
+        status, _, response = self.form('/oauth/authorize', {**fields, 'decision': 'approve'}, auth)
+        self.assertEqual(status, 303)
+        code = urllib.parse.parse_qs(urllib.parse.urlsplit(self.callback(response, auth)).query)['code'][0]
+        status, tokens, _ = self.form('/oauth/token', {
+            'client_id': client['client_id'], 'code': code,
+            'redirect_uri': client['redirect_uris'][0], 'code_verifier': VERIFIER,
+            'grant_type': 'authorization_code'})
+        self.assertEqual(status, 200)
+
+        headers = {'Authorization': 'Bearer ' + tokens['access_token'], 'Accept': 'application/json, text/event-stream'}
+        worker = self.workers.items.setdefault(user['id'], gateway.FakeWorker())
+        body = {'jsonrpc': '2.0', 'id': 100, 'method': 'tools/call', 'params': {
+            'name': 'spotify_create_playlist', 'arguments': {'name': 'Nova Playlist'}, '_requireConfirmation': False}}
+        calls = []
+        def rpc(path, method='GET', payload=None):
+            calls.append(payload)
+            return 200, {'jsonrpc': '2.0', 'id': 100, 'result': {'content': [{'type': 'text', 'text': 'ok'}]}}
+        with patch.object(worker, 'json', side_effect=rpc):
+            self.assertEqual(self.request('/mcp', 'POST', body, headers=headers)[0], 200)
+            self.assertTrue(len(calls) >= 1)
+            # A confirmacao eh obrigatoria e sobrescreve a flag do chamador
+            self.assertTrue(calls[-1]['params']['_requireConfirmation'])
 
 
 if __name__ == '__main__':
